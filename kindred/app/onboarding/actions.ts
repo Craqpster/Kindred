@@ -41,6 +41,7 @@ const schema = z.object({
     // "Prefer not to say" is itself a real row. Skipping and choosing not to say are
     // different answers, and the schema keeps them different.
     gender_id: z.coerce.number().int().positive().optional(),
+    ease_in: z.enum(["openers", "gradual", "volume"]).optional(),
     hobby_ids: idList,
     interest_ids: idList,
 });
@@ -55,6 +56,7 @@ export async function createProfile(
         username: formData.get("username"),
         birth_date: formData.get("birth_date"),
         gender_id: formData.get("gender_id") || undefined,
+        ease_in: formData.get("ease_in") || undefined,
         hobby_ids: formData.getAll("hobby_ids"),
         interest_ids: formData.getAll("interest_ids"),
     });
@@ -86,6 +88,7 @@ export async function createProfile(
                 username: parsed.data.username,
                 birth_date: parsed.data.birth_date,
                 gender_id: parsed.data.gender_id ?? null,
+                ease_in: parsed.data.ease_in ?? null,
                 profile_hobbies: {
                     create: parsed.data.hobby_ids.map((hobby_id) => ({ hobby_id })),
                 },
@@ -133,8 +136,8 @@ export async function createProfile(
         }
     }
 
-    if (alreadyOnboarded) redirect("/profile");
+    if (alreadyOnboarded) redirect("/me");
 
-    revalidatePath("/profile");
-    redirect("/chat");
+    revalidatePath("/me");
+    redirect("/chats");
 }
