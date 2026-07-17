@@ -136,7 +136,7 @@ export async function createProfile(
         }
     }
 
-    if (alreadyOnboarded) redirect("/profile");
+    if (alreadyOnboarded) redirect("/me");
 
     revalidatePath("/profile");
     redirect("/chat");

@@ -10,7 +10,7 @@ export default async function OnboardingPage() {
     await verifySession();
 
     const profile = await getProfile();
-    if (profile) redirect("/profile");
+    if (profile) redirect("/me");
 
     const [hobbies, interests, genders] = await Promise.all([
         prisma.hobbies.findMany({ select: { id: true, name: true } }),
