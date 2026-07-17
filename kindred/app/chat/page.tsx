@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import type { ChannelFilters, ChannelOptions, ChannelSort } from "stream-chat";
 import {
@@ -32,14 +33,40 @@ export default function ChatPage() {
   }, []);
 
   if (loading) {
-    return <div className="p-8">Loading...</div>;
+    return <StatusCard message="Loading..." />;
   }
 
   if (!user) {
-    return <div className="p-8">You need to be logged in to chat.</div>;
+    return (
+      <StatusCard message="You need to be logged in to chat.">
+        <Link
+          href="/login"
+          className="mt-4 inline-block rounded-lg bg-[#153D74] px-6 py-3 font-medium text-white shadow-md transition hover:shadow-lg"
+        >
+          Log in
+        </Link>
+      </StatusCard>
+    );
   }
 
   return <ChatWindow userId={user.id} />;
+}
+
+function StatusCard({
+  message,
+  children,
+}: {
+  message: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <main className="mx-auto flex max-w-md flex-col items-center px-6 py-24 text-center font-[var(--font-poppins)]">
+      <div className="w-full rounded-lg border border-[#3F79AF] bg-white p-6 shadow-sm">
+        <p className="text-[#1A1A1A]">{message}</p>
+        {children}
+      </div>
+    </main>
+  );
 }
 
 function ChatWindow({ userId }: { userId: string }) {
@@ -57,7 +84,7 @@ function ChatWindow({ userId }: { userId: string }) {
   });
 
   if (!client) {
-    return <div className="p-8">Connecting to chat...</div>;
+    return <StatusCard message="Connecting to chat..." />;
   }
 
   const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
@@ -65,18 +92,23 @@ function ChatWindow({ userId }: { userId: string }) {
   const options: ChannelOptions = { limit: 10 };
 
   return (
-    <div className="flex flex-1">
-      <Chat client={client}>
-        <ChannelList filters={filters} sort={sort} options={options} />
-        <Channel>
-          <Window>
-            <ChannelHeader />
-            <MessageList />
-            <MessageComposer />
-          </Window>
-          <Thread />
-        </Channel>
-      </Chat>
+    <div className="flex h-dvh flex-col font-[var(--font-poppins)]">
+      <header className="border-b border-[#3F79AF] bg-white px-6 py-4">
+        <h1 className="font-[var(--font-lora)] text-xl font-bold text-[#153D74]">Chats</h1>
+      </header>
+      <div className="flex flex-1 overflow-hidden">
+        <Chat client={client} theme="str-chat__theme-light">
+          <ChannelList filters={filters} sort={sort} options={options} />
+          <Channel>
+            <Window>
+              <ChannelHeader />
+              <MessageList />
+              <MessageComposer />
+            </Window>
+            <Thread />
+          </Channel>
+        </Chat>
+      </div>
     </div>
   );
 }

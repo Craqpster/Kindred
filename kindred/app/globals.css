@@ -2,7 +2,7 @@
 
 /* Light beige theme */
 :root {
-  --background: #153D74; /* soft beige */
+  --background: #F5EFE6; /* soft beige */
   --foreground: #1A1A1A; /* charcoal text */
 }
 
@@ -13,13 +13,7 @@
   --font-serif: var(--font-lora);
 }
 
-/* Disable dark mode completely */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #F5EFE6;
-    --foreground: #1A1A1A;
-  }
-}
+/* Dark mode is intentionally not supported: the beige theme above is always used. */
 
 /* Apply globally */
 body {
