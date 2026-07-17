@@ -34,7 +34,7 @@ export default function MatchCard({ match }: { match: Match }) {
                 </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="mt-auto flex gap-2">
                 <form action={sayHi}>
                     <input type="hidden" name="other_id" value={match.id} />
                     <Button type="submit" size="sm">

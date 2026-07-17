@@ -16,13 +16,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const profile = await requireProfile();
 
     return (
-        <div className="flex min-h-screen flex-col bg-chantilly sm:flex-row">
+        <div className="flex min-h-screen flex-col sm:flex-row">
             <SidebarNav username={profile.username} />
             <main className="flex flex-1 flex-col">
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>
             </main>
+            <main className="flex flex-1 flex-col bg-mist">{children}</main>
         </div>
     );
 }
