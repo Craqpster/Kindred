@@ -18,10 +18,11 @@ model profiles {
   gender_id  Int?      @db.SmallInt
   avatar_id  String?
 
-  /// The user's own confidence, which grows as they interact with people.
+  /// An internal metric, never a user input: everyone starts at 1 and it grows as they
+  /// interact with people. Onboarding does not ask for it.
   /// Not derived data: the interactions live in Stream Chat, never in Postgres.
   /// A chat's difficulty level is a property of the chat and does not belong here.
-  /// Bounded 1..5 by a CHECK constraint that Prisma cannot model — see the migration.
+  /// Uncapped, floored at 1 by a CHECK that Prisma cannot model — see the migration.
   confidence_level Int @default(1)
 
   created_at DateTime @default(now()) @db.Timestamptz(6)
