@@ -31,8 +31,8 @@ export default function AuthForm({
     const [state, formAction, pending] = useActionState(action, EMPTY);
 
     return (
-        <main className="mx-auto flex max-w-md flex-col px-6 py-24 font-[var(--font-poppins)]">
-            <h1 className="mb-8 text-center text-4xl font-bold text-[#153D74] font-[var(--font-lora)]">
+        <main className="mx-auto flex max-w-md flex-col px-6 py-24 font-sans">
+            <h1 className="mb-8 text-center text-4xl font-bold text-[#153D74]">
                 {heading}
             </h1>
 
