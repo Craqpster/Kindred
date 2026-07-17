@@ -18,7 +18,7 @@ export default function MatchCard({
     const sharedPhrase = match.sharedEaseIn ? easeInPhrase(viewerEaseIn) : null;
 
     return (
-        <div className="flex flex-col gap-4 rounded-3xl border border-metro-blue/20 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 rounded-3xl bg-white p-5 shadow-sm">
             <div className="flex items-center gap-3">
                 <Avatar name={match.username} size={44} />
                 <span className="font-semibold text-star-sapphire">{match.username}</span>
