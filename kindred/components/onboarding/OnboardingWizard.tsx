@@ -10,7 +10,8 @@ import { ageFrom } from "@/lib/age";
 import { randomHandle } from "@/lib/handles";
 import type { ResolvedTag } from "@/lib/onboarding-tags";
 
-const TOTAL_STEPS = 6;
+// One question per card
+const TOTAL_STEPS = 7;
 const MIN_AGE = 18;
 
 const EASE_IN_OPTIONS = [
@@ -30,6 +31,10 @@ const EASE_IN_OPTIONS = [
         detail: "We'll keep the matches coming.",
     },
 ];
+
+const CHIP = "cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20";
+
+const OPTION_CARD = "cursor-pointer rounded-2xl border border-metro-blue p-4 text-center transition select-none has-checked:border-star-sapphire has-checked:bg-iceland/10 hover:bg-flour/50";
 
 const EMPTY: OnboardingState = {};
 
@@ -54,9 +59,7 @@ export default function OnboardingWizard({
     // The server validates independently; if it rejects something, jump to the step that
     // owns the message rather than leaving it on a screen the user cannot see.
     //
-    // Adjusted during render rather than in an effect: React re-runs this immediately
-    // without painting the wrong step first, and an effect here trips
-    // react-hooks/set-state-in-effect.
+    // Adjusted during render rather than in an effect
     const [seenState, setSeenState] = useState(state);
     if (seenState !== state) {
         setSeenState(state);
@@ -71,10 +74,11 @@ export default function OnboardingWizard({
         2: true,
         3: handle.trim().length >= 3,
         4: picked.length > 0,
-        5: easeIn !== "" && oldEnough,
-        // Gender is optional, so this step never blocks. Skipping it and choosing
-        // "Prefer not to say" are both valid, and they mean different things.
+        5: easeIn !== "",
+        // Gender is optional, so this step never blocks
         6: true,
+        // The last card is the submit, so the age gate lives here alone.
+        7: oldEnough,
     };
 
     const toggleTag = (key: string) =>
@@ -83,15 +87,15 @@ export default function OnboardingWizard({
         );
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-chantilly px-6 py-12 font-sans">
-            <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-sm sm:p-10">
+        <main className="flex min-h-screen items-center justify-center bg-mist px-6 py-12 font-sans">
+            <div className="w-full max-w-lg rounded-3xl bg-white p-8 text-center shadow-md sm:p-10">
                 <Progress step={step} />
 
                 <form action={formAction} className="mt-8 flex flex-col">
                     {state.formError && (
                         <p
                             role="alert"
-                            className="mb-5 rounded-lg border border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700"
+                            className="mb-5 rounded-2xl border border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700"
                         >
                             {state.formError}
                         </p>
@@ -124,11 +128,12 @@ export default function OnboardingWizard({
                                             onChange={(e) => setHandle(e.target.value)}
                                             maxLength={20}
                                             autoComplete="off"
+                                            className="text-left"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => setHandle(randomHandle())}
-                                            className="shrink-0 rounded-lg border border-metro-blue px-4 text-sm font-medium text-star-sapphire transition hover:bg-flour"
+                                            className="shrink-0 rounded-full border border-metro-blue px-4 text-sm font-medium text-star-sapphire transition hover:bg-flour"
                                         >
                                             Shuffle
                                         </button>
@@ -142,14 +147,11 @@ export default function OnboardingWizard({
                         <Heading>What are you into?</Heading>
                         <Sub>These become your openers.</Sub>
 
-                        <div className="mt-6 flex flex-wrap gap-2">
+                        <div className="mt-6 flex flex-wrap justify-center gap-2">
                             {tags.map((tag) => {
                                 const key = `${tag.source}-${tag.id}`;
                                 return (
-                                    <label
-                                        key={key}
-                                        className="cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20"
-                                    >
+                                    <label key={key} className={CHIP}>
                                         <input
                                             type="checkbox"
                                             /* One grid, two tables: the name decides which
@@ -178,10 +180,7 @@ export default function OnboardingWizard({
 
                         <div className="mt-6 flex flex-col gap-3">
                             {EASE_IN_OPTIONS.map((option) => (
-                                <label
-                                    key={option.value}
-                                    className="cursor-pointer rounded-lg border border-metro-blue p-4 transition select-none has-checked:border-star-sapphire has-checked:bg-iceland/10 hover:bg-flour/50"
-                                >
+                                <label key={option.value} className={OPTION_CARD}>
                                     <input
                                         type="radio"
                                         name="ease_in"
@@ -195,37 +194,15 @@ export default function OnboardingWizard({
                                 </label>
                             ))}
                         </div>
-
-                        <div className="mt-6">
-                            <Field
-                                id="birth_date"
-                                label="Your date of birth"
-                                hint={`You need to be ${MIN_AGE} or older.`}
-                                error={state.errors?.birth_date}
-                            >
-                                {(aria) => (
-                                    <TextInput
-                                        {...aria}
-                                        name="birth_date"
-                                        type="date"
-                                        value={birthDate}
-                                        onChange={(e) => setBirthDate(e.target.value)}
-                                    />
-                                )}
-                            </Field>
-                        </div>
                     </Step>
 
                     <Step active={step === 6}>
                         <Heading>How do you identify?</Heading>
                         <Sub>Entirely optional — skip it if you&apos;d rather not say.</Sub>
 
-                        <div className="mt-6 flex flex-wrap gap-2">
+                        <div className="mt-6 flex flex-wrap justify-center gap-2">
                             {genders.map((option) => (
-                                <label
-                                    key={option.id}
-                                    className="cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20"
-                                >
+                                <label key={option.id} className={CHIP}>
                                     <input
                                         type="radio"
                                         name="gender_id"
@@ -237,6 +214,26 @@ export default function OnboardingWizard({
                                     {option.label}
                                 </label>
                             ))}
+                        </div>
+                    </Step>
+
+                    <Step active={step === 7}>
+                        <Heading>When were you born?</Heading>
+                        <Sub>Kindred is for people {MIN_AGE} and over.</Sub>
+
+                        <div className="mt-6">
+                            <Field id="birth_date" label="Your date of birth" error={state.errors?.birth_date}>
+                                {(aria) => (
+                                    <TextInput
+                                        {...aria}
+                                        name="birth_date"
+                                        type="date"
+                                        value={birthDate}
+                                        onChange={(e) => setBirthDate(e.target.value)}
+                                        className="text-left"
+                                    />
+                                )}
+                            </Field>
                         </div>
                     </Step>
 
@@ -261,13 +258,15 @@ export default function OnboardingWizard({
                         )}
 
                         {step > 1 && (
-                            <button
-                                type="button"
-                                onClick={() => setStep(step - 1)}
-                                className="mt-4 text-sm text-gray-600 transition hover:text-star-sapphire"
-                            >
-                                ‹ Back
-                            </button>
+                            <div className="text-left">
+                                <button
+                                    type="button"
+                                    onClick={() => setStep(step - 1)}
+                                    className="mt-4 text-sm text-gray-600 transition hover:text-star-sapphire"
+                                >
+                                    ‹ Back
+                                </button>
+                            </div>
                         )}
                     </div>
                 </form>
@@ -278,7 +277,10 @@ export default function OnboardingWizard({
 
 function Progress({ step }: { step: number }) {
     return (
-        <ol className="flex items-center justify-center gap-2" aria-label={`Step ${step} of ${TOTAL_STEPS}`}>
+        <ol
+            className="flex items-center justify-center gap-2"
+            aria-label={`Step ${step} of ${TOTAL_STEPS}`}
+        >
             {Array.from({ length: TOTAL_STEPS }, (_, i) => {
                 const reached = i < step;
                 return (
@@ -301,9 +303,7 @@ function Step({ active, children }: { active: boolean; children: React.ReactNode
 }
 
 function Heading({ children }: { children: React.ReactNode }) {
-    return (
-        <h1 className="text-3xl font-bold text-star-sapphire">{children}</h1>
-    );
+    return <h1 className="text-3xl font-bold text-star-sapphire">{children}</h1>;
 }
 
 function Sub({ children }: { children: React.ReactNode }) {

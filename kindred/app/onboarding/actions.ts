@@ -18,7 +18,8 @@ export type OnboardingState = {
     };
     /// Which wizard step the error belongs to, so the client can jump back to it
     /// instead of showing a message on a screen the user cannot see.
-    errorStep?: 3 | 4 | 5;
+    /// 3 = handle, 4 = tags, 7 = date of birth.
+    errorStep?: 3 | 4 | 7;
 };
 
 const MIN_AGE = 18;
@@ -63,7 +64,7 @@ export async function createProfile(
         const { username, birth_date } = z.flattenError(parsed.error).fieldErrors;
         return {
             errors: { username, birth_date },
-            errorStep: username ? 3 : 5,
+            errorStep: username ? 3 : 7,
         };
     }
 
