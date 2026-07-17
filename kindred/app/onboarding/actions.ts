@@ -138,6 +138,6 @@ export async function createProfile(
 
     if (alreadyOnboarded) redirect("/me");
 
-    revalidatePath("/profile");
-    redirect("/chat");
+    revalidatePath("/me");
+    redirect("/chats");
 }
