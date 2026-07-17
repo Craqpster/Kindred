@@ -6,8 +6,8 @@ type ButtonProps = React.ComponentPropsWithoutRef<"button"> & {
 };
 
 const VARIANTS = {
-    primary: "bg-[#153D74] text-white shadow-md hover:shadow-lg",
-    secondary: "border border-[#153D74] text-[#153D74] hover:bg-[#EEF0FF]",
+    primary: "bg-star-sapphire text-white shadow-md hover:shadow-lg",
+    secondary: "border border-star-sapphire text-star-sapphire hover:bg-mist",
 } as const;
 
 export default function Button({

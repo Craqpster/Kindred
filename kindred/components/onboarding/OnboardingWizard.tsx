@@ -77,7 +77,7 @@ export default function OnboardingWizard({
         );
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-[#F0F4EA] px-6 py-12 font-sans">
+        <main className="flex min-h-screen items-center justify-center bg-chantilly px-6 py-12 font-sans">
             <div className="w-full max-w-lg rounded-2xl bg-white p-8 shadow-sm sm:p-10">
                 <Progress step={step} />
 
@@ -122,7 +122,7 @@ export default function OnboardingWizard({
                                         <button
                                             type="button"
                                             onClick={() => setHandle(randomHandle())}
-                                            className="shrink-0 rounded-lg border border-[#3F79AF] px-4 text-sm font-medium text-[#153D74] transition hover:bg-[#EAE6DD]"
+                                            className="shrink-0 rounded-lg border border-metro-blue px-4 text-sm font-medium text-star-sapphire transition hover:bg-flour"
                                         >
                                             Shuffle
                                         </button>
@@ -142,7 +142,7 @@ export default function OnboardingWizard({
                                 return (
                                     <label
                                         key={key}
-                                        className="cursor-pointer rounded-full border border-[#689CD5] bg-[#689CD5]/10 px-4 py-2 text-sm text-[#153D74] transition select-none has-checked:border-[#153D74] has-checked:bg-[#153D74] has-checked:text-white hover:bg-[#689CD5]/20"
+                                        className="cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20"
                                     >
                                         <input
                                             type="checkbox"
@@ -174,7 +174,7 @@ export default function OnboardingWizard({
                             {EASE_IN_OPTIONS.map((option) => (
                                 <label
                                     key={option.value}
-                                    className="cursor-pointer rounded-lg border border-[#3F79AF] p-4 transition select-none has-checked:border-[#153D74] has-checked:bg-[#689CD5]/10 hover:bg-[#EAE6DD]/50"
+                                    className="cursor-pointer rounded-lg border border-metro-blue p-4 transition select-none has-checked:border-star-sapphire has-checked:bg-iceland/10 hover:bg-flour/50"
                                 >
                                     <input
                                         type="radio"
@@ -184,8 +184,8 @@ export default function OnboardingWizard({
                                         onChange={() => setEaseIn(option.value)}
                                         className="sr-only"
                                     />
-                                    <span className="block font-medium text-[#153D74]">{option.title}</span>
-                                    <span className="mt-1 block text-sm text-[#4B5563]">{option.detail}</span>
+                                    <span className="block font-medium text-star-sapphire">{option.title}</span>
+                                    <span className="mt-1 block text-sm text-gray-600">{option.detail}</span>
                                 </label>
                             ))}
                         </div>
@@ -230,7 +230,7 @@ export default function OnboardingWizard({
                             <button
                                 type="button"
                                 onClick={() => setStep(step - 1)}
-                                className="mt-4 text-sm text-[#4B5563] transition hover:text-[#153D74]"
+                                className="mt-4 text-sm text-gray-600 transition hover:text-star-sapphire"
                             >
                                 ‹ Back
                             </button>
@@ -252,7 +252,7 @@ function Progress({ step }: { step: number }) {
                         key={i}
                         aria-current={i === step - 1 ? "step" : undefined}
                         className={`h-1.5 rounded-full transition-all ${
-                            reached ? "w-6 bg-[#153D74]" : "w-1.5 bg-gray-300"
+                            reached ? "w-6 bg-star-sapphire" : "w-1.5 bg-gray-300"
                         }`}
                     />
                 );
@@ -268,10 +268,10 @@ function Step({ active, children }: { active: boolean; children: React.ReactNode
 
 function Heading({ children }: { children: React.ReactNode }) {
     return (
-        <h1 className="text-3xl font-bold text-[#153D74]">{children}</h1>
+        <h1 className="text-3xl font-bold text-star-sapphire">{children}</h1>
     );
 }
 
 function Sub({ children }: { children: React.ReactNode }) {
-    return <p className="mt-3 text-[#4B5563]">{children}</p>;
+    return <p className="mt-3 text-gray-600">{children}</p>;
 }
