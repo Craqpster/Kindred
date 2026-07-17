@@ -38,6 +38,9 @@ yarn-error.log*
 # prisma (generated client is rebuilt by `postinstall: prisma generate`)
 /lib/generated/
 
+# local dev tooling — creates real auth users
+/scripts/seed-dev-profiles.ts
+
 # vercel
 .vercel
 

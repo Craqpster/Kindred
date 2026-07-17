@@ -31,14 +31,14 @@ export default function AuthForm({
     const [state, formAction, pending] = useActionState(action, EMPTY);
 
     return (
-        <main className="mx-auto flex max-w-md flex-col px-6 py-24 font-[var(--font-poppins)]">
-            <h1 className="mb-8 text-center text-4xl font-bold text-[#153D74] font-[var(--font-lora)]">
+        <main className="mx-auto flex max-w-md flex-col px-6 py-24 font-sans">
+            <h1 className="mb-8 text-center text-4xl font-bold text-star-sapphire">
                 {heading}
             </h1>
 
             <form
                 action={formAction}
-                className="flex flex-col gap-5 rounded-lg border border-[#3F79AF] bg-white p-6 shadow-sm"
+                className="flex flex-col gap-5 rounded-lg border border-metro-blue bg-white p-6 shadow-sm"
             >
                 {state.formError && (
                     <p
@@ -79,14 +79,14 @@ export default function AuthForm({
                 </Button>
             </form>
 
-            <p className="mt-6 text-center text-sm text-[#4B5563]">{footer}</p>
+            <p className="mt-6 text-center text-sm text-gray-600">{footer}</p>
         </main>
     );
 }
 
 export function AuthFooterLink({ href, children }: { href: string; children: React.ReactNode }) {
     return (
-        <Link href={href} className="font-medium text-[#153D74] hover:underline">
+        <Link href={href} className="font-medium text-star-sapphire hover:underline">
             {children}
         </Link>
     );

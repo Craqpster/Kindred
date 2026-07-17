@@ -29,12 +29,12 @@ export default function Field({ id, label, hint, error, children }: FieldProps) 
 
     return (
         <div className="flex flex-col gap-1.5">
-            <label htmlFor={id} className="font-medium text-[#153D74]">
+            <label htmlFor={id} className="font-medium text-star-sapphire">
                 {label}
             </label>
 
             {hint && (
-                <p id={hintId} className="text-sm text-[#4B5563]">
+                <p id={hintId} className="text-sm text-gray-600">
                     {hint}
                 </p>
             )}
