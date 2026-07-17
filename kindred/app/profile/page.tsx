@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { ageFrom } from "@/lib/age";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/utils/supabase/server";
 
@@ -63,16 +64,4 @@ export default async function ProfilePage() {
             </dl>
         </main>
     );
-}
-
-// Age is computed rather than stored: a stored age is wrong within a year.
-function ageFrom(birthDate: Date | null): number | null {
-    if (!birthDate) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDelta = today.getMonth() - birthDate.getMonth();
-    if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
-        age -= 1;
-    }
-    return age;
 }
