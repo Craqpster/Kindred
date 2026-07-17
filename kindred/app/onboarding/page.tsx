@@ -12,14 +12,18 @@ export default async function OnboardingPage() {
     const profile = await getProfile();
     if (profile) redirect("/profile");
 
-    const [hobbies, interests] = await Promise.all([
+    const [hobbies, interests, genders] = await Promise.all([
         prisma.hobbies.findMany({ select: { id: true, name: true } }),
         prisma.interests.findMany({ select: { id: true, name: true } }),
+        // Seeded by 20260716220111_normalize_profiles; ordered by id so the options keep
+        // the order they were seeded in rather than an arbitrary one.
+        prisma.genders.findMany({ select: { id: true, label: true }, orderBy: { id: "asc" } }),
     ]);
 
     return (
         <OnboardingWizard
             tags={resolveTags(hobbies, interests)}
+            genders={genders}
             initialHandle={randomHandle()}
         />
     );

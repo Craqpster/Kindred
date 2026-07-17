@@ -10,7 +10,7 @@ import { ageFrom } from "@/lib/age";
 import { randomHandle } from "@/lib/handles";
 import type { ResolvedTag } from "@/lib/onboarding-tags";
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 const MIN_AGE = 18;
 
 const EASE_IN_OPTIONS = [
@@ -35,9 +35,11 @@ const EMPTY: OnboardingState = {};
 
 export default function OnboardingWizard({
     tags,
+    genders,
     initialHandle,
 }: {
     tags: readonly ResolvedTag[];
+    genders: readonly { id: number; label: string }[];
     initialHandle: string;
 }) {
     const [state, formAction, pending] = useActionState(createProfile, EMPTY);
@@ -45,6 +47,7 @@ export default function OnboardingWizard({
 
     const [handle, setHandle] = useState(initialHandle);
     const [picked, setPicked] = useState<readonly string[]>([]);
+    const [gender, setGender] = useState("");
     const [easeIn, setEaseIn] = useState("");
     const [birthDate, setBirthDate] = useState("");
 
@@ -69,6 +72,9 @@ export default function OnboardingWizard({
         3: handle.trim().length >= 3,
         4: picked.length > 0,
         5: easeIn !== "" && oldEnough,
+        // Gender is optional, so this step never blocks. Skipping it and choosing
+        // "Prefer not to say" are both valid, and they mean different things.
+        6: true,
     };
 
     const toggleTag = (key: string) =>
@@ -210,6 +216,30 @@ export default function OnboardingWizard({
                         </div>
                     </Step>
 
+                    <Step active={step === 6}>
+                        <Heading>How do you identify?</Heading>
+                        <Sub>Entirely optional — skip it if you&apos;d rather not say.</Sub>
+
+                        <div className="mt-6 flex flex-wrap gap-2">
+                            {genders.map((option) => (
+                                <label
+                                    key={option.id}
+                                    className="cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20"
+                                >
+                                    <input
+                                        type="radio"
+                                        name="gender_id"
+                                        value={option.id}
+                                        checked={gender === String(option.id)}
+                                        onChange={() => setGender(String(option.id))}
+                                        className="sr-only"
+                                    />
+                                    {option.label}
+                                </label>
+                            ))}
+                        </div>
+                    </Step>
+
                     <div className="mt-8">
                         {step < TOTAL_STEPS ? (
                             <Button
@@ -221,7 +251,11 @@ export default function OnboardingWizard({
                                 {step === 1 ? "Start" : step === 2 ? "Okay, I'm in" : "Continue"}
                             </Button>
                         ) : (
-                            <Button type="submit" disabled={!canContinue[5] || pending} className="w-full">
+                            <Button
+                                type="submit"
+                                disabled={!canContinue[TOTAL_STEPS] || pending}
+                                className="w-full"
+                            >
                                 {pending ? "Setting you up…" : "Continue"}
                             </Button>
                         )}

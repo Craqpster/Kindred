@@ -36,6 +36,10 @@ const schema = z.object({
         .date({ error: "Enter your date of birth." })
         .refine((d) => (ageFrom(d) ?? -1) >= MIN_AGE, `You must be ${MIN_AGE} or older.`)
         .refine((d) => (ageFrom(d) ?? 999) <= 120, "Enter a valid date of birth."),
+    // Optional at every level: the column is nullable, the step can be skipped, and
+    // "Prefer not to say" is itself a real row. Skipping and choosing not to say are
+    // different answers, and the schema keeps them different.
+    gender_id: z.coerce.number().int().positive().optional(),
     hobby_ids: idList,
     interest_ids: idList,
 });
@@ -49,6 +53,7 @@ export async function createProfile(
     const parsed = schema.safeParse({
         username: formData.get("username"),
         birth_date: formData.get("birth_date"),
+        gender_id: formData.get("gender_id") || undefined,
         hobby_ids: formData.getAll("hobby_ids"),
         interest_ids: formData.getAll("interest_ids"),
     });
@@ -79,6 +84,7 @@ export async function createProfile(
                 id: userId,
                 username: parsed.data.username,
                 birth_date: parsed.data.birth_date,
+                gender_id: parsed.data.gender_id ?? null,
                 profile_hobbies: {
                     create: parsed.data.hobby_ids.map((hobby_id) => ({ hobby_id })),
                 },
