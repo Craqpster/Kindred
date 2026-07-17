@@ -287,7 +287,7 @@ function Progress({ step }: { step: number }) {
                     <li
                         key={i}
                         aria-current={i === step - 1 ? "step" : undefined}
-                        className={`h-1.5 rounded-full transition-all ${
+                        className={`h-1.5 rounded-full transition-all duration-200 ${
                             reached ? "w-6 bg-star-sapphire" : "w-1.5 bg-gray-300"
                         }`}
                     />
