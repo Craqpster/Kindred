@@ -54,7 +54,7 @@ export default async function ProfilePage() {
                 <dd>{profile.gender?.label ?? "—"}</dd>
 
                 <dt className="opacity-60">Confidence</dt>
-                <dd>{profile.confidence_level} / 5</dd>
+                <dd>{profile.confidence_level}</dd>
 
                 <dt className="opacity-60">Hobbies</dt>
                 <dd>{hobbies.length ? hobbies.join(", ") : "—"}</dd>
