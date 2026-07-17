@@ -18,6 +18,11 @@ model profiles {
   gender_id  Int?      @db.SmallInt
   avatar_id  String?
 
+  /// The onboarding "how do you want to ease in?" answer: 'openers' | 'gradual' | 'volume'.
+  /// Constrained by a CHECK that Prisma cannot model — see the migration. Used by the
+  /// Meet matcher for "why you matched".
+  ease_in String?
+
   /// An internal metric, never a user input: everyone starts at 1 and it grows as they
   /// interact with people. Onboarding does not ask for it.
   /// Not derived data: the interactions live in Stream Chat, never in Postgres.
