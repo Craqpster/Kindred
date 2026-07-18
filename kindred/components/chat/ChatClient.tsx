@@ -1,54 +1,26 @@
 "use client";
 
 import type { ChannelFilters, ChannelOptions, ChannelSort } from "stream-chat";
-import {
-    Chat,
-    Channel,
-    ChannelHeader,
-    ChannelList,
-    MessageComposer,
-    MessageList,
-    Thread,
-    Window,
-    useCreateChatClient,
-} from "stream-chat-react";
-import "stream-chat-react/dist/css/index.css";
+import { Channel, ChannelHeader, ChannelList, MessageComposer, MessageList, Thread, Window } from "stream-chat-react";
 
-const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
-
-// Moved out of app/chat/page.tsx. The server component now guarantees the user and hands
-// down the handle, so the useEffect/loading/!user dance is gone. userData carries `name`
-// so Stream shows the handle instead of the bare UUID it displayed before.
-export default function ChatClient({ userId, username }: { userId: string; username: string }) {
-    const client = useCreateChatClient({
-        apiKey,
-        tokenOrProvider: async () => {
-            const res = await fetch("/api/stream-token");
-            if (!res.ok) {
-                throw new Error("Failed to fetch Stream token");
-            }
-            const data = await res.json();
-            return data.token as string;
-        },
-        userData: { id: userId, name: username },
-    });
-
-    if (!client) {
-        return (
-            <div className="flex flex-1 items-center justify-center p-8 text-star-sapphire">
-                Connecting to chat...
-            </div>
-        );
-    }
-
+// The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
+// (app) shell - by the time this renders, <Chat> is already an ancestor from the
+// layout, so ChannelList/Channel pick up client + theme from context on their own.
+export default function ChatClient({ userId }: { userId: string }) {
     const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
     const sort: ChannelSort = { last_message_at: -1 };
     const options: ChannelOptions = { limit: 10 };
 
     return (
+        // Channel-list width is fixed via the .str-chat.str-chat__channel-list rule in
+        // globals.css, not here - see that rule's comment for why an inline/ancestor
+        // override doesn't work for this particular library. The flex-1 wrapper below
+        // is still needed though: Stream's .str-chat__channel has no flex-grow of its
+        // own, so without a wrapper that claims the remaining space, it would only be
+        // as wide as its content demands.
         <div className="flex flex-1 min-h-0">
-            <Chat client={client} theme="str-chat__theme-light">
-                <ChannelList filters={filters} sort={sort} options={options} />
+            <ChannelList filters={filters} sort={sort} options={options} />
+            <div className="flex flex-1 min-w-0">
                 <Channel>
                     <Window>
                         <ChannelHeader />
@@ -57,7 +29,7 @@ export default function ChatClient({ userId, username }: { userId: string; usern
                     </Window>
                     <Thread />
                 </Channel>
-            </Chat>
+            </div>
         </div>
     );
 }
