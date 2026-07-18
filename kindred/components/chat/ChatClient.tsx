@@ -1,7 +1,17 @@
 "use client";
 
-import type { ChannelFilters, ChannelOptions, ChannelSort } from "stream-chat";
-import { Channel, ChannelHeader, ChannelList, MessageComposer, MessageList, Thread, Window } from "stream-chat-react";
+import { useCallback, useEffect, useState } from "react";
+import type { ChannelFilters, ChannelOptions, ChannelSort, LocalMessage, Message, SendMessageOptions } from "stream-chat";
+import {
+    Channel,
+    ChannelHeader,
+    ChannelList,
+    MessageComposer,
+    MessageList,
+    Thread,
+    Window,
+    useChannelActionContext,
+} from "stream-chat-react";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -25,11 +35,121 @@ export default function ChatClient({ userId }: { userId: string }) {
                     <Window>
                         <ChannelHeader />
                         <MessageList />
-                        <MessageComposer />
+                        <ModeratedMessageComposer />
                     </Window>
                     <Thread />
                 </Channel>
             </div>
         </div>
+    );
+}
+
+// Stream's own moderation turned out to need a paid plan we don't have (see the PR
+// notes), so this checks messages against OpenAI's free Moderation endpoint instead,
+// via our own /api/moderate-message route (keeps the OpenAI key server-side only).
+//
+// overrideSubmitHandler completely replaces MessageComposer's built-in send - it does
+// NOT run alongside it. That's why this has to call sendMessage itself for a message
+// that passes the check, and why it has to live in its own component: sendMessage only
+// comes from useChannelActionContext(), which requires being a descendant of <Channel>,
+// not the component that renders <Channel> itself.
+function ModeratedMessageComposer() {
+    const { sendMessage } = useChannelActionContext();
+    const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+    const [secondsLeft, setSecondsLeft] = useState(0);
+    const [showWarning, setShowWarning] = useState(false);
+
+    // Ticks the countdown once a cooldown is active, and clears itself once it expires.
+    useEffect(() => {
+        if (!cooldownUntil) return;
+
+        const tick = () => {
+            const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+            setSecondsLeft(remaining);
+            if (remaining === 0) setCooldownUntil(null);
+        };
+
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [cooldownUntil]);
+
+    // The first couple of flagged messages are warning-only (no cooldownUntil from the
+    // route) - show the warning for a few seconds rather than leaving it up forever.
+    useEffect(() => {
+        if (!showWarning) return;
+        const timeout = setTimeout(() => setShowWarning(false), 6000);
+        return () => clearTimeout(timeout);
+    }, [showWarning]);
+
+    const overrideSubmitHandler = useCallback(
+        async ({
+            localMessage,
+            message,
+            sendOptions,
+        }: {
+            cid: string;
+            localMessage: LocalMessage;
+            message: Message;
+            sendOptions: SendMessageOptions;
+        }) => {
+            let flagged = false;
+            let newCooldownUntil: number | null = null;
+
+            if (message.text?.trim()) {
+                try {
+                    const res = await fetch("/api/moderate-message", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text: message.text }),
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        flagged = data.flagged;
+                        newCooldownUntil = data.cooldownUntil ?? null;
+                    }
+                    // A non-ok response here is treated the same as flagged: false -
+                    // fail open, same policy as the route itself uses for the OpenAI call.
+                } catch {
+                    // Network error reaching our own route - fail open.
+                }
+            }
+
+            if (flagged) {
+                if (newCooldownUntil) {
+                    setCooldownUntil(newCooldownUntil);
+                } else {
+                    setShowWarning(true);
+                }
+                // Stream's MessageComposer shows its own generic "Send message request
+                // failed" toast whenever this throws - we can't customize that text, so
+                // the banner below carries the actual explanation instead.
+                throw new Error("Message blocked by moderation");
+            }
+
+            await sendMessage({ localMessage, message, options: sendOptions });
+        },
+        [sendMessage],
+    );
+
+    return (
+        <>
+            {cooldownUntil && secondsLeft > 0 ? (
+                <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
+                    Please keep this chat respectful — offensive language isn&apos;t
+                    allowed here, and repeated violations may result in restrictions on
+                    your account. You can send messages again in {secondsLeft}s.
+                </div>
+            ) : (
+                showWarning && (
+                    <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
+                        That message wasn&apos;t sent — please keep this chat respectful.
+                        Continuing to send offensive messages will temporarily restrict
+                        you from chatting.
+                    </div>
+                )
+            )}
+            <MessageComposer overrideSubmitHandler={overrideSubmitHandler} />
+        </>
     );
 }
