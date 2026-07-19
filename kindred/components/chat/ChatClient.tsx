@@ -18,14 +18,16 @@ import {
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
 // layout, so ChannelList/Channel pick up client + theme from context on their own.
 //
-// greetChannelCid comes from `?c=` when the user just waved at someone on /meet: that
+// greetChannelId comes from `?c=` when the user just waved at someone on /meet: that
 // conversation opens straight away with the greeting prefilled but unsent.
+//
+// An id, not a cid — customActiveChannel queries by id, and a cid throws.
 export default function ChatClient({
     userId,
-    greetChannelCid,
+    greetChannelId,
 }: {
     userId: string;
-    greetChannelCid?: string;
+    greetChannelId?: string;
 }) {
     const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
     const sort: ChannelSort = { last_message_at: -1 };
@@ -43,14 +45,14 @@ export default function ChatClient({
                 filters={filters}
                 sort={sort}
                 options={options}
-                customActiveChannel={greetChannelCid}
+                customActiveChannel={greetChannelId}
             />
             <div className="flex flex-1 min-w-0">
                 <Channel>
                     <Window>
                         <ChannelHeader />
                         <MessageList />
-                        <PrefillGreeting targetCid={greetChannelCid} />
+                        <PrefillGreeting targetId={greetChannelId} />
                         <ModeratedMessageComposer />
                     </Window>
                     <Thread />
@@ -66,20 +68,22 @@ const GREETING = "👋";
 // a deliberate press of Send by the person doing the waving.
 //
 //
-function PrefillGreeting({ targetCid }: { targetCid?: string }) {
+function PrefillGreeting({ targetId }: { targetId?: string }) {
     const { channel } = useChannelStateContext();
     const filled = useRef(false);
 
     useEffect(() => {
         if (filled.current) return;
-        if (!targetCid || !channel || channel.cid !== targetCid) return;
+        // channel.id, not channel.cid — `?c=` carries the id half of the cid, matching
+        // what customActiveChannel needs.
+        if (!targetId || !channel || channel.id !== targetId) return;
 
         const { textComposer } = channel.messageComposer;
         if (!textComposer.textIsEmpty) return;
 
         textComposer.setText(GREETING);
         filled.current = true;
-    }, [targetCid, channel]);
+    }, [targetId, channel]);
 
     return null;
 }

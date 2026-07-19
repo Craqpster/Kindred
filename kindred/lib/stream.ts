@@ -22,7 +22,12 @@ export const streamServerClient = StreamChat.getInstance(api_key, api_secret);
 /// Deliberately does NOT send a message. The greeting is prefilled into the sender's
 /// composer (see components/chat/ChatClient.tsx) so they send it themselves.
 ///
-/// Returns the channel cid so the caller can redirect straight into the conversation.
+/// Returns the channel *id* so the caller can redirect straight into the conversation.
+///
+/// An id, not a cid. ChannelList's `customActiveChannel` matches on `chan.id` and falls
+/// back to `queryChannels({ id })`, so handing it a cid ("messaging:!members-…") fails at
+/// query time with "invalid id value, did you pass a channel cid instead of channel id?"
+/// rather than at compile time.
 export async function startChatRequest(senderId: string, recipientId: string) {
     const [sender, recipient] = await Promise.all([
         prisma.profiles.findUniqueOrThrow({ where: { id: senderId } }),
@@ -50,5 +55,12 @@ export async function startChatRequest(senderId: string, recipientId: string) {
     });
     await channel.create();
 
-    return channel.cid;
+    // Typed as optional because a channel has no id until it exists; create() assigns
+    // one. Checked rather than asserted so a silent undefined can't become the string
+    // "undefined" in the redirect URL.
+    if (!channel.id) {
+        throw new Error("Stream channel was created without an id");
+    }
+
+    return channel.id;
 }
