@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { verifySession } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
-import { createDirectChannel } from "@/lib/stream";
+import { startChatRequest } from "@/lib/stream";
 
 const targetId = z.uuid();
 
@@ -23,6 +24,12 @@ export async function sayHi(formData: FormData) {
 
     const otherId = parsed.data;
 
+    // Stream first, Postgres second. If channel creation fails, no connections row is
+    // written, so the card stays on Meet and the wave can be retried. The other order
+    // would hide the person with no conversation to show for it. The opposite failure
+    // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
+    const cid = await startChatRequest(userId, otherId);
+
     await prisma.connections.upsert({
         where: { user_id_other_id: { user_id: userId, other_id: otherId } },
         create: { user_id: userId, other_id: otherId, status: "greeted" },
@@ -31,13 +38,5 @@ export async function sayHi(formData: FormData) {
 
     revalidatePath("/meet");
 
-    // A connections row is one-directional (who greeted whom). It's a mutual match, and
-    // a chat should exist, once the other person's row back to us also says "greeted".
-    const reciprocal = await prisma.connections.findUnique({
-        where: { user_id_other_id: { user_id: otherId, other_id: userId } },
-    });
-
-    if (reciprocal?.status === "greeted") {
-        await createDirectChannel(userId, otherId);
-    }
+    redirect(`/chats?c=${encodeURIComponent(cid)}`);
 }

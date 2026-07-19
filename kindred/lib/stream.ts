@@ -13,29 +13,42 @@ if (!api_key || !api_secret) {
 
 export const streamServerClient = StreamChat.getInstance(api_key, api_secret);
 
-/// Called once two users have both said hi to each other. Creates a 1:1 Stream channel
-/// for them. Omitting a channel id makes Stream treat this as a "distinct" channel for
-/// this exact pair of members, so calling it again for the same pair is a safe no-op
-/// rather than a duplicate channel.
-export async function createDirectChannel(userIdA: string, userIdB: string) {
-    const [profileA, profileB] = await Promise.all([
-        prisma.profiles.findUniqueOrThrow({ where: { id: userIdA } }),
-        prisma.profiles.findUniqueOrThrow({ where: { id: userIdB } }),
+/// Opens the 1:1 channel for a wave: `senderId` reaching out to `recipientId`.
+///
+/// Omitting a channel id makes Stream treat this as a "distinct" channel for this exact
+/// pair of members, so waving at the same person twice reuses the conversation instead
+/// of creating a second one.
+///
+/// Deliberately does NOT send a message. The greeting is prefilled into the sender's
+/// composer (see components/chat/ChatClient.tsx) so they send it themselves.
+///
+/// Returns the channel cid so the caller can redirect straight into the conversation.
+export async function startChatRequest(senderId: string, recipientId: string) {
+    const [sender, recipient] = await Promise.all([
+        prisma.profiles.findUniqueOrThrow({ where: { id: senderId } }),
+        prisma.profiles.findUniqueOrThrow({ where: { id: recipientId } }),
     ]);
 
     // Both people must exist as Stream users before they can be added to a channel —
-    // the one who didn't say hi first may never have visited /chats yet.
+    // the recipient may never have visited /chats yet.
     await streamServerClient.upsertUsers([
-        { id: profileA.id, name: profileA.username },
-        { id: profileB.id, name: profileB.username },
+        { id: sender.id, name: sender.username },
+        { id: recipient.id, name: recipient.username },
     ]);
 
     // created_by_id is required when creating a channel with server-side (API secret)
-    // auth — Stream has no other way to know which user "made" it. Who it names doesn't
-    // matter for a mutual match; A is as good as B.
+    // auth — Stream has no other way to know which user "made" it.
+    //
+    // requested_by / requested_of are custom fields marking this as a pending request.
+    // The Requests section will filter on requested_of; until that exists the channel
+    // still lands in the recipient's normal list.
     const channel = streamServerClient.channel("messaging", {
-        members: [profileA.id, profileB.id],
-        created_by_id: profileA.id,
+        members: [sender.id, recipient.id],
+        created_by_id: sender.id,
+        requested_by: sender.id,
+        requested_of: recipient.id,
     });
     await channel.create();
+
+    return channel.cid;
 }
