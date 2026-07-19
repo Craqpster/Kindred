@@ -1,5 +1,5 @@
 import ChatConnectionProvider from "@/components/chat/ChatConnectionProvider";
-import SidebarNav from "@/components/app/SidebarNav";
+import AppDock from "@/components/app/AppDock";
 import { requireProfile } from "@/lib/dal";
 
 // The authenticated shell. requireProfile() gates every tab in one place: no session
@@ -17,11 +17,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
     return (
         // The shell is locked to the viewport height and only <main> scrolls. Without
-        // this, a long list of children grows the whole page and the fixed-height aside
-        // scrolls off, exposing the background beneath it.
-        <div className="flex h-dvh flex-col overflow-hidden sm:flex-row">
-            <SidebarNav username={profile.username} />
-            <main className="flex flex-1 flex-col overflow-y-auto bg-mist">
+        // this, a long list of children grows the whole page and the dock scrolls off,
+        // exposing the background behind it.
+        //
+        // The dock is absolutely positioned OVER <main> rather than sitting in flow: its
+        // frosted glass only reads if content passes behind it. `absolute` (not `fixed`)
+        // is right because this shell never scrolls — <main> does.
+        //
+        // The padding clears whichever edge the dock is on: bottom on mobile, top on
+        // desktop. It lives inside the scroll container, so content starts clear of the
+        // dock and then slides under it.
+        <div className="relative flex h-dvh flex-col overflow-hidden">
+            <AppDock username={profile.username} />
+            <main className="flex flex-1 flex-col overflow-y-auto bg-mist pb-24 sm:pt-20 sm:pb-0">
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>
