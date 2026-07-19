@@ -3,61 +3,71 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 
-// The "+N" chip on a match card. Hovering or focusing it springs a popover open with the
-// tags that did not fit.
-//
-// A <button type="button">, not a <span>: it has to be focusable so keyboard users can
-// reach the hidden tags, and the explicit type matters because a bare <button> defaults
-// to submit and this sits in a card beside the Say hi form.
+import { tintFor } from "@/lib/tag-colors";
+
+// The "+N" chip on a match card. Clicking it expands in place: the chip itself becomes
+// the remaining tags, wrapping inside the card. Clicking again collapses it.
 export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
     const [open, setOpen] = useState(false);
     const reduceMotion = useReducedMotion();
 
     if (tags.length === 0) return null;
 
-    return (
-        <span className="relative inline-flex">
-            <button
-                type="button"
-                // Names the hidden content for screen readers, which never see the
-                // popover — it is decorative and marked aria-hidden below.
-                aria-label={`${tags.length} more: ${tags.join(", ")}`}
-                onMouseEnter={() => setOpen(true)}
-                onMouseLeave={() => setOpen(false)}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setOpen(false)}
-                className="cursor-default rounded-full border border-white/50 bg-iceland/10 px-3 py-1 text-xs text-gray-600 backdrop-blur-md transition-colors hover:bg-iceland/20"
-            >
-                +{tags.length}
-            </button>
+    const transition = reduceMotion
+        ? { duration: 0 }
+        : ({ type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const);
 
-            <AnimatePresence>
-                {open && (
-                    <motion.span
-                        aria-hidden="true"
-                        initial={{ opacity: 0, scale: 0.9, y: 4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 4 }}
-                        transition={
-                            reduceMotion
-                                ? { duration: 0 }
-                                : { type: "spring", stiffness: 500, damping: 30, mass: 0.6 }
-                        }
-                        // bottom-full so it opens upward, clear of the card's action row.
-                        // The card has no overflow-hidden, so this is not clipped.
-                        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 flex gap-1 rounded-xl border border-white/60 bg-white/60 px-2 py-1.5 whitespace-nowrap shadow-sm backdrop-blur-xl"
-                    >
-                        {tags.map((tag) => (
-                            <span
+    return (
+        <motion.button
+            type="button"
+            // layout animates the size change itself, since the element genuinely grows
+            // rather than a separate layer fading in.
+            layout
+            transition={transition}
+            onClick={() => setOpen((current) => !current)}
+            aria-expanded={open}
+            // Only while collapsed: screen readers get the hidden tags without having to
+            // expand. Once open the tags are real visible text, and an aria-label here
+            // would override them instead of letting them be read.
+            aria-label={open ? undefined : `Show ${tags.length} more: ${tags.join(", ")}`}
+            className={`flex cursor-pointer flex-wrap items-center gap-1.5 transition-colors ${
+                open
+                    ? "rounded-2xl bg-canvas p-1.5"
+                    : "rounded-full bg-canvas px-3 py-1.5 text-sm font-medium text-muted hover:bg-slate-ink/8"
+            }`}
+        >
+            <AnimatePresence mode="popLayout" initial={false}>
+                {open ? (
+                    tags.map((tag) => {
+                        const tint = tintFor(tag);
+                        return (
+                            <motion.span
                                 key={tag}
-                                className="rounded-full border border-white/50 bg-iceland/10 px-2 py-0.5 text-xs text-star-sapphire backdrop-blur-md"
+                                layout
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.9 }}
+                                transition={transition}
+                                style={{ backgroundColor: tint.bg, color: tint.text }}
+                                className="rounded-full px-3 py-1.5 text-sm font-medium"
                             >
                                 {tag}
-                            </span>
-                        ))}
+                            </motion.span>
+                        );
+                    })
+                ) : (
+                    <motion.span
+                        key="count"
+                        layout
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={transition}
+                    >
+                        +{tags.length}
                     </motion.span>
                 )}
             </AnimatePresence>
-        </span>
+        </motion.button>
     );
 }

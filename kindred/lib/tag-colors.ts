@@ -24,9 +24,10 @@ const TINTS: readonly TagTint[] = [
 ];
 
 export function tintFor(tag: string): TagTint {
-    let hash = 0;
+    let hash = 0x811c9dc5;
     for (let i = 0; i < tag.length; i += 1) {
-        hash = (hash * 31 + tag.charCodeAt(i)) | 0;
+        hash ^= tag.charCodeAt(i);
+        hash = Math.imul(hash, 0x01000193);
     }
-    return TINTS[Math.abs(hash) % TINTS.length];
+    return TINTS[Math.abs(hash | 0) % TINTS.length];
 }
