@@ -21,3 +21,22 @@
 body {
     font-family: var(--font-poppins), sans-serif;
 }
+
+/* stream-chat-react's own .str-chat class sets --str-chat__channel-list-width: 100%
+   directly on the ChannelList root element (it carries both .str-chat and
+   .str-chat__channel-list). A value declared on an element itself always wins over one
+   inherited from an ancestor, so trying to override this custom property from a
+   wrapping div (even inline) has no effect - it has to be set on a selector matching
+   the same element, with at least as much specificity as .str-chat alone. */
+.str-chat.str-chat__channel-list {
+    --str-chat__channel-list-width: 320px;
+}
+
+/* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
+   it just sizes to its content's natural width and leaves the rest of the row blank.
+   Setting it to fill its flex parent (the flex-1 wrapper around <Channel> in
+   ChatClient.tsx) is what makes the message pane actually use the space next to the
+   channel list instead of sitting narrow next to a blank gap. */
+.str-chat.str-chat__channel {
+    width: 100%;
+}
