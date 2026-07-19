@@ -26,7 +26,7 @@ export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
                 onMouseLeave={() => setOpen(false)}
                 onFocus={() => setOpen(true)}
                 onBlur={() => setOpen(false)}
-                className="cursor-default rounded-full bg-iceland/10 px-3 py-1 text-xs text-gray-600 transition-colors hover:bg-iceland/20"
+                className="cursor-default rounded-full border border-white/50 bg-iceland/10 px-3 py-1 text-xs text-gray-600 backdrop-blur-md transition-colors hover:bg-iceland/20"
             >
                 +{tags.length}
             </button>
@@ -45,12 +45,12 @@ export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
                         }
                         // bottom-full so it opens upward, clear of the card's action row.
                         // The card has no overflow-hidden, so this is not clipped.
-                        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 flex gap-1 rounded-xl border border-white/60 bg-white/80 px-2 py-1.5 whitespace-nowrap shadow-sm backdrop-blur-xl"
+                        className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 flex gap-1 rounded-xl border border-white/60 bg-white/60 px-2 py-1.5 whitespace-nowrap shadow-sm backdrop-blur-xl"
                     >
                         {tags.map((tag) => (
                             <span
                                 key={tag}
-                                className="rounded-full bg-iceland/10 px-2 py-0.5 text-xs text-star-sapphire"
+                                className="rounded-full border border-white/50 bg-iceland/10 px-2 py-0.5 text-xs text-star-sapphire backdrop-blur-md"
                             >
                                 {tag}
                             </span>
