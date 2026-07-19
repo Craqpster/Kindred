@@ -8,7 +8,9 @@ export default async function MeetPage() {
     const matches = await getMatchesFor(profile);
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-6 py-10">
+        // sm:pt-20 clears the dock, which is fixed to the top on desktop. It lives here
+        // rather than in the layout so /chats can reclaim that height.
+        <div className="mx-auto w-full max-w-4xl px-6 py-10 sm:pt-20">
             <h1 className="text-2xl font-bold text-star-sapphire">Meet</h1>
             <p className="mt-1 text-gray-600">
                 Start with one or two, you can always meet more.

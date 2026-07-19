@@ -10,7 +10,7 @@ export default async function MePage() {
     const interests = profile.profile_interests.map(({ interest }) => interest.name);
 
     return (
-        <div className="mx-auto w-full max-w-2xl px-6 py-10">
+        <div className="mx-auto w-full max-w-2xl px-6 py-10 sm:pt-20">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     <Avatar name={profile.username} size={56} />

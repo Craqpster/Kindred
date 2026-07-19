@@ -24,12 +24,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         // frosted glass only reads if content passes behind it. `absolute` (not `fixed`)
         // is right because this shell never scrolls — <main> does.
         //
-        // The padding clears whichever edge the dock is on: bottom on mobile, top on
-        // desktop. It lives inside the scroll container, so content starts clear of the
-        // dock and then slides under it.
         <div className="relative flex h-dvh flex-col overflow-hidden">
             <AppDock username={profile.username} />
-            <main className="flex flex-1 flex-col overflow-y-auto bg-mist pb-24 sm:pt-20 sm:pb-0">
+            <main
+                id="app-scroll"
+                className="flex flex-1 flex-col overflow-y-auto bg-mist pb-24 sm:pb-0"
+            >
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>
