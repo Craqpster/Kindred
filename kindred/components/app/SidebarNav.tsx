@@ -15,7 +15,7 @@ export default function SidebarNav({ username }: { username: string }) {
     const pathname = usePathname();
 
     return (
-        <aside className="flex w-full shrink-0 flex-row items-center justify-between gap-1 bg-flour px-4 py-3 sm:h-screen sm:w-56 sm:flex-col sm:items-stretch sm:justify-start sm:gap-2 sm:px-3 sm:py-6">
+        <aside className="flex w-full shrink-0 flex-row items-center justify-between gap-1 bg-flour px-4 py-3 sm:h-full sm:w-56 sm:flex-col sm:items-stretch sm:justify-start sm:gap-2 sm:px-3 sm:py-6">
             <div className="hidden px-3 pb-4 text-lg font-bold text-star-sapphire sm:block">
                 Kindred
             </div>

@@ -16,14 +16,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     const profile = await requireProfile();
 
     return (
-        <div className="flex min-h-screen flex-col sm:flex-row">
+        // The shell is locked to the viewport height and only <main> scrolls. Without
+        // this, a long list of children grows the whole page and the fixed-height aside
+        // scrolls off, exposing the background beneath it.
+        <div className="flex h-dvh flex-col overflow-hidden sm:flex-row">
             <SidebarNav username={profile.username} />
-            <main className="flex flex-1 flex-col">
+            <main className="flex flex-1 flex-col overflow-y-auto bg-mist">
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>
             </main>
-            <main className="flex flex-1 flex-col bg-mist">{children}</main>
         </div>
     );
 }
