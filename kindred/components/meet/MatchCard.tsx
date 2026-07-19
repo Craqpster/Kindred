@@ -1,4 +1,7 @@
-import { sayHi, notNow } from "@/app/(app)/meet/actions";
+import { Hand } from "lucide-react";
+
+import { sayHi } from "@/app/(app)/meet/actions";
+import ExtraTagsPill from "@/components/meet/ExtraTagsPill";
 import Avatar from "@/components/ui/Avatar";
 import Button from "@/components/ui/Button";
 import type { Match } from "@/lib/matches";
@@ -7,7 +10,7 @@ const MAX_PILLS = 3;
 
 export default function MatchCard({ match }: { match: Match }) {
     const shown = match.sharedTags.slice(0, MAX_PILLS);
-    const extra = match.sharedTags.length - shown.length;
+    const extra = match.sharedTags.slice(MAX_PILLS);
 
     return (
         <div className="flex flex-col gap-4 rounded-3xl bg-white p-4 shadow-sm">
@@ -17,7 +20,7 @@ export default function MatchCard({ match }: { match: Match }) {
             </div>
 
             {shown.length > 0 && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     {shown.map((tag) => (
                         <span
                             key={tag}
@@ -26,25 +29,16 @@ export default function MatchCard({ match }: { match: Match }) {
                             {tag}
                         </span>
                     ))}
-                    {extra > 0 && (
-                        <span className="rounded-full bg-iceland/10 px-3 py-1 text-xs text-gray-600">
-                            +{extra}
-                        </span>
-                    )}
+                    <ExtraTagsPill tags={extra} />
                 </div>
             )}
 
             <div className="mt-auto flex gap-2">
                 <form action={sayHi}>
                     <input type="hidden" name="other_id" value={match.id} />
-                    <Button type="submit" size="sm">
-                        Say hi
-                    </Button>
-                </form>
-                <form action={notNow}>
-                    <input type="hidden" name="other_id" value={match.id} />
-                    <Button type="submit" variant="secondary" size="sm">
-                        Not now
+                    {/* Icon-only, so it needs an explicit accessible name. */}
+                    <Button type="submit" size="icon" aria-label="Say hi" title="Say hi">
+                        <Hand size={18} aria-hidden />
                     </Button>
                 </form>
             </div>
