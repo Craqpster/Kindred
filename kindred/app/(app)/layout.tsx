@@ -26,10 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         //
         <div className="relative flex h-dvh flex-col overflow-hidden">
             <AppDock username={profile.username} />
-            <main
-                id="app-scroll"
-                className="flex flex-1 flex-col overflow-y-auto bg-mist pb-24 sm:pb-0"
-            >
+            <main className="flex flex-1 flex-col overflow-y-auto bg-mist pb-24 sm:pb-0 sm:pl-24">
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>

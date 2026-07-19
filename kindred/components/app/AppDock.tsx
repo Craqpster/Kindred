@@ -4,61 +4,33 @@ import { MessageCircle, Users } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
 
 import Avatar from "@/components/ui/Avatar";
 
-// A floating frosted dock: bottom on mobile (thumb reach), top on desktop.
+// A floating frosted dock: a horizontal bar at the bottom on mobile (thumb reach), a
+// vertical rail centred on the left edge on desktop.
 //
-// Three behaviours keep it from fighting the content instead of hiding it outright:
-//   - dimmed while idle, full opacity on hover or keyboard focus
-//   - slides away while scrolling down, returns on scroll up
-//   - the active pill physically travels between items on a spring
+// It sits OVER the content — see app/(app)/layout.tsx — because backdrop-blur has
+// nothing to blur unless content passes behind it. <main> reserves the matching edge
+// (bottom on mobile, left on desktop) so nothing is ever covered.
+//
+// Icons only, on both breakpoints. title + aria-label carry the meaning that the
+// dropped text labels used to.
 
 const TABS = [
     { href: "/meet", label: "Meet", Icon: Users },
     { href: "/chats", label: "Chats", Icon: MessageCircle },
 ];
 
-const SCROLL_CONTAINER_ID = "app-scroll";
-
-/// Tracks whether the user is scrolling down, so the dock can get out of the way.
-/// Routes whose <main> never scrolls (/chats — Stream's message list scrolls itself)
-/// simply emit no events, so the dock stays put there. No route special-casing needed.
-function useHideOnScrollDown() {
-    const [hidden, setHidden] = useState(false);
-
-    useEffect(() => {
-        const scroller = document.getElementById(SCROLL_CONTAINER_ID);
-        if (!scroller) return;
-
-        let last = scroller.scrollTop;
-
-        const onScroll = () => {
-            const current = scroller.scrollTop;
-            // Ignore jitter, and never hide near the top where there is nothing to reveal.
-            if (Math.abs(current - last) > 8) {
-                setHidden(current > last && current > 64);
-                last = current;
-            }
-        };
-
-        scroller.addEventListener("scroll", onScroll, { passive: true });
-        return () => scroller.removeEventListener("scroll", onScroll);
-    }, []);
-
-    return hidden;
-}
-
 export default function AppDock({ username }: { username: string }) {
     const pathname = usePathname();
-    const hidden = useHideOnScrollDown();
     const reduceMotion = useReducedMotion();
 
     const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
-    // The pill is one shared element: motion matches it across items by layoutId and
-    // springs it to the new position, so the indicator travels rather than cross-fading.
+    // One shared element: motion matches it across items by layoutId and springs it to
+    // the new position, so the indicator travels rather than cross-fading. layoutId
+    // handles the vertical travel on desktop with no extra configuration.
     const pill = (
         <motion.span
             layoutId="dock-pill"
@@ -74,22 +46,20 @@ export default function AppDock({ username }: { username: string }) {
     );
 
     const itemClass = (active: boolean) =>
-        `relative flex items-center gap-2 rounded-xl px-3 py-2 ${
+        `relative flex items-center justify-center rounded-xl p-2.5 ${
             active ? "text-white" : "text-star-sapphire hover:bg-mist"
         }`;
 
     return (
         <nav
             aria-label="Main"
-            data-hidden={hidden}
             className={
                 "absolute bottom-4 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-1 " +
                 "rounded-2xl border border-white/60 bg-white/60 px-2 py-1.5 backdrop-blur-xl " +
-                // Dimmed while idle so it stops competing with content, but never hidden:
-                // focus-within is what keeps it reachable by keyboard.
-                "opacity-40 transition-[opacity,transform] duration-300 hover:opacity-100 focus-within:opacity-100 " +
-                // Slide off whichever edge it lives on.
-                "data-[hidden=true]:translate-y-24 sm:top-4 sm:bottom-auto sm:data-[hidden=true]:-translate-y-24"
+                // Desktop: vertical rail, centred on the left edge. translate-x-0 is
+                // required — without it the mobile centring transform carries into this
+                // breakpoint and pulls the rail half off-screen.
+                "sm:top-1/2 sm:bottom-auto sm:left-4 sm:-translate-y-1/2 sm:translate-x-0 sm:flex-col"
             }
         >
             {TABS.map(({ href, label, Icon }) => {
@@ -98,32 +68,29 @@ export default function AppDock({ username }: { username: string }) {
                     <Link
                         key={href}
                         href={href}
+                        title={label}
+                        aria-label={label}
                         aria-current={active ? "page" : undefined}
                         className={itemClass(active)}
                     >
                         {active && pill}
-                        <Icon size={18} aria-hidden className="relative z-10" />
-                        {/* Labels are desktop-only: three items stay unambiguous on a wide
-                            screen, and the bottom dock stays compact on a narrow one. */}
-                        <span className="relative z-10 hidden text-sm font-medium sm:inline">
-                            {label}
-                        </span>
+                        <Icon size={20} aria-hidden className="relative z-10" />
                     </Link>
                 );
             })}
 
-            {/* The avatar is the Me item. It keeps its label so it reads as a profile
-                link rather than decoration. */}
+            {/* The avatar is the Me item. */}
             <Link
                 href="/me"
+                title="Me"
+                aria-label="Me"
                 aria-current={isActive("/me") ? "page" : undefined}
                 className={itemClass(isActive("/me"))}
             >
                 {isActive("/me") && pill}
                 <span className="relative z-10 flex items-center">
-                    <Avatar name={username} size={18} />
+                    <Avatar name={username} size={20} />
                 </span>
-                <span className="relative z-10 hidden text-sm font-medium sm:inline">Me</span>
             </Link>
         </nav>
     );
