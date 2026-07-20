@@ -64,3 +64,32 @@ export async function startChatRequest(senderId: string, recipientId: string) {
 
     return channel.id;
 }
+
+/// Opens the channel for a group formed by lib/groups.ts.
+///
+/// Type "team", not "messaging", so ChannelList's existing `{ type: "messaging" }` filter
+/// leaves group channels out of the 1:1 list without a single change to that filter.
+/// The two types ship with identical config and channel_member permissions.
+///
+/// Takes an explicit id — the group's uuid — which is the opposite of startChatRequest's
+/// deliberately id-less distinct channel, and for a different reason: it makes create()
+/// idempotent, so retrying after a failed run reuses the channel instead of orphaning one.
+export async function createGroupChannel(
+    groupId: string,
+    title: string,
+    members: { id: string; username: string }[],
+    createdById: string,
+) {
+    await streamServerClient.upsertUsers(
+        members.map((member) => ({ id: member.id, name: member.username })),
+    );
+
+    const channel = streamServerClient.channel("team", groupId, {
+        name: title,
+        members: members.map((member) => member.id),
+        created_by_id: createdById,
+    });
+    await channel.create();
+
+    return groupId;
+}
