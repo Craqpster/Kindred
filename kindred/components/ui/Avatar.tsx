@@ -5,12 +5,12 @@
 // image, this stays as the fallback for anyone who hasn't picked one.
 
 const COLORS = [
-    "#1f4d39", // deep forest — 9.64:1
-    "#35604a", // pine        — 7.18:1
-    "#3d5433", // moss        — 8.35:1
-    "#24605c", // deep teal   — 7.23:1
-    "#574a3c", // bark        — 8.57:1
-    "#8a4b32", // clay        — 6.70:1
+    "#153d74", // star sapphire  — 10.23:1
+    "#24506e", // deep teal-blue —  8.16:1
+    "#1f4e82", // deep           —  8.08:1
+    "#2b5a8c", // mid            —  6.78:1
+    "#35648f", // slate blue     —  5.92:1
+    "#4c6e9c", // light          —  4.97:1
 ];
 
 function initialsOf(name: string): string {
