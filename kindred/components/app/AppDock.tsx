@@ -79,7 +79,7 @@ export default function AppDock({ username }: { username: string }) {
 
     const itemClass = (active: boolean) =>
         `relative flex items-center rounded-xl p-2.5 ${
-            active ? "text-white" : "text-ink-600 hover:bg-bone-200 hover:text-ink-900"
+            active ? "text-surface" : "text-ink-600 hover:bg-bone-200 hover:text-ink-900"
         }`;
 
     return (

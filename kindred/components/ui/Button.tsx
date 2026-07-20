@@ -21,7 +21,7 @@ type ButtonProps = HTMLMotionProps<"button"> & {
 const VARIANTS = {
     primary: "bg-star-sapphire text-white hover:bg-star-sapphire/90",
     secondary: "border border-star-sapphire text-star-sapphire hover:bg-mist",
-    accent: "bg-accent-600 text-white hover:bg-accent-700",
+    accent: "bg-accent-600 text-surface hover:bg-accent-700",
 } as const;
 
 const SIZES = {
@@ -31,6 +31,12 @@ const SIZES = {
 } as const;
 
 const SPRING = { type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const;
+
+// The focus ring is deliberately flush — no ring-offset. Tailwind's
+// --tw-ring-offset-color defaults to #fff, so an offset draws a pure-white gap around the
+// button: invisible on the legacy white surfaces, a bright artifact on a warm card. A
+// flush ring needs no per-surface colour, which matters because this component is shared
+// between the warm shell and the legacy blue pages.
 
 const HOVER_QUERY = "(hover: hover)";
 
@@ -61,7 +67,7 @@ export default function Button({
             whileHover={reduceMotion || !canHover ? undefined : { scaleX: 1.05, scaleY: 1.02 }}
             whileTap={reduceMotion ? undefined : { scale: 0.93 }}
             transition={SPRING}
-            className={`inline-flex items-center justify-center rounded-full font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
+            className={`inline-flex items-center justify-center rounded-full font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
         />
     );
 }
