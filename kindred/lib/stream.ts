@@ -65,6 +65,23 @@ export async function startChatRequest(senderId: string, recipientId: string) {
     return channel.id;
 }
 
+/// Accepts a wave: clears `requested_of` so the channel moves from the Requests tab to
+/// Active.
+export async function acceptChatRequest(channelId: string, userId: string) {
+    const [channel] = await streamServerClient.queryChannels({
+        type: "messaging",
+        id: channelId,
+        members: { $in: [userId] },
+    });
+
+    if (!channel) throw new Error("No such chat request");
+    if (channel.data?.requested_of !== userId) {
+        throw new Error("That request was not sent to you");
+    }
+
+    await channel.updatePartial({ unset: ["requested_of"] });
+}
+
 /// Opens the channel for a group formed by lib/groups.ts.
 ///
 /// Type "team", not "messaging", so ChannelList's existing `{ type: "messaging" }` filter
