@@ -45,9 +45,9 @@ export default function Avatar({
                 width: size,
                 height: size,
                 backgroundColor: colorOf(name),
-                fontSize: size * 0.4,
+                fontSize: Math.round(size * 0.4),
             }}
-            className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-surface select-none ${className}`}
+            className={`inline-flex shrink-0 items-center justify-center rounded-full font-sans leading-none font-semibold text-surface select-none ${className}`}
         >
             {initialsOf(name)}
         </span>
