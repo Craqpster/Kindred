@@ -14,17 +14,6 @@
     --color-ink: #1a1a1a; /* charcoal body text */
 }
 
-/* THE WARM SYSTEM: the authenticated shell. Colour here is semantic, not
-   decorative — green means "you two share this" and nothing else in the app is
-   green, not the nav and not an avatar. That is why the six hashed pastel tag
-   tints were deleted: a hue derived from a hash carries no information, so it was
-   decoration competing with the only real signal on a match card.
-
-   Ruled out by design, not taste: red/pink/coral read romantic no matter the
-   surrounding copy, and purple reads as Discord. Green carries "growth", which is
-   the right note for a confidence app.
-
-*/
 @theme {
     --color-bone-100: #f1ede4; /* the page, and insets inside a card */
     --color-bone-200: #e6e1d6; /* dividers, and recessed wells like the view toggle */
@@ -37,12 +26,10 @@
     --color-ink-600: #6f6a60; /* secondary text */
     --color-ink-900: #16150f; /* primary text */
 
-    /* 600 is the previous --color-accent unchanged, so the CTA does not shift.
-       700 is the text-on-tint weight and the button's hover. */
-    --color-accent-50: #edf3ee;
-    --color-accent-100: #d7e6db;
-    --color-accent-600: #2f6b4f;
-    --color-accent-700: #245640;
+    --color-accent-50: #e3ecf7; /* tag pill fill */
+    --color-accent-100: #d3e1f1; /* tag pill hover */
+    --color-accent-600: #153d74; /* star sapphire */
+    --color-accent-700: #0f2d57;
 
     /* Two radius steps, deliberately. The app had seven values, and Meet alone used
        rounded-3xl AND rounded-[2rem] — near but not equal, which reads as a mistake
