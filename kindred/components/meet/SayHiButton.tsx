@@ -9,11 +9,9 @@ import Button from "@/components/ui/Button";
 // There is deliberately no counterpart for skipping someone. Meet has no reject.
 export default function SayHiButton({
     id,
-    username,
     full = false,
 }: {
     id: string;
-    username: string;
     /// Labelled and full-width, for the spotlight card. Otherwise icon-only, which is
     /// all a compact card has room for.
     full?: boolean;
@@ -32,7 +30,7 @@ export default function SayHiButton({
                 <Button
                     type="submit"
                     size="icon"
-                    aria-label={`Say hi`}
+                    aria-label="Say hi"
                     title="Say hi"
                     className="bg-accent hover:bg-accent/90"
                 >

@@ -17,7 +17,7 @@ export default function MatchCard({ match }: { match: Match }) {
                     {match.username}
                 </h3>
 
-                <SayHiButton id={match.id} username={match.username} />
+                <SayHiButton id={match.id} />
             </div>
         </div>
     );

@@ -7,7 +7,10 @@ import { EASE_IN_REASON } from "@/lib/ease-in";
 import type { Match } from "@/lib/matches";
 
 const SHARED_PILLS = 6;
-const OTHER_PILLS = 5;
+
+// Capped and truncated so a tag-heavy profile cannot wrap this into a second block and
+// unbalance the row it sits in.
+const ALSO_INTO = 3;
 
 // The one match the page leads with. getMatchesFor already sorts by overlap, so the
 // first entry genuinely is the strongest — this card exists to say so out loud, since
@@ -50,17 +53,16 @@ export default function SpotlightCard({ match }: { match: Match }) {
                 </p>
             ) : null}
 
-            <MatchTags
-                tags={match.otherTags}
-                max={OTHER_PILLS}
-                label="They're also into"
-                tone="muted"
-            />
+            {match.otherTags.length > 0 ? (
+                <p className="truncate text-meta text-ink-600">
+                    Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
+                </p>
+            ) : null}
 
             {/* mt-auto pins the action to the bottom however much the card above it
                 fills, so the button sits in the same place on every match. */}
             <div className="mt-auto pt-1">
-                <SayHiButton id={match.id} username={match.username} full />
+                <SayHiButton id={match.id} full />
             </div>
         </div>
     );
