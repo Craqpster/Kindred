@@ -27,24 +27,24 @@ export default function SpotlightCard({ match }: { match: Match }) {
                 </div>
             </div>
 
-            <div className="mt-auto flex items-center gap-3 bg-bone-100/70 p-5 sm:px-10 sm:py-5">
-                <Avatar name={match.username} size={48} />
+            <div className="mt-auto flex items-center justify-between gap-3 bg-bone-100/70 p-5 sm:px-10 sm:py-5">
+                <div className="flex min-w-0 items-center gap-3">
+                    <Avatar name={match.username} size={48} />
 
-                <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-                    <h2 className="truncate font-display text-title text-ink-900">
-                        {match.username}
-                    </h2>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                        <h2 className="truncate font-display text-title text-ink-900">
+                            {match.username}
+                        </h2>
 
-                    {match.otherTags.length > 0 ? (
-                        <p className="truncate text-meta text-ink-600">
-                            Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
-                        </p>
-                    ) : null}
+                        {match.otherTags.length > 0 ? (
+                            <p className="truncate text-meta text-ink-600">
+                                Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
+                            </p>
+                        ) : null}
+                    </div>
                 </div>
 
-                <div className="shrink-0 pl-2">
-                    <SayHiButton id={match.id} labelled />
-                </div>
+                <SayHiButton id={match.id} labelled />
             </div>
         </div>
     );
