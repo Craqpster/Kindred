@@ -14,9 +14,6 @@ import {
     useChannelStateContext,
 } from "stream-chat-react";
 
-import GroupChatCard from "@/components/chat/GroupChatCard";
-import type { Group } from "@/lib/groups";
-
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
 // layout, so ChannelList/Channel pick up client + theme from context on their own.
@@ -28,11 +25,9 @@ import type { Group } from "@/lib/groups";
 export default function ChatClient({
     userId,
     greetChannelId,
-    group,
 }: {
     userId: string;
     greetChannelId?: string;
-    group: Group | null;
 }) {
     const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
     const sort: ChannelSort = { last_message_at: -1 };
@@ -46,11 +41,10 @@ export default function ChatClient({
         // own, so without a wrapper that claims the remaining space, it would only be
         // as wide as its content demands.
         <div className="flex flex-1 min-h-0">
-            {/* The channel list moves into a column so the group card can sit above it.
-                That flip is why globals.css has to override Stream's own `flex` on
-                .str-chat__channel-list — see the comment there. */}
+            {/* The channel list sits in a column so the tabs and the group can sit above
+                it. That flip is why globals.css overrides Stream's own `flex` on
+                .str-chat__channel-list. */}
             <div className="flex w-80 shrink-0 flex-col min-h-0">
-                <GroupChatCard group={group} />
                 <ChannelList
                     filters={filters}
                     sort={sort}

@@ -84,20 +84,6 @@ body {
     font-family: var(--font-poppins), sans-serif;
 }
 
-/* stream-chat-react sets --str-chat__channel-list-width directly on the ChannelList root
-   (it carries both .str-chat and .str-chat__channel-list). A value declared on an element
-   always wins over one inherited from an ancestor, so overriding it from a wrapping div —
-   even inline — has no effect; it has to be a selector matching the same element.
-
-   The list now sits BELOW the group card in a flex column rather than beside the message
-   pane in a row, and that flips what Stream's own `flex: 0 0
-   var(--str-chat__channel-list-width)` means: flex-basis is measured along the container's
-   main axis, so in a column it stops being a 320px width and becomes a 320px HEIGHT —
-   which also beats the element's own `height: 100%`, leaving a stubby list with a gap
-   under it. Overriding flex here is what lets it claim the leftover vertical space.
-   min-height: 0 is the usual flex-child override so the list scrolls internally rather
-   than growing the column. Width now comes from the w-80 wrapper in ChatClient, so the
-   custom property is left at Stream's default. */
 .str-chat.str-chat__channel-list {
     flex: 1 1 auto;
     min-height: 0;
