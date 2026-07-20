@@ -1,5 +1,6 @@
 import ChatClient from "@/components/chat/ChatClient";
 import { requireProfile } from "@/lib/dal";
+import { getGroupFor } from "@/lib/groups";
 import { streamServerClient } from "@/lib/stream";
 
 // The shell already gated auth + onboarding, and ChatConnectionProvider (in the
@@ -22,17 +23,21 @@ export default async function ChatsPage({
     // is accepted (acceptRequest revalidates this path); a wave arriving while the page sits
     // open won't bump it until a navigation. Wiring that to the notification.message_new
     // listener in ChatConnectionProvider is the follow-up.
-    const requests = await streamServerClient.queryChannels({
-        type: "messaging",
-        members: { $in: [profile.id] },
-        requested_of: profile.id,
-    });
+    const [requests, group] = await Promise.all([
+        streamServerClient.queryChannels({
+            type: "messaging",
+            members: { $in: [profile.id] },
+            requested_of: profile.id,
+        }),
+        getGroupFor(profile.id),
+    ]);
 
     return (
         <ChatClient
             userId={profile.id}
             greetChannelId={c}
             requestCount={requests.length}
+            group={group}
         />
     );
 }

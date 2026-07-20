@@ -17,7 +17,9 @@ import {
 
 import { acceptRequest } from "@/app/(app)/chats/actions";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
+import GroupChatRow from "@/components/chat/GroupChatRow";
 import Button from "@/components/ui/Button";
+import type { Group } from "@/lib/groups";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -31,10 +33,12 @@ export default function ChatClient({
     userId,
     greetChannelId,
     requestCount,
+    group,
 }: {
     userId: string;
     greetChannelId?: string;
     requestCount: number;
+    group: Group | null;
 }) {
     const [tab, setTab] = useState<ChatTab>("active");
 
@@ -76,6 +80,9 @@ export default function ChatClient({
                     keeps the wrapper out of the layout so the list is still the column's
                     flex child and the globals.css sizing rule applies to it. */}
                 <div className={tab === "active" ? "contents" : "hidden"}>
+                    {group?.streamChannelId && (
+                        <GroupChatRow group={group} channelId={group.streamChannelId} />
+                    )}
                     <ChannelList
                         filters={activeFilters}
                         sort={sort}
