@@ -37,12 +37,9 @@
     --radius-card: 1.25rem;
     --radius-hero: 1.75rem;
 
-    /* Warm-tinted elevation, because a neutral black shadow over bone goes
-       grey-blue. Both are near-invisible by design: the border does the work, the
-       shadow only stops a card looking like it is floating free. */
-    --shadow-card: 0 1px 2px 0 rgb(22 21 15 / 0.04);
+    --shadow-card: 0 1px 2px 0 rgb(96 87 67 / 0.1);
     --shadow-hero:
-        0 1px 2px 0 rgb(22 21 15 / 0.04), 0 8px 24px -12px rgb(22 21 15 / 0.1);
+        0 2px 4px -1px rgb(96 87 67 / 0.1), 0 8px 20px -8px rgb(96 87 67 / 0.26);
 
     /* Type scale. Each size carries its own line-height/tracking/weight, so
        text-hero is one decision instead of four classes that drift apart between
