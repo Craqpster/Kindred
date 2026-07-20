@@ -17,8 +17,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
     return (
         <div className="flex min-h-screen flex-col bg-chantilly sm:flex-row">
-            <SidebarNav username={profile.username} />
-            <main className="flex flex-1 flex-col">
+            <div className="sm:sticky sm:top-0 sm:h-screen">
+                <SidebarNav username={profile.username} />
+            </div>
+            <main className="flex flex-1 flex-col overflow-x-hidden">
                 <ChatConnectionProvider userId={profile.id} username={profile.username}>
                     {children}
                 </ChatConnectionProvider>

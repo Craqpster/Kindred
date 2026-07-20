@@ -33,10 +33,20 @@ model profiles {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  // Privacy & Redesign settings
+  display_name_mode String?  @default("username")
+  dms_open          Boolean? @default(true)
+  show_confidence   Boolean? @default(true)
+  show_interests    Boolean? @default(true)
+  
+  // Confidence leveling
+  confidence_points Int?     @default(0)
+
   users             users               @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   gender            genders?            @relation(fields: [gender_id], references: [id], onDelete: SetNull)
   profile_hobbies   profile_hobbies[]
   profile_interests profile_interests[]
+  profile_badges    profile_badges[]
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
@@ -109,6 +119,28 @@ model profile_interests {
 
   @@id([profile_id, interest_id])
   @@index([interest_id])
+  @@schema("public")
+}
+
+model badges {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  description     String
+  icon            String?
+  tierRequirement Int?
+  
+  profile_badges  profile_badges[]
+
+  @@schema("public")
+}
+
+model profile_badges {
+  profile_id String   @db.Uuid
+  badge_id   String   @db.Uuid
+  profile    profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  badge      badges   @relation(fields: [badge_id], references: [id], onDelete: Cascade)
+
+  @@id([profile_id, badge_id])
   @@schema("public")
 }
 

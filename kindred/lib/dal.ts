@@ -36,6 +36,7 @@ export const getProfile = cache(async () => {
             gender: true,
             profile_hobbies: { include: { hobby: true } },
             profile_interests: { include: { interest: true } },
+            profile_badges: { include: { badge: true } },
         },
     });
 });
