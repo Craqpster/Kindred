@@ -9,20 +9,18 @@ import Button from "@/components/ui/Button";
 // There is deliberately no counterpart for skipping someone. Meet has no reject.
 export default function SayHiButton({
     id,
-    full = false,
+    labelled = false,
 }: {
     id: string;
-    /// Labelled and full-width, for the spotlight card. Otherwise icon-only, which is
-    /// all a compact card has room for.
-    full?: boolean;
+    labelled?: boolean;
 }) {
     return (
-        <form action={sayHi} className={full ? "w-full" : undefined}>
+        <form action={sayHi} className="shrink-0">
             <input type="hidden" name="other_id" value={id} />
 
-            {full ? (
-                <Button type="submit" variant="accent" className="w-full gap-2">
-                    <Hand size={18} aria-hidden />
+            {labelled ? (
+                <Button type="submit" variant="accent" size="sm" className="gap-2">
+                    <Hand size={16} aria-hidden />
                     Say hi
                 </Button>
             ) : (

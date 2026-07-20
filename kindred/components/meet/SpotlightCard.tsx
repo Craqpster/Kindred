@@ -38,23 +38,21 @@ export default function SpotlightCard({ match }: { match: Match }) {
                 </p>
             ) : null}
 
-            <div className="mt-auto flex flex-col gap-5 border-t border-bone-200 pt-6">
-                <div className="flex items-center gap-3">
-                    <Avatar name={match.username} size={44} />
+            <div className="mt-auto flex items-center gap-3 border-t border-bone-200 pt-6">
+                <Avatar name={match.username} size={44} />
 
-                    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <h2 className="truncate font-display text-title text-ink-900">
-                            {match.username}
-                        </h2>
-                        {match.otherTags.length > 0 ? (
-                            <p className="truncate text-meta text-ink-600">
-                                Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
-                            </p>
-                        ) : null}
-                    </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <h2 className="truncate font-display text-title text-ink-900">
+                        {match.username}
+                    </h2>
+                    {match.otherTags.length > 0 ? (
+                        <p className="truncate text-meta text-ink-600">
+                            Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
+                        </p>
+                    ) : null}
                 </div>
 
-                <SayHiButton id={match.id} full />
+                <SayHiButton id={match.id} labelled />
             </div>
         </div>
     );
