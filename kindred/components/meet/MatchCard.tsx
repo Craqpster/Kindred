@@ -8,8 +8,7 @@ export default function MatchCard({ match }: { match: Match }) {
     return (
         <div className="flex h-full flex-col gap-4 rounded-card border border-ink-900/8 bg-surface p-5 shadow-card">
             <MatchTags tags={match.sharedTags} max={MAX_PILLS} label="You both like" />
-
-            <div className="mt-auto flex items-center gap-2.5 border-t border-bone-200 pt-4">
+            <div className="mt-auto flex items-center gap-2.5 pt-4">
                 <Avatar name={match.username} size={28} />
                 {/* ink-900, not muted: the name is the person's identity, not metadata,
                     and ink-600 at this size is borderline against white. */}
