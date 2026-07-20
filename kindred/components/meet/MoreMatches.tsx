@@ -27,7 +27,7 @@ export default function MoreMatches({
         : ({ type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const);
 
     return (
-        <div className="mt-4 flex flex-col items-center gap-4">
+        <div className="mt-6 flex flex-col items-center gap-4">
             <AnimatePresence initial={false}>
                 {open ? (
                     <motion.div
@@ -58,7 +58,7 @@ export default function MoreMatches({
                 // aria-controls at an id that is not in the document is a dangling
                 // reference. aria-expanded is what carries the state either way.
                 aria-controls={open ? regionId : undefined}
-                className="flex cursor-pointer items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-slate-ink/5 hover:text-slate-ink"
+                className="flex cursor-pointer items-center gap-1.5 rounded-full px-4 py-2 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900"
             >
                 {open ? "Show fewer" : `Show ${count} more ${count === 1 ? "person" : "people"}`}
                 <motion.span
