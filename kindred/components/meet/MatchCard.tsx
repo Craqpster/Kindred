@@ -6,7 +6,7 @@ import type { Match } from "@/lib/matches";
 const MAX_PILLS = 3;
 export default function MatchCard({ match }: { match: Match }) {
     return (
-        <div className="flex h-full flex-col gap-4 rounded-card border border-ink-900/8 bg-surface p-5 shadow-card transition-[translate,box-shadow] duration-250 ease-smooth hover:shadow-hero motion-safe:hover:-translate-y-0.5">
+        <div className="flex h-full flex-col gap-4 rounded-card border border-ink-900/8 bg-surface p-5 shadow-card transition-[translate,box-shadow] duration-250 ease-smooth hover:shadow-hero motion-safe:hover:-translate-y-px">
             <MatchTags tags={match.sharedTags} max={MAX_PILLS} label="You both like" />
             <div className="mt-auto flex items-center gap-2.5 pt-4">
                 <Avatar name={match.username} size={28} />
