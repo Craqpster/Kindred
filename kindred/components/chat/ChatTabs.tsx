@@ -1,0 +1,76 @@
+"use client";
+
+import { motion, useReducedMotion } from "motion/react";
+
+export type ChatTab = "active" | "requests";
+
+export default function ChatTabs({
+    tab,
+    onChange,
+    requestCount,
+}: {
+    tab: ChatTab;
+    onChange: (tab: ChatTab) => void;
+    requestCount: number;
+}) {
+    const reduceMotion = useReducedMotion();
+
+    const pill = (
+        <motion.span
+            layoutId="chats-tab-pill"
+            className="absolute inset-0 rounded-full bg-ink-900"
+            transition={
+                reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 32 }
+            }
+        />
+    );
+
+    const options: readonly { value: ChatTab; label: string }[] = [
+        { value: "active", label: "Active" },
+        { value: "requests", label: "Requests" },
+    ];
+
+    return (
+        <div className="m-3 flex shrink-0 items-center gap-0.5 self-start rounded-full bg-bone-200 p-0.5">
+            {options.map(({ value, label }) => {
+                const active = tab === value;
+
+                return (
+                    <button
+                        key={value}
+                        type="button"
+                        // A mode switch, not navigation.
+                        aria-pressed={active}
+                        onClick={() => onChange(value)}
+                        className={`relative cursor-pointer rounded-full px-3 py-1.5 text-meta font-medium transition-colors ${
+                            active ? "text-surface" : "text-ink-900"
+                        }`}
+                    >
+                        {active && pill}
+                        <span className="relative z-10 flex items-center gap-1.5">
+                            {label}
+                            {value === "requests" && requestCount > 0 && (
+                                <>
+                                    <span
+                                        aria-hidden="true"
+                                        className={`rounded-full px-1.5 text-label tabular-nums ${
+                                            active
+                                                ? "bg-surface/25 text-surface"
+                                                : "bg-ink-900 text-surface"
+                                        }`}
+                                    >
+                                        {requestCount}
+                                    </span>
+                                    <span className="sr-only">
+                                        {requestCount} pending{" "}
+                                        {requestCount === 1 ? "request" : "requests"}
+                                    </span>
+                                </>
+                            )}
+                        </span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
