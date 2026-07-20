@@ -4,15 +4,13 @@
 // This is the placeholder while real avatars are deferred. When avatar_id gains an
 // image, this stays as the fallback for anyone who hasn't picked one.
 
-// Palette tints from the brand colours (globals.css @theme). Text is white on all of
-// them, so every combination stays legible.
 const COLORS = [
-    "#153D74", // star sapphire
-    "#3F79AF", // metro blue
-    "#689CD5", // iceland
-    "#2B5A8C",
-    "#4C6E9C",
-    "#1F4E82",
+    "#1f4d39", // deep forest — 9.64:1
+    "#35604a", // pine        — 7.18:1
+    "#3d5433", // moss        — 8.35:1
+    "#24605c", // deep teal   — 7.23:1
+    "#574a3c", // bark        — 8.57:1
+    "#8a4b32", // clay        — 6.70:1
 ];
 
 function initialsOf(name: string): string {
