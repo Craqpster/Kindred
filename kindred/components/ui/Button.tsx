@@ -14,13 +14,14 @@ import { useSyncExternalStore } from "react";
 
 
 type ButtonProps = HTMLMotionProps<"button"> & {
-    variant?: "primary" | "secondary";
+    variant?: "primary" | "secondary" | "accent";
     size?: "sm" | "md" | "icon";
 };
 
 const VARIANTS = {
     primary: "bg-star-sapphire text-white hover:bg-star-sapphire/90",
     secondary: "border border-star-sapphire text-star-sapphire hover:bg-mist",
+    accent: "bg-accent-600 text-white hover:bg-accent-700",
 } as const;
 
 const SIZES = {

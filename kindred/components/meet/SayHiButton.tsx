@@ -21,7 +21,7 @@ export default function SayHiButton({
             <input type="hidden" name="other_id" value={id} />
 
             {full ? (
-                <Button type="submit" className="w-full gap-2 bg-accent-600 hover:bg-accent-700">
+                <Button type="submit" variant="accent" className="w-full gap-2">
                     <Hand size={18} aria-hidden />
                     Say hi
                 </Button>
@@ -29,10 +29,10 @@ export default function SayHiButton({
                 // Icon-only, so it needs an explicit accessible name.
                 <Button
                     type="submit"
+                    variant="accent"
                     size="icon"
                     aria-label="Say hi"
                     title="Say hi"
-                    className="bg-accent-600 hover:bg-accent-700"
                 >
                     <Hand size={18} aria-hidden />
                 </Button>
