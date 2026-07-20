@@ -24,22 +24,12 @@
    surrounding copy, and purple reads as Discord. Green carries "growth", which is
    the right note for a confidence app.
 
-   Contrast against WCAG 2.1, and the two rules that fall out of it:
-     ink-900 / bone-100      16.21  AAA
-     ink-600 / surface        5.38  AA
-     ink-600 / bone-100       4.77  AA
-     ink-600 / bone-200       4.20  FAILS — secondary text never sits on bone-200
-     accent-700 / accent-50   7.52  AAA
-     white / accent-600       6.29  AA */
+*/
 @theme {
-    /* Warm neutral ramp. Low chroma, so it reads bone rather than beige and never
-       fights the green. bone-100 is the old --color-canvas value unchanged, so the
-       page background does not shift. */
-    --color-bone-50: #faf8f4; /* lifted wash inside a card */
-    --color-bone-100: #f4f1ea; /* the page */
-    --color-bone-200: #e8e3d8; /* quiet fills, dividers */
-    --color-bone-300: #d8d2c4; /* borders meant to be seen */
-    --color-surface: #ffffff; /* cards — a card is white, not a step on the ramp */
+    --color-bone-100: #f1ede4; /* the page, and insets inside a card */
+    --color-bone-200: #e6e1d6; /* dividers, and recessed wells like the view toggle */
+    --color-bone-300: #d4cdbf; /* borders meant to be seen */
+    --color-surface: #fbf9f5; /* cards, and text on a dark fill */
 
     /* Warm-tinted greys, not neutral: a pure grey next to bone reads blue by
        contrast. There is deliberately no lighter step — anything paler fails AA on
