@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
-/* The Kindred palette. Use these tokens rather than literal hexes:
-   bg-mist, text-star-sapphire, border-metro-blue, bg-iceland/10 */
+/* LEGACY: the original blue palette. Landing page, /login, /signup and onboarding
+   only. Frozen — nothing new should reach for these; anything inside app/(app)/
+   uses the warm system below. Rule of thumb: a colour token with NO numeric
+   suffix is legacy. */
 @theme {
     --color-flour: #eae6dd; /* Flour */
     --color-chantilly: #f0f4ea; /* Chantilly Lace */
@@ -10,17 +12,95 @@
     --color-metro-blue: #3f79af; /* Metro Blue */
     --color-star-sapphire: #153d74; /* Star Sapphire */
     --color-ink: #1a1a1a; /* charcoal body text */
+}
 
-    /* Meet-page palette pilot. Deliberately alongside the blues above rather than
-       replacing them, so only surfaces that opt in change.
-       Ruled out by design, not taste: red/pink/coral read romantic no matter the
-       surrounding copy, and purple reads as Discord. Green carries "growth" instead,
-       which is the right note for a confidence app. */
-    --color-canvas: #f4f1ea; /* warm bone page background */
-    --color-surface: #ffffff; /* cards */
-    --color-slate-ink: #16150f; /* warm near-black text */
-    --color-muted: #6f6a60; /* secondary text */
-    --color-accent: #2f6b4f; /* forest green — the wave, focus rings */
+/* THE WARM SYSTEM: the authenticated shell. Colour here is semantic, not
+   decorative — green means "you two share this" and nothing else in the app is
+   green, not the nav and not an avatar. That is why the six hashed pastel tag
+   tints were deleted: a hue derived from a hash carries no information, so it was
+   decoration competing with the only real signal on a match card.
+
+   Ruled out by design, not taste: red/pink/coral read romantic no matter the
+   surrounding copy, and purple reads as Discord. Green carries "growth", which is
+   the right note for a confidence app.
+
+   Contrast against WCAG 2.1, and the two rules that fall out of it:
+     ink-900 / bone-100      16.21  AAA
+     ink-600 / surface        5.38  AA
+     ink-600 / bone-100       4.77  AA
+     ink-600 / bone-200       4.20  FAILS — secondary text never sits on bone-200
+     accent-700 / accent-50   7.52  AAA
+     white / accent-600       6.29  AA */
+@theme {
+    /* Warm neutral ramp. Low chroma, so it reads bone rather than beige and never
+       fights the green. bone-100 is the old --color-canvas value unchanged, so the
+       page background does not shift. */
+    --color-bone-50: #faf8f4; /* lifted wash inside a card */
+    --color-bone-100: #f4f1ea; /* the page */
+    --color-bone-200: #e8e3d8; /* quiet fills, dividers */
+    --color-bone-300: #d8d2c4; /* borders meant to be seen */
+    --color-surface: #ffffff; /* cards — a card is white, not a step on the ramp */
+
+    /* Warm-tinted greys, not neutral: a pure grey next to bone reads blue by
+       contrast. There is deliberately no lighter step — anything paler fails AA on
+       bone, and a token you may not use for text is a trap. */
+    --color-ink-600: #6f6a60; /* secondary text */
+    --color-ink-900: #16150f; /* primary text */
+
+    /* 600 is the previous --color-accent unchanged, so the CTA does not shift.
+       700 is the text-on-tint weight and the button's hover. */
+    --color-accent-50: #edf3ee;
+    --color-accent-100: #d7e6db;
+    --color-accent-600: #2f6b4f;
+    --color-accent-700: #245640;
+
+    /* Two radius steps, deliberately. The app had seven values, and Meet alone used
+       rounded-3xl AND rounded-[2rem] — near but not equal, which reads as a mistake
+       rather than a distinction. Pills keep rounded-full. */
+    --radius-card: 1.25rem;
+    --radius-hero: 1.75rem;
+
+    /* Warm-tinted elevation, because a neutral black shadow over bone goes
+       grey-blue. Both are near-invisible by design: the border does the work, the
+       shadow only stops a card looking like it is floating free. */
+    --shadow-card: 0 1px 2px 0 rgb(22 21 15 / 0.04);
+    --shadow-hero:
+        0 1px 2px 0 rgb(22 21 15 / 0.04), 0 8px 24px -12px rgb(22 21 15 / 0.1);
+
+    /* Type scale. Each size carries its own line-height/tracking/weight, so
+       text-hero is one decision instead of four classes that drift apart between
+       components. Explicit utilities still win — Tailwind emits these as
+       var(--tw-font-weight, …), so `text-hero font-medium` is a safe override.
+
+       Never name a colour and a size the same: text-* resolves --color-* BEFORE
+       --text-*, so a --color-label would make text-label silently a colour. */
+    --text-label: 0.6875rem;
+    --text-label--line-height: 1;
+    --text-label--letter-spacing: 0.08em;
+    --text-label--font-weight: 600;
+
+    --text-meta: 0.8125rem;
+    --text-meta--line-height: 1.4;
+
+    --text-body: 0.9375rem;
+    --text-body--line-height: 1.55;
+
+    --text-title: 1.375rem;
+    --text-title--line-height: 1.25;
+    --text-title--letter-spacing: -0.015em;
+    --text-title--font-weight: 600;
+
+    --text-hero: 2.125rem;
+    --text-hero--line-height: 1.1;
+    --text-hero--letter-spacing: -0.025em;
+    --text-hero--font-weight: 600;
+
+    /* Migration shims: the Meet pilot's names aliased onto the ramp, so every commit
+       in the overhaul compiles on its own. Deleted once nothing references them. */
+    --color-canvas: var(--color-bone-100);
+    --color-slate-ink: var(--color-ink-900);
+    --color-muted: var(--color-ink-600);
+    --color-accent: var(--color-accent-600);
 }
 
 @theme inline {
