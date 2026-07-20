@@ -94,23 +94,12 @@
     --text-hero--line-height: 1.1;
     --text-hero--letter-spacing: -0.025em;
     --text-hero--font-weight: 600;
-
-    /* Migration shims: the Meet pilot's names aliased onto the ramp, so every commit
-       in the overhaul compiles on its own. Deleted once nothing references them. */
-    --color-canvas: var(--color-bone-100);
-    --color-slate-ink: var(--color-ink-900);
-    --color-muted: var(--color-ink-600);
-    --color-accent: var(--color-accent-600);
 }
 
 @theme inline {
     /* inline so these resolve next/font's generated variables at the use site */
     --font-sans: var(--font-poppins);
 
-    /* Real theme tokens, not font-[var(--x)] arbitrary values. That form is ambiguous —
-       Tailwind can't tell family from weight — so `font-bold` silently beat it and the
-       old Lora heading font never rendered anywhere. `font-display` / `font-body`
-       cannot fail that way. */
     --font-display: var(--font-montserrat);
     --font-body: var(--font-karla);
 }
