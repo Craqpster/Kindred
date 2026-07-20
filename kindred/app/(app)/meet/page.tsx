@@ -1,8 +1,12 @@
+import { cookies } from "next/headers";
+
 import MatchCard from "@/components/meet/MatchCard";
 import MoreMatches from "@/components/meet/MoreMatches";
 import SpotlightCard from "@/components/meet/SpotlightCard";
+import ViewToggle from "@/components/meet/ViewToggle";
 import { requireProfile } from "@/lib/dal";
 import { getMatchesFor } from "@/lib/matches";
+import { MEET_VIEW_COOKIE, meetViewFrom } from "@/lib/meet-view";
 
 // How many matches share the opening screen with the spotlight. Everyone else is behind
 const RUNNERS_UP = 3;
@@ -17,6 +21,8 @@ export default async function MeetPage() {
     const profile = await requireProfile();
     const matches = await getMatchesFor(profile);
 
+    const view = meetViewFrom((await cookies()).get(MEET_VIEW_COOKIE)?.value);
+
     const [top, ...others] = matches;
     const runnersUp = others.slice(0, RUNNERS_UP);
     const rest = others.slice(RUNNERS_UP);
@@ -24,16 +30,30 @@ export default async function MeetPage() {
     return (
         <div className="min-h-full flex-1 bg-bone-100 font-body text-ink-900">
             <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:py-12">
-                <h1 className="font-display text-title">Meet</h1>
-                <p className="mt-1 text-body text-ink-600">
-                    Start with one or two, you can always meet more.
-                </p>
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h1 className="font-display text-title">Meet</h1>
+                        <p className="mt-1 text-body text-ink-600">
+                            Start with one or two, you can always meet more.
+                        </p>
+                    </div>
+
+                    <ViewToggle view={view} />
+                </div>
 
                 {matches.length === 0 ? (
                     <p className="mt-10 rounded-hero border border-ink-900/8 bg-surface p-10 text-center text-body text-ink-600 shadow-card">
                         No matches just yet. As more people join and share your hobbies and
                         interests, they&apos;ll show up here.
                     </p>
+                ) : view === "grid" ? (
+                    /* The flat view: every match at equal weight, no spotlight and no
+                       reveal. Keeping a spotlight here would make the toggle a no-op. */
+                    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {matches.map((match) => (
+                            <MatchCard key={match.id} match={match} />
+                        ))}
+                    </div>
                 ) : (
                     <>
                         <div className="mt-8 flex flex-col gap-4">

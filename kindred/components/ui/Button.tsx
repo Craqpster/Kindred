@@ -60,7 +60,7 @@ export default function Button({
             whileHover={reduceMotion || !canHover ? undefined : { scaleX: 1.05, scaleY: 1.02 }}
             whileTap={reduceMotion ? undefined : { scale: 0.93 }}
             transition={SPRING}
-            className={`inline-flex items-center justify-center rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
+            className={`inline-flex items-center justify-center rounded-full font-medium transition-colors focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${SIZES[size]} ${VARIANTS[variant]} ${className}`}
         />
     );
 }
