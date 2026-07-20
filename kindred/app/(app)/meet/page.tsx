@@ -22,7 +22,7 @@ export default async function MeetPage() {
             ) : (
                 <div className="mt-8 grid gap-4 sm:grid-cols-2">
                     {matches.map((match) => (
-                        <MatchCard key={match.id} match={match} viewerEaseIn={profile.ease_in} />
+                        <MatchCard key={match.id} match={match} />
                     ))}
                 </div>
             )}
