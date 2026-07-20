@@ -1,5 +1,6 @@
 import ChatClient from "@/components/chat/ChatClient";
 import { requireProfile } from "@/lib/dal";
+import { streamServerClient } from "@/lib/stream";
 
 // The shell already gated auth + onboarding, and ChatConnectionProvider (in the
 // layout) already holds the live Stream connection. We only need the id to filter
@@ -17,5 +18,21 @@ export default async function ChatsPage({
 }) {
     const [profile, { c }] = await Promise.all([requireProfile(), searchParams]);
 
-    return <ChatClient userId={profile.id} greetChannelId={c} />;
+    // Counted server-side so the badge is right on first paint. It refreshes when a request
+    // is accepted (acceptRequest revalidates this path); a wave arriving while the page sits
+    // open won't bump it until a navigation. Wiring that to the notification.message_new
+    // listener in ChatConnectionProvider is the follow-up.
+    const requests = await streamServerClient.queryChannels({
+        type: "messaging",
+        members: { $in: [profile.id] },
+        requested_of: profile.id,
+    });
+
+    return (
+        <ChatClient
+            userId={profile.id}
+            greetChannelId={c}
+            requestCount={requests.length}
+        />
+    );
 }
