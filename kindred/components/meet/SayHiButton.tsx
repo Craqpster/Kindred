@@ -25,14 +25,14 @@ export default function SayHiButton({
             {full ? (
                 <Button type="submit" className="w-full gap-2 bg-accent hover:bg-accent/90">
                     <Hand size={18} aria-hidden />
-                    Say hi to {username}
+                    Say hi
                 </Button>
             ) : (
                 // Icon-only, so it needs an explicit accessible name.
                 <Button
                     type="submit"
                     size="icon"
-                    aria-label={`Say hi to ${username}`}
+                    aria-label={`Say hi`}
                     title="Say hi"
                     className="bg-accent hover:bg-accent/90"
                 >
