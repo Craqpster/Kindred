@@ -58,7 +58,7 @@ export default function AppDock({ username }: { username: string }) {
     const pill = (
         <motion.span
             layoutId="dock-pill"
-            className="absolute inset-0 rounded-xl bg-star-sapphire"
+            className="absolute inset-0 rounded-xl bg-ink-900"
             // A spring that ignores the OS reduce-motion setting is an accessibility
             // regression, so drop to an instant move instead.
             transition={spring(400, 32)}
@@ -79,7 +79,7 @@ export default function AppDock({ username }: { username: string }) {
 
     const itemClass = (active: boolean) =>
         `relative flex items-center rounded-xl p-2.5 ${
-            active ? "text-white" : "text-star-sapphire hover:bg-mist"
+            active ? "text-white" : "text-ink-600 hover:bg-bone-200 hover:text-ink-900"
         }`;
 
     return (
@@ -94,7 +94,7 @@ export default function AppDock({ username }: { username: string }) {
             onBlur={() => setExpanded(false)}
             className={
                 "absolute bottom-4 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-1 " +
-                "rounded-2xl border border-white/60 bg-white/60 px-2 py-1.5 backdrop-blur-xl " +
+                "rounded-card border border-ink-900/8 bg-surface/70 px-2 py-1.5 shadow-card backdrop-blur-xl " +
                 // Desktop: vertical rail, centred on the left edge. translate-x-0 is
                 // required — without it the mobile centring transform carries into this
                 // breakpoint and pulls the rail half off-screen.
