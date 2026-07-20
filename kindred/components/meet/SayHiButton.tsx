@@ -19,8 +19,7 @@ export default function SayHiButton({
             <input type="hidden" name="other_id" value={id} />
 
             {labelled ? (
-                <Button type="submit" variant="accent" size="sm" className="gap-2">
-                    <Hand size={16} aria-hidden />
+                <Button type="submit" variant="accent" size="md">
                     Say hi
                 </Button>
             ) : (
