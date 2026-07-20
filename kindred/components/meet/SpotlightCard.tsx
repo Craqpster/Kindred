@@ -1,54 +1,40 @@
-import { MessagesSquare } from "lucide-react";
-
 import MatchTags from "@/components/meet/MatchTags";
 import SayHiButton from "@/components/meet/SayHiButton";
 import Avatar from "@/components/ui/Avatar";
-import { EASE_IN_REASON } from "@/lib/ease-in";
+// import { EASE_IN_REASON } from "@/lib/ease-in";
 import type { Match } from "@/lib/matches";
 
 const SHARED_PILLS = 6;
-
-// Capped and truncated so a tag-heavy profile cannot wrap this into a second block and
-// unbalance the row it sits in.
 const ALSO_INTO = 3;
 
-// The one match the page leads with. getMatchesFor already sorts by overlap, so the
 export default function SpotlightCard({ match }: { match: Match }) {
     const sharedCount = match.sharedTags.length;
-    const reason = match.sharedEaseIn ? EASE_IN_REASON[match.sharedEaseIn] : null;
+    // const reason = match.sharedEaseIn ? EASE_IN_REASON[match.sharedEaseIn] : null;
 
     return (
-        <div className="flex flex-col gap-6 rounded-hero border border-ink-900/8 bg-surface p-7 shadow-hero sm:p-9">
-            <p className="text-label text-ink-600 uppercase">Most to talk about</p>
+        <div className="group flex flex-col overflow-hidden rounded-hero bg-surface shadow-xl shadow-slate-200/40 transition-all duration-400 ease-out hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-100/60">
+            
+            <div className="flex flex-col items-start gap-6 p-8 sm:px-10 sm:py-8">
+                <div className="flex flex-col gap-4">
+                    <p className="font-display text-hero text-ink-900">
+                        You share <span className="text-accent-600">{sharedCount}</span>{" "}
+                        {sharedCount === 1 ? "interest" : "interests"}
+                    </p>
 
-            <div className="flex flex-col gap-4">
-                <p className="font-display text-hero text-ink-900">
-                    You have <span className="text-accent-600">{sharedCount}</span>{" "}
-                    {sharedCount === 1 ? "thing" : "things"} in common
-                </p>
-
-                {/* No label — the line above already said what these are. */}
-                <MatchTags tags={match.sharedTags} max={SHARED_PILLS} />
+                    <div className="pt-1">
+                        <MatchTags tags={match.sharedTags} max={SHARED_PILLS} />
+                    </div>
+                </div>
             </div>
 
-            {reason ? (
-                <p className="flex items-start gap-2.5 rounded-card bg-bone-100 p-3.5 text-body text-ink-600">
-                    <MessagesSquare
-                        size={16}
-                        className="mt-0.5 shrink-0 text-accent-600"
-                        aria-hidden
-                    />
-                    {reason}
-                </p>
-            ) : null}
+            <div className="mt-auto flex items-center gap-3 bg-bone-100/70 p-5 sm:px-10 sm:py-5">
+                <Avatar name={match.username} size={48} />
 
-            <div className="mt-auto flex items-center gap-3 border-t border-bone-200 pt-6">
-                <Avatar name={match.username} size={44} />
-
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
                     <h2 className="truncate font-display text-title text-ink-900">
                         {match.username}
                     </h2>
+
                     {match.otherTags.length > 0 ? (
                         <p className="truncate text-meta text-ink-600">
                             Also into {match.otherTags.slice(0, ALSO_INTO).join(", ")}
@@ -56,7 +42,9 @@ export default function SpotlightCard({ match }: { match: Match }) {
                     ) : null}
                 </div>
 
-                <SayHiButton id={match.id} labelled />
+                <div className="shrink-0 pl-2">
+                    <SayHiButton id={match.id} labelled />
+                </div>
             </div>
         </div>
     );
