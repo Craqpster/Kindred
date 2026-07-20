@@ -7,7 +7,17 @@ import { tintFor } from "@/lib/tag-colors";
 
 // The "+N" chip on a match card. Clicking it expands in place: the chip itself becomes
 // the remaining tags, wrapping inside the card. Clicking again collapses it.
-export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
+//
+// `tone` has to match the row this chip belongs to — see MatchTags. Expanding a muted
+// row into tinted pills would not just look inconsistent, it would be wrong: the tint
+// is what marks a tag as shared.
+export default function ExtraTagsPill({
+    tags,
+    tone = "tinted",
+}: {
+    tags: readonly string[];
+    tone?: "tinted" | "muted";
+}) {
     const [open, setOpen] = useState(false);
     const reduceMotion = useReducedMotion();
 
@@ -39,7 +49,7 @@ export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
             <AnimatePresence mode="popLayout" initial={false}>
                 {open ? (
                     tags.map((tag) => {
-                        const tint = tintFor(tag);
+                        const tint = tone === "tinted" ? tintFor(tag) : null;
                         return (
                             <motion.span
                                 key={tag}
@@ -48,8 +58,14 @@ export default function ExtraTagsPill({ tags }: { tags: readonly string[] }) {
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.9 }}
                                 transition={transition}
-                                style={{ backgroundColor: tint.bg, color: tint.text }}
-                                className="rounded-full px-3 py-1.5 text-sm font-medium"
+                                style={
+                                    tint
+                                        ? { backgroundColor: tint.bg, color: tint.text }
+                                        : undefined
+                                }
+                                className={`rounded-full px-3 py-1.5 text-sm font-medium ${
+                                    tint ? "" : "bg-surface text-muted"
+                                }`}
                             >
                                 {tag}
                             </motion.span>
