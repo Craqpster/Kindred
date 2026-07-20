@@ -4,16 +4,16 @@ import Avatar from "@/components/ui/Avatar";
 import type { Match } from "@/lib/matches";
 
 const MAX_PILLS = 3;
-
-// Shared interests lead; the person is context underneath.
 export default function MatchCard({ match }: { match: Match }) {
     return (
-        <div className="flex flex-col gap-4 rounded-3xl border border-slate-ink/8 bg-surface p-5">
+        <div className="flex h-full flex-col gap-4 rounded-card border border-ink-900/8 bg-surface p-5 shadow-card">
             <MatchTags tags={match.sharedTags} max={MAX_PILLS} label="You both like" />
 
-            <div className="mt-auto flex items-center gap-2.5 pt-4">
+            <div className="mt-auto flex items-center gap-2.5 border-t border-bone-200 pt-4">
                 <Avatar name={match.username} size={28} />
-                <h3 className="min-w-0 flex-1 truncate text-sm font-normal text-muted">
+                {/* ink-900, not muted: the name is the person's identity, not metadata,
+                    and ink-600 at this size is borderline against white. */}
+                <h3 className="min-w-0 flex-1 truncate text-meta font-medium text-ink-900">
                     {match.username}
                 </h3>
 
