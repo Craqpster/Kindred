@@ -42,6 +42,8 @@ model profiles {
   connections_made     connections[] @relation("connection_actor")
   connections_received connections[] @relation("connection_target")
 
+  group_member group_members?
+
   @@index([gender_id])
   @@schema("public")
 }
@@ -60,6 +62,36 @@ model connections {
 
   @@id([user_id, other_id])
   @@index([other_id])
+  @@schema("public")
+}
+
+/// A 3-4 person group chat, assembled from shared hobbies and interests.
+model groups {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The top tag the members share, computed once at formation and then frozen.
+  title String
+
+  stream_channel_id String? @unique
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  members group_members[]
+
+  @@schema("public")
+}
+
+model group_members {
+  profile_id String   @id @db.Uuid
+  group_id   String   @db.Uuid
+  joined_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  group   groups   @relation(fields: [group_id], references: [id], onDelete: Cascade)
+
+  /// The primary key only indexes profile_id, so "who else is in my group" would
+  /// sequential-scan without this. Same reasoning as profile_hobbies.hobby_id.
+  @@index([group_id])
   @@schema("public")
 }
 
