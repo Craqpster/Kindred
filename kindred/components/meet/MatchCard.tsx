@@ -13,9 +13,9 @@ export default function MatchCard({ match }: { match: Match }) {
 
             <div className="mt-auto flex items-center gap-2.5 pt-4">
                 <Avatar name={match.username} size={28} />
-                <span className="min-w-0 flex-1 truncate text-sm text-muted">
+                <h3 className="min-w-0 flex-1 truncate text-sm font-normal text-muted">
                     {match.username}
-                </span>
+                </h3>
 
                 <SayHiButton id={match.id} username={match.username} />
             </div>
