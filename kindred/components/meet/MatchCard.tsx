@@ -1,9 +1,6 @@
-import { Hand } from "lucide-react";
-
-import { sayHi } from "@/app/(app)/meet/actions";
 import MatchTags from "@/components/meet/MatchTags";
+import SayHiButton from "@/components/meet/SayHiButton";
 import Avatar from "@/components/ui/Avatar";
-import Button from "@/components/ui/Button";
 import type { Match } from "@/lib/matches";
 
 const MAX_PILLS = 3;
@@ -20,19 +17,7 @@ export default function MatchCard({ match }: { match: Match }) {
                     {match.username}
                 </span>
 
-                <form action={sayHi}>
-                    <input type="hidden" name="other_id" value={match.id} />
-                    {/* Icon-only, so it needs an explicit accessible name. */}
-                    <Button
-                        type="submit"
-                        size="icon"
-                        aria-label={`Say hi to ${match.username}`}
-                        title="Say hi"
-                        className="bg-accent hover:bg-accent/90"
-                    >
-                        <Hand size={18} aria-hidden />
-                    </Button>
-                </form>
+                <SayHiButton id={match.id} username={match.username} />
             </div>
         </div>
     );
