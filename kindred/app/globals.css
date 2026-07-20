@@ -1,7 +1,9 @@
 @import "tailwindcss";
 
-/* The Kindred palette. Use these tokens rather than literal hexes:
-   bg-mist, text-star-sapphire, border-metro-blue, bg-iceland/10 */
+/* LEGACY: the original blue palette. Landing page, /login, /signup and onboarding
+   only. Frozen — nothing new should reach for these; anything inside app/(app)/
+   uses the warm system below. Rule of thumb: a colour token with NO numeric
+   suffix is legacy. */
 @theme {
     --color-flour: #eae6dd; /* Flour */
     --color-chantilly: #f0f4ea; /* Chantilly Lace */
@@ -12,10 +14,70 @@
     --color-ink: #1a1a1a; /* charcoal body text */
 }
 
+@theme {
+    --color-bone-100: #f1ede4; /* the page, and insets inside a card */
+    --color-bone-200: #e6e1d6; /* dividers, and recessed wells like the view toggle */
+    --color-bone-300: #d4cdbf; /* borders meant to be seen */
+    --color-surface: #fbf9f5; /* cards, and text on a dark fill */
+
+    /* Warm-tinted greys, not neutral: a pure grey next to bone reads blue by
+       contrast. There is deliberately no lighter step — anything paler fails AA on
+       bone, and a token you may not use for text is a trap. */
+    --color-ink-600: #6f6a60; /* secondary text */
+    --color-ink-900: #16150f; /* primary text */
+
+    --color-accent-50: #e3ecf7; /* tag pill fill */
+    --color-accent-100: #d3e1f1; /* tag pill hover */
+    --color-accent-600: #153d74; /* star sapphire */
+    --color-accent-700: #0f2d57;
+
+    /* Two radius steps, deliberately. The app had seven values, and Meet alone used
+       rounded-3xl AND rounded-[2rem] — near but not equal, which reads as a mistake
+       rather than a distinction. Pills keep rounded-full. */
+    --radius-card: 1.25rem;
+    --radius-hero: 1.75rem;
+
+    --shadow-card: 0 1px 2px 0 rgb(96 87 67 / 0.1);
+    --shadow-hero:
+        0 2px 4px -1px rgb(96 87 67 / 0.1), 0 8px 20px -8px rgb(96 87 67 / 0.26);
+
+    --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* Type scale. Each size carries its own line-height/tracking/weight, so
+       text-hero is one decision instead of four classes that drift apart between
+       components. Explicit utilities still win — Tailwind emits these as
+       var(--tw-font-weight, …), so `text-hero font-medium` is a safe override.
+
+       Never name a colour and a size the same: text-* resolves --color-* BEFORE
+       --text-*, so a --color-label would make text-label silently a colour. */
+    --text-label: 0.6875rem;
+    --text-label--line-height: 1;
+    --text-label--letter-spacing: 0.08em;
+    --text-label--font-weight: 600;
+
+    --text-meta: 0.8125rem;
+    --text-meta--line-height: 1.4;
+
+    --text-body: 0.9375rem;
+    --text-body--line-height: 1.55;
+
+    --text-title: 1.375rem;
+    --text-title--line-height: 1.25;
+    --text-title--letter-spacing: -0.015em;
+    --text-title--font-weight: 600;
+
+    --text-hero: 2.125rem;
+    --text-hero--line-height: 1.1;
+    --text-hero--letter-spacing: -0.025em;
+    --text-hero--font-weight: 600;
+}
+
 @theme inline {
     /* inline so these resolve next/font's generated variables at the use site */
     --font-sans: var(--font-poppins);
-    --font-serif: var(--font-lora);
+
+    --font-display: var(--font-montserrat);
+    --font-body: var(--font-karla);
 }
 
 body {
