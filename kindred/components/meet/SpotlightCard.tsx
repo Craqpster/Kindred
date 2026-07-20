@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 
 import MatchTags from "@/components/meet/MatchTags";
 import SayHiButton from "@/components/meet/SayHiButton";
@@ -19,7 +19,7 @@ export default function SpotlightCard({ match }: { match: Match }) {
 
     return (
         <div className="flex flex-col gap-6 rounded-hero border border-ink-900/8 bg-surface p-7 shadow-hero sm:p-9">
-            <p className="text-label text-ink-600 uppercase">Your closest match</p>
+            <p className="text-label text-ink-600 uppercase">Most to talk about</p>
 
             <div className="flex flex-col gap-4">
                 <p className="font-display text-hero text-ink-900">
@@ -33,7 +33,11 @@ export default function SpotlightCard({ match }: { match: Match }) {
 
             {reason ? (
                 <p className="flex items-start gap-2.5 rounded-card bg-bone-100 p-3.5 text-body text-ink-600">
-                    <Sparkles size={16} className="mt-0.5 shrink-0 text-accent-600" aria-hidden />
+                    <MessagesSquare
+                        size={16}
+                        className="mt-0.5 shrink-0 text-accent-600"
+                        aria-hidden
+                    />
                     {reason}
                 </p>
             ) : null}
