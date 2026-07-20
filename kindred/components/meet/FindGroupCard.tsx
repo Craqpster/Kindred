@@ -13,7 +13,7 @@ const FAILURE_COPY: Record<FormGroupFailure, string> = {
     race: "Someone beat you to it. Try once more.",
 };
 
-const CARD = "rounded-card border border-ink-900/8 bg-surface p-4 shadow-card";
+const CARD = "mt-8 rounded-card border border-ink-900/8 bg-surface p-4 shadow-card";
 
 /// Finding a group lives on /meet; opening one lives on /chats. So this renders nothing
 /// once the group has a channel — there is nothing left to find, and the group itself is
