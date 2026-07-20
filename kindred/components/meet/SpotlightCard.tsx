@@ -12,7 +12,7 @@ export default function SpotlightCard({ match }: { match: Match }) {
     // const reason = match.sharedEaseIn ? EASE_IN_REASON[match.sharedEaseIn] : null;
 
     return (
-        <div className="group flex flex-col overflow-hidden rounded-hero bg-surface shadow-xl shadow-slate-200/40 transition-all duration-400 ease-out hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-indigo-100/60">
+        <div className="flex flex-col overflow-hidden rounded-hero bg-surface shadow-card transition-[transform,box-shadow] duration-200 ease-out hover:shadow-hero motion-safe:hover:-translate-y-0.5">
             
             <div className="flex flex-col items-start gap-6 p-8 sm:px-10 sm:py-8">
                 <div className="flex flex-col gap-4">
