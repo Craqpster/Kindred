@@ -22,12 +22,12 @@ import {
 } from "stream-chat-react";
 
 import AttachmentMenu from "@/components/chat/AttachmentMenu";
+import ChannelLevelAvatar from "@/components/chat/ChannelLevelAvatar";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import IcebreakerCard from "@/components/chat/IcebreakerCard";
 import { useChatChannels } from "@/components/chat/useChatChannels";
 import { useModeratedSend } from "@/components/chat/useModeratedSend";
-import { getChatLevel } from "@/lib/chat-level";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -89,8 +89,9 @@ export default function ChatClient({
                 <Channel>
                     <ComposerComponents>
                         <Window>
-                            <ChannelHeader />
-                            <ChatXpBadge />
+                            {/* The chat level lives in the header avatar's ring now, not
+                                in a bar of its own below it. */}
+                            <ChannelHeader Avatar={ChannelLevelAvatar} />
                             <AutoPromptTrigger />
                             <MessageList Message={ChatMessage} />
                             <PrefillGreeting targetId={greet ? openChannelId : undefined} />
@@ -274,61 +275,6 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     }
 
     return <MessageUI {...props} />;
-}
-
-// A single XP total shared by everyone in this chat (not a per-person stat - that's
-// profiles.confidence_level, shown elsewhere). Refetches whenever the message count
-// changes, so it stays current whether the XP-worthy message was sent by this user or
-// the other person - lib/confidence.ts awards it to channel_xp regardless of sender.
-//
-// Channel-type agnostic - a group's channel_cid works exactly like a 1:1's for this
-// purpose, since channel_xp is keyed by cid, not by member count.
-function ChatXpBadge() {
-    const { channel, messages } = useChannelStateContext();
-    const [xp, setXp] = useState<number | null>(null);
-
-    const refetch = useCallback(() => {
-        fetch(`/api/chat-xp?channelCid=${encodeURIComponent(channel.cid)}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data) setXp(data.xp);
-            })
-            .catch(() => {});
-    }, [channel]);
-
-    useEffect(refetch, [refetch, messages?.length]);
-
-    // A new message means the badge should re-check right away, but confidence.ts
-    // awards XP in a background call that lands slightly after the message itself, so
-    // that first refetch can still read the old value. This event fires once the award
-    // has actually landed (see ModeratedMessageComposer below), for a second, correctly
-    // timed refetch - for both participants, not just whoever sent the message.
-    useEffect(() => {
-        const handleXpUpdated = () => refetch();
-        channel.on("chat_xp_updated", handleXpUpdated);
-        return () => channel.off("chat_xp_updated", handleXpUpdated);
-    }, [channel, refetch]);
-
-    if (xp === null) return null;
-
-    const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(xp);
-
-    return (
-        <div className="border-b border-metro-blue/20 bg-mist px-4 py-1.5">
-            <div className="flex items-center justify-between text-sm text-star-sapphire">
-                <span>Chat Level {level}</span>
-                <span className="text-xs text-metro-blue">
-                    {xpIntoLevel}/{xpForNextLevel} to next level
-                </span>
-            </div>
-            <div className="mt-1 h-1.5 w-full rounded-full bg-metro-blue/15">
-                <div
-                    className="h-1.5 rounded-full bg-metro-blue transition-all"
-                    style={{ width: `${(xpIntoLevel / xpForNextLevel) * 100}%` }}
-                />
-            </div>
-        </div>
-    );
 }
 
 // The composer at the bottom of the window. The moderation check and the post-send

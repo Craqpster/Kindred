@@ -171,3 +171,15 @@ body {
 .str-chat.str-chat__channel {
     width: 100%;
 }
+
+/* The header is a fixed-height grid (72px by default) and the avatar inside it is 40px,
+   which leaves only a couple of pixels of slack once the md padding is accounted for. The
+   level ring in ChannelLevelAvatar.tsx draws OUTSIDE that 40px box, so without a little
+   more room it collides with the row.
+
+   Set on .str-chat__channel-header itself rather than a wrapper: Stream declares this
+   custom property directly on the element, so an ancestor never wins. Doubled class for
+   the same source-order reason as the block above. */
+.str-chat .str-chat__channel-header.str-chat__channel-header {
+    --str-chat__channel-header-height: 84px;
+}

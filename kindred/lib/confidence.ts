@@ -1,5 +1,6 @@
 import "server-only";
 
+import { XP_PER_MESSAGE, XP_PER_PROMPT_ANSWER } from "@/lib/confidence-xp";
 import { prisma } from "@/lib/prisma";
 import { streamServerClient } from "@/lib/stream";
 import { tierForPoints } from "@/lib/confidence-tiers";
@@ -8,14 +9,13 @@ import { tierForPoints } from "@/lib/confidence-tiers";
 // single emoji, etc. Chosen to be generous rather than strict for v1.
 const MIN_MESSAGE_LENGTH = 15;
 
-/// What a qualifying message is worth. An icebreaker answer pays more because it is the
-/// harder thing to do - it asks someone to volunteer something about themselves to a
-/// stranger, which is exactly the behaviour the confidence ladder exists to encourage.
+/// The award amounts live in lib/confidence-xp.ts so the client can state them without
+/// importing this module. Re-exported here because this is where they are spent, and a
+/// reader following the award path should not have to go hunting.
 ///
 /// Note that confidence-tiers.ts's thresholds were picked when everything paid 1, so
 /// tiers arrive faster now. Deliberate for the moment; retune there, not here.
-export const XP_PER_MESSAGE = 1;
-export const XP_PER_PROMPT_ANSWER = 3;
+export { XP_PER_MESSAGE, XP_PER_PROMPT_ANSWER } from "@/lib/confidence-xp";
 
 /// What an award actually did, for callers that want to tell the user about it.
 /// `null` from awardConfidenceForMessage means nothing was awarded - which the old

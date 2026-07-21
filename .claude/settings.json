@@ -19,7 +19,9 @@
       "Bash(kill -9 61860)",
       "Bash(lsof -ti:3000)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH -m 20 \"http://localhost:3000/api/profile/badges\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const m=require\\('stream-chat-react'\\); console.log\\('ChannelAvatar:', typeof m.ChannelAvatar\\)\")",
+      "Bash(awk -F: '$0 ~ /ChatXpBadge/ {found=$1} found && $1>found {print \"ChatXpBadge spans lines \"found\" to \"$1; exit}')"
     ]
   }
 }
