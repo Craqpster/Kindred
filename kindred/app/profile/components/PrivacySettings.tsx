@@ -73,7 +73,7 @@ export function PrivacySettings({
   };
 
   return (
-    <div>
+    <div className="rounded-xl p-2">
       <div 
         className="flex justify-between items-center mb-4 cursor-pointer group"
         onClick={() => setIsExpanded(!isExpanded)}

@@ -1,4 +1,4 @@
-import SignOutForm from "@/components/auth/SignOutForm";
+﻿import SignOutForm from "@/components/auth/SignOutForm";
 import { requireProfile } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { ProfileEditor } from "@/app/profile/components/ProfileEditor";
