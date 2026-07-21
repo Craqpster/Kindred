@@ -190,40 +190,47 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: "auto" }}
                                     transition={transition}
-                                    className="flex gap-2 overflow-hidden"
+                                    className="flex flex-col overflow-hidden"
                                 >
-                                    <Avatar
-                                        name={answer.user?.name ?? answer.user?.id ?? "?"}
-                                        size={24}
-                                    />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center justify-between gap-2 text-label text-ink-600">
-                                            <span className="truncate">
-                                                {answer.user?.id === client.userID
-                                                    ? "You"
-                                                    : (answer.user?.name ?? answer.user?.id)}
-                                            </span>
+                                    {/* Avatar and name on one centred row. Previously the
+                                        avatar sat beside the whole block, so it aligned to
+                                        the top of a two-line column and the name appeared
+                                        pushed down relative to it. */}
+                                    <div className="flex items-center gap-2 text-label text-ink-600">
+                                        <Avatar
+                                            name={answer.user?.name ?? answer.user?.id ?? "?"}
+                                            size={24}
+                                        />
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {answer.user?.id === client.userID
+                                                ? "You"
+                                                : (answer.user?.name ?? answer.user?.id)}
+                                        </span>
 
-                                            {/* Only on answers that are actually legible:
-                                                offering to quote text the viewer cannot
-                                                read would be a button that produces a
-                                                blank. Unlike quoting the prompt, this is
-                                                an ordinary reply - the composer only tags
-                                                a send as an answer when the quoted message
-                                                is the icebreaker itself, so this earns the
-                                                usual +1 and stays in the timeline. */}
-                                            {youAnswered && (
-                                                <QuoteButton
-                                                    label={`Quote ${answer.user?.name ?? "this answer"}`}
-                                                    onClick={() =>
-                                                        channel.messageComposer.setQuotedMessage(
-                                                            answer,
-                                                        )
-                                                    }
-                                                />
-                                            )}
-                                        </div>
+                                        {/* Only on answers that are actually legible:
+                                            offering to quote text the viewer cannot read
+                                            would be a button that produces a blank. Unlike
+                                            quoting the prompt, this is an ordinary reply -
+                                            the composer only tags a send as an answer when
+                                            the quoted message is the icebreaker itself, so
+                                            this earns the usual +1 and stays in the
+                                            timeline. */}
+                                        {youAnswered && (
+                                            <QuoteButton
+                                                label={`Quote ${answer.user?.name ?? "this answer"}`}
+                                                onClick={() =>
+                                                    channel.messageComposer.setQuotedMessage(
+                                                        answer,
+                                                    )
+                                                }
+                                            />
+                                        )}
+                                    </div>
 
+                                    {/* Indented to clear the 24px avatar plus its 8px gap,
+                                        so the answer hangs under the name rather than
+                                        under the face. */}
+                                    <div className="mt-1 pl-8">
                                         {youAnswered ? (
                                             <p className="text-meta wrap-break-word text-ink-900">
                                                 {answer.text}
@@ -236,7 +243,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                             // Leaving it out is also the honest thing for
                                             // a screen reader, which a blur does nothing
                                             // about either way.
-                                            <span className="mt-1 flex flex-col gap-1">
+                                            <span className="flex flex-col gap-1">
                                                 <span className="sr-only">
                                                     Hidden until you answer
                                                 </span>
