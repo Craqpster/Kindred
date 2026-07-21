@@ -85,8 +85,9 @@ export async function awardConfidenceForMessage(
     text: string,
     promptId?: string,
 ): Promise<AwardResult | null> {
+    // Pass channelCid down so we can check if they already answered a prompt in this chat today
     const guaranteed = promptId
-        ? await promptReplyIsUnclaimed(userId, messageId, promptId)
+        ? await promptReplyIsUnclaimed(userId, messageId, promptId, channelCid)
         : false;
 
     if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) {
@@ -97,10 +98,7 @@ export async function awardConfidenceForMessage(
     const members = await channelMemberIds(channelCid);
 
     return prisma.$transaction(async (tx) => {
-        // Counted before anything is paid, and counted even once the cap has stopped the
-        // payments: this tally is also what the bonus threshold reads, and a chat whose
-        // threshold sits above the cap could never reach its own bonus if the counter
-        // stopped climbing.
+        // Counted before anything is paid...
         const activity = await tx.daily_chat_activity.upsert({
             where: {
                 channel_cid_profile_id_day: { channel_cid: channelCid, profile_id: userId, day },
@@ -115,8 +113,7 @@ export async function awardConfidenceForMessage(
             select: { qualifying_messages: true },
         });
 
-        // An icebreaker answer ignores the cap - it is already limited to once per prompt
-        // by prompt_awards, so it cannot be ground out the way ordinary chatter can.
+        // An icebreaker answer ignores the cap...
         const messageXp = guaranteed
             ? XP_PER_PROMPT_ANSWER
             : activity.qualifying_messages <= DAILY_MESSAGE_XP_CAP
@@ -131,9 +128,7 @@ export async function awardConfidenceForMessage(
             senderTally: activity.qualifying_messages,
         });
 
-        // The sender's personal total takes both halves; the CHANNEL's total takes only
-        // the message half, because claimDailyBonus has already added the bonus to it.
-        // The chat is one shared number - the bonus lands on it once, not once per member.
+        // The sender's personal total takes both halves...
         const senderXp = messageXp + (bonus?.perMember ?? 0);
 
         const profile = await tx.profiles.update({
@@ -300,6 +295,7 @@ async function promptReplyIsUnclaimed(
     userId: string,
     messageId: string,
     promptId: string,
+    channelCid: string
 ): Promise<boolean> {
     try {
         const { message } = await streamServerClient.getMessage(messageId);
@@ -311,9 +307,31 @@ async function promptReplyIsUnclaimed(
         ) {
             return false;
         }
+
+        // --- DEDUPE LOGIC ---
+        // Check if the user already earned XP for ANY icebreaker in this chat today
+        const [channelType, channelId] = channelCid.split(":");
+        const channel = streamServerClient.channel(channelType, channelId);
+        const today = utcDay();
+        
+        // Grab recent messages to verify daily task completion
+        const { messages } = await channel.query({
+            messages: { limit: 50 } 
+        });
+        
+        const alreadyAnsweredToday = messages.some(m => 
+            m.id !== messageId && // Exclude the message we are currently processing
+            m.user?.id === userId && 
+            m.messageType === "prompt_response" &&
+            new Date(m.created_at || "").getTime() >= today.getTime()
+        );
+
+        if (alreadyAnsweredToday) {
+            return false; // Task already completed today, deny bonus XP
+        }
+        // ------------------------
+
     } catch {
-        // Can't reach Stream to confirm - decline the exemption rather than hand it out
-        // unverified. The message still earns XP the ordinary way if it qualifies.
         return false;
     }
 
@@ -323,8 +341,7 @@ async function promptReplyIsUnclaimed(
         });
         return true;
     } catch {
-        // Already claimed (P2002 on the composite key). Prisma 7's driver adapters dropped
-        // error.meta.target, so there is nothing more specific to match on here.
+        // Already claimed this exact prompt previously (P2002 on the composite key).
         return false;
     }
 }

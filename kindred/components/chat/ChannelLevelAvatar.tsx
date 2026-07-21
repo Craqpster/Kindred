@@ -3,7 +3,6 @@
 import { CheckCircle2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-// Stream's Event, not the DOM's - the global one shadows it otherwise.
 import type { Event } from "stream-chat";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
@@ -20,13 +19,6 @@ import {
     XP_PER_PROMPT_ANSWER,
 } from "@/lib/confidence-xp";
 
-// Geometry of the ring, derived rather than hardcoded so the two sizes cannot drift out
-// of proportion with each other. The ring sits OUTSIDE the avatar, so the whole control
-// measures larger than the avatar it wraps - which is what the header has to make room
-// for.
-//
-// "compact" exists for the floating channel pill: at 40px the ring makes the pill as tall
-// as the header it replaced, which defeats the point of floating it.
 const RING_SIZES = {
     default: { avatar: 40, stroke: 3, gap: 3 },
     compact: { avatar: 28, stroke: 2, gap: 2 },
@@ -38,11 +30,9 @@ function ringGeometry(size: RingSize) {
     const { avatar, stroke, gap } = RING_SIZES[size];
     const box = avatar + (stroke + gap) * 2;
     const radius = (box - stroke) / 2;
-
     return { box, radius, stroke, avatar, circumference: 2 * Math.PI * radius };
 }
 
-/// The channel's chat level, drawn as a progress ring around the header avatar.
 export default function ChannelLevelAvatar({
     ringSize = "default",
     userName,
@@ -77,15 +67,26 @@ export default function ChannelLevelAvatar({
 
     useEffect(refetch, [refetch, messages?.length]);
 
-    // Fired once the award has actually landed (see useModeratedSend), for both people -
-    // otherwise the refetch above races the write and reads the old number.
+    // UPDATED: Now listens for new messages from you to instantly refresh the stats
     useEffect(() => {
-        const handle = () => refetch();
-        channel.on("chat_xp_updated", handle);
-        return () => channel.off("chat_xp_updated", handle);
-    }, [channel, refetch]);
+        const handleServerUpdate = () => refetch();
+        
+        const handleNewMessage = (event: Event) => {
+            if (event.user?.id === client.userID) {
+                // Wait 500ms for backend Prisma transaction to finish, then update UI
+                setTimeout(refetch, 500);
+            }
+        };
 
-    // Advancements that belong to the whole channel.
+        channel.on("chat_xp_updated", handleServerUpdate);
+        channel.on("message.new", handleNewMessage);
+        
+        return () => {
+            channel.off("chat_xp_updated", handleServerUpdate);
+            channel.off("message.new", handleNewMessage);
+        };
+    }, [channel, client.userID, refetch]);
+
     useEffect(() => {
         const handleLevel = (event: Event) => {
             if (event.user?.id === client.userID) return;
@@ -107,7 +108,6 @@ export default function ChannelLevelAvatar({
         };
     }, [channel, client.userID, refetch, showToast]);
 
-    // Dismissal for a hand-rolled popover
     useEffect(() => {
         if (!open) return;
 
@@ -140,6 +140,13 @@ export default function ChannelLevelAvatar({
     const progress = xpForNextLevel === 0 ? 0 : xpIntoLevel / xpForNextLevel;
     const remaining = xpForNextLevel - xpIntoLevel;
 
+    const answeredPromptToday = !!messages?.some((m) => {
+        if (m.user?.id !== client.userID || m.messageType !== "prompt_response") return false;
+        return new Date(m.created_at || Date.now()).toDateString() === new Date().toDateString();
+    });
+
+    const maxMessagesReached = messagesToday >= DAILY_MESSAGE_XP_CAP;
+
     const panelTransition = reduceMotion
         ? { duration: 0 }
         : ({ duration: 0.2, ease: [0.22, 1, 0.36, 1] } as const);
@@ -150,34 +157,14 @@ export default function ChannelLevelAvatar({
 
     const containerVariants = {
         hidden: {},
-        visible: {
-            transition: {
-                staggerChildren: 0.05,
-            },
-        },
-        exit: {
-            transition: {
-                staggerChildren: 0.04,
-                staggerDirection: -1,
-            },
-        },
+        visible: { transition: { staggerChildren: 0.05 } },
+        exit: { transition: { staggerChildren: 0.04, staggerDirection: -1 } },
     };
 
     const itemVariants = {
         hidden: { opacity: 0, y: 10, scale: 0.98 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            scale: 1,
-            transition: springTransition,
-        },
-        exit: {
-            opacity: 0,
-            y: 10,
-            scale: 0.98,
-            // Uses the same spring as entrance so it doesn't just abruptly vanish
-            transition: springTransition,
-        },
+        visible: { opacity: 1, y: 0, scale: 1, transition: springTransition },
+        exit: { opacity: 0, y: 10, scale: 0.98, transition: springTransition },
     };
 
     const displayTitle = userName || channel.data?.name || "Group";
@@ -240,7 +227,6 @@ export default function ChannelLevelAvatar({
                         exit="exit"
                         className="absolute top-full left-1/2 z-30 mt-2 flex w-64 -translate-x-1/2 flex-col gap-2 text-left"
                     >
-                        {/* Groups only */}
                         {channel.type === "team" && channel.id && (
                             <motion.div variants={itemVariants} className={`${frostedCardClasses} !p-3`}>
                                 <GroupNameEditor
@@ -250,7 +236,6 @@ export default function ChannelLevelAvatar({
                             </motion.div>
                         )}
 
-                        {/* Members Box */}
                         <motion.div variants={itemVariants} className={frostedCardClasses}>
                             <p className="text-label text-ink-600 uppercase">
                                 In this chat · {members.length}
@@ -267,7 +252,6 @@ export default function ChannelLevelAvatar({
                             </ul>
                         </motion.div>
 
-                        {/* Chat Level Box */}
                         <motion.div variants={itemVariants} className={frostedCardClasses}>
                             <p className="text-label text-ink-600 uppercase">
                                 Chat level
@@ -286,24 +270,22 @@ export default function ChannelLevelAvatar({
                             </p>
                         </motion.div>
 
-                        {/* Daily Tasks Box */}
                         <motion.div variants={itemVariants} className={frostedCardClasses}>
                             <p className="mb-3 text-label text-ink-600 uppercase">
                                 Daily Tasks
                             </p>
                             
                             <div className="flex flex-col gap-4">
-                                {/* Task: Max out daily messages */}
                                 <div className="flex items-start gap-2.5">
                                     <CheckCircle2
                                         size={18}
                                         className={`mt-0.5 shrink-0 ${
-                                            messagesToday >= DAILY_MESSAGE_XP_CAP
+                                            maxMessagesReached
                                                 ? "fill-accent-600 text-surface"
                                                 : "text-bone-300"
                                         }`}
                                     />
-                                    <div className="flex min-w-0 flex-col">
+                                    <div className="flex min-w-0 w-full flex-col">
                                         <span className="text-meta text-ink-900">
                                             Max out daily messages
                                         </span>
@@ -315,14 +297,33 @@ export default function ChannelLevelAvatar({
                                                 (up to {DAILY_MESSAGE_XP_CAP} a day)
                                             </span>
                                         </div>
+                                        
+                                        {!maxMessagesReached && (
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <div className="h-1.5 flex-1 rounded-full bg-bone-200/50">
+                                                    <div
+                                                        className="h-1.5 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
+                                                        style={{
+                                                            width: `${Math.min(1, messagesToday / DAILY_MESSAGE_XP_CAP) * 100}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="tabular-nums text-label text-ink-600">
+                                                    {Math.min(messagesToday, DAILY_MESSAGE_XP_CAP)}/{DAILY_MESSAGE_XP_CAP}
+                                                </span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Task: Answer an icebreaker (assuming ongoing/untracked for now) */}
                                 <div className="flex items-start gap-2.5">
                                     <CheckCircle2
                                         size={18}
-                                        className="mt-0.5 shrink-0 text-bone-300"
+                                        className={`mt-0.5 shrink-0 ${
+                                            answeredPromptToday 
+                                                ? "fill-accent-600 text-surface" 
+                                                : "text-bone-300"
+                                        }`}
                                     />
                                     <div className="flex min-w-0 flex-col">
                                         <span className="text-meta text-ink-900">
@@ -336,7 +337,6 @@ export default function ChannelLevelAvatar({
                                     </div>
                                 </div>
 
-                                {/* Task: Group Bonus */}
                                 <div className="flex items-start gap-2.5">
                                     <CheckCircle2
                                         size={18}

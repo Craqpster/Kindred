@@ -325,26 +325,10 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                                 {answer.text}
                                             </p>
                                         ) : (
-                                            // The text is withheld from the markup, not
-                                            // covered with a blur: a CSS filter is undone
-                                            // by opening devtools, so it would be a
-                                            // decoration pretending to be a mechanism.
-                                            // Leaving it out is also the honest thing for
-                                            // a screen reader, which a blur does nothing
-                                            // about either way.
-                                            <span className="flex flex-col gap-1">
-                                                <span className="sr-only">
-                                                    Hidden until you answer
-                                                </span>
-                                                <span
-                                                    aria-hidden
-                                                    className="h-2 w-full rounded-full bg-bone-200"
-                                                />
-                                                <span
-                                                    aria-hidden
-                                                    className="h-2 w-2/3 rounded-full bg-bone-200"
-                                                />
-                                            </span>
+                                            // Replaced the placeholder lines with clean text
+                                            <p className="text-meta italic text-ink-600">
+                                                Hidden until you answer
+                                            </p>
                                         )}
                                     </div>
                                 </motion.li>

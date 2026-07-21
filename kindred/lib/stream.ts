@@ -64,14 +64,17 @@ export async function startChatRequest(
     // Unset rather than simply not setting: this channel already exists (they waved first),
     // so it is carrying their request markers and create() will not remove them.
     if (mutual) {
-        await channel.updatePartial({ unset: ["requested_by", "requested_of"] });
-    }
+        // Cast channel.data to a generic record so TS lets us look up dynamic string keys
+        const data = channel.data as Record<string, any> | undefined;
+        
+        const fieldsToUnset = ["requested_by", "requested_of"].filter(
+            (field) => data?.[field] !== undefined
+        );
 
-    // Typed as optional because a channel has no id until it exists; create() assigns
-    // one. Checked rather than asserted so a silent undefined can't become the string
-    // "undefined" in the redirect URL.
-    if (!channel.id) {
-        throw new Error("Stream channel was created without an id");
+        if (fieldsToUnset.length > 0) {
+            // Cast the final array to any to bypass Stream's strict keyof checks
+            await channel.updatePartial({ unset: fieldsToUnset as any });
+        }
     }
 
     return channel.id;
