@@ -1,17 +1,20 @@
 import { cookies } from "next/headers";
 
+import FindGroupCard from "@/components/meet/FindGroupCard";
 import MatchCard from "@/components/meet/MatchCard";
 import MoreMatches from "@/components/meet/MoreMatches";
 import SpotlightCard from "@/components/meet/SpotlightCard";
 import ViewToggle from "@/components/meet/ViewToggle";
 import { requireProfile } from "@/lib/dal";
+import { getGroupFor } from "@/lib/groups";
 import { getMatchesFor } from "@/lib/matches";
 import { MEET_VIEW_COOKIE, meetViewFrom } from "@/lib/meet-view";
 
 // How many matches share the opening screen with the spotlight. Everyone else is behind
 const RUNNERS_UP = 3;
 
-// Groups are deferred (no formation mechanism yet), so this shows only the 1:1 section.
+// Finding a group happens here; the group itself lives on /chats, pinned above the Active
+// tab. FindGroupCard renders nothing once the user has one — there is nothing left to find.
 //
 // The page leads with one match rather than laying all ten out at once. getMatchesFor
 // already ranks them, so an even grid was throwing that ordering away and asking the
@@ -19,7 +22,10 @@ const RUNNERS_UP = 3;
 // ask — and the rest are one click away rather than gone.
 export default async function MeetPage() {
     const profile = await requireProfile();
-    const matches = await getMatchesFor(profile);
+    const [matches, group] = await Promise.all([
+        getMatchesFor(profile),
+        getGroupFor(profile.id),
+    ]);
 
     const view = meetViewFrom((await cookies()).get(MEET_VIEW_COOKIE)?.value);
 
@@ -40,6 +46,10 @@ export default async function MeetPage() {
 
                     <ViewToggle view={view} />
                 </div>
+
+                {/* Renders nothing once they have a group, and carries its own top margin
+                    so there is no empty spacer left behind when it does. */}
+                <FindGroupCard group={group} />
 
                 {matches.length === 0 ? (
                     <p className="mt-10 rounded-hero border border-ink-900/8 bg-surface p-10 text-center text-body text-ink-600 shadow-card">
