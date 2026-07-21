@@ -2,11 +2,17 @@
 
 import { EyeOff } from "lucide-react";
 import {
-    QuotedMessage,
+    QuotedMessagePreviewUI,
+    useChannelActionContext,
     useChannelStateContext,
     useChatContext,
     useMessageContext,
 } from "stream-chat-react";
+
+// Stream's default is 500ms, which for something you have just scrolled to is a flicker
+// you can miss entirely - especially when the jump crossed a page and the list was still
+// settling. Long enough here to register as "this is the one", short enough not to linger.
+const HIGHLIGHT_MS = 1600;
 
 /// Stream's quoted-message rendering, with one exception: an icebreaker answer the viewer
 /// has not earned the right to read yet.
@@ -19,8 +25,9 @@ import {
 /// The check has to be viewer-side. Gating who may quote does nothing, because the person
 /// leaked to is a third party whose own answering state is what actually matters.
 export default function KindredQuotedMessage() {
-    const { message } = useMessageContext("KindredQuotedMessage");
+    const { message, renderText } = useMessageContext("KindredQuotedMessage");
     const { messages } = useChannelStateContext();
+    const { jumpToMessage } = useChannelActionContext("KindredQuotedMessage");
     const { client } = useChatContext();
 
     const quoted = message.quoted_message;
@@ -46,5 +53,20 @@ export default function KindredQuotedMessage() {
         }
     }
 
-    return <QuotedMessage />;
+    if (!quoted) return null;
+
+    // Rendered through Stream's own preview UI rather than its QuotedMessage wrapper, so
+    // the click can carry a longer highlight duration. Same stopPropagation/preventDefault
+    // the default does - without them the click also selects the surrounding message.
+    return (
+        <QuotedMessagePreviewUI
+            quotedMessage={quoted}
+            renderText={renderText}
+            onClick={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                jumpToMessage(quoted.id, undefined, HIGHLIGHT_MS);
+            }}
+        />
+    );
 }

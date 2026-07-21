@@ -84,7 +84,7 @@ function IconButton({
 }
 
 export default function IcebreakerCard({ message }: { message: LocalMessage }) {
-    const { channel, messages } = useChannelStateContext();
+    const { channel, messages, highlightedMessageId } = useChannelStateContext();
     const { client } = useChatContext();
     const { moderate, finalizeSend, notice } = useModeratedSend();
 
@@ -97,6 +97,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     const reduceMotion = useReducedMotion();
     const regionId = useId();
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const cardRef = useRef<HTMLDivElement>(null);
 
     // A tween, not a spring. A spring loose enough to feel alive overshoots, and
     // overshooting a height means the box opens taller than it will end up and then
@@ -133,6 +134,28 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     // The bot posts prompts but is never added as a member, so this is exactly the
     // humans - no filtering needed beyond it.
     const memberCount = Object.keys(channel.state.members).length;
+
+    // Jumping to a quote targets a message id. That id is the prompt when someone quoted
+    // the icebreaker, but an ANSWER when they quoted a reply - and answers have no node of
+    // their own, since they render inside this card. So the card answers for both.
+    //
+    // Stream's own highlight is no help here either: it applies a class inside MessageUI,
+    // which this component deliberately replaces, so it never reaches us.
+    const isHighlighted =
+        !!highlightedMessageId &&
+        (highlightedMessageId === message.id ||
+            answers.some((a) => a.id === highlightedMessageId));
+
+    // Stream scrolls to the <li> wrapper, which for a quoted answer is an empty hairline -
+    // centring it leaves the card framed by accident. Re-centring on the card itself is
+    // what actually puts the thing you asked for in front of you.
+    useEffect(() => {
+        if (!isHighlighted) return;
+        cardRef.current?.scrollIntoView({
+            behavior: reduceMotion ? "auto" : "smooth",
+            block: "center",
+        });
+    }, [isHighlighted, reduceMotion]);
 
     const send = async () => {
         const text = draft.trim();
@@ -189,7 +212,14 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                 runs two size animations against the same box: the card scales past the
                 target while the height grows into it, then the projection snaps back.
                 The height animations below own the growth on their own. */}
-            <div className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card">
+            <div
+                ref={cardRef}
+                className={`w-full max-w-md rounded-card border bg-surface p-4 transition-[border-color,box-shadow] duration-250 ease-smooth ${
+                    isHighlighted
+                        ? "border-accent-600 shadow-hero ring-2 ring-accent-600/30"
+                        : "border-bone-300 shadow-card"
+                }`}
+            >
                 <p className="flex items-center gap-1.5 text-label text-ink-600 uppercase">
                     <Lightbulb size={13} strokeWidth={1.5} aria-hidden />
                     Icebreaker
