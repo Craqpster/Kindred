@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
 import { acceptRequest } from "@/app/(app)/chats/actions";
+import { useToast, type ToastInput } from "@/components/ui/ToastStack";
+import type { AwardResult } from "@/lib/confidence";
+import { getChatLevel } from "@/lib/chat-level";
 
 // The two halves of sending a message that have nothing to do with Stream's composer:
 // the moderation check that runs before a send, and the bookkeeping that runs after one.
@@ -26,6 +29,7 @@ export type ModerationNotice = {
 export function useModeratedSend() {
     const { channel } = useChannelStateContext();
     const { client } = useChatContext();
+    const { showToast } = useToast();
     const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [showWarning, setShowWarning] = useState(false);
@@ -87,6 +91,34 @@ export function useModeratedSend() {
         return { blocked: true };
     }, []);
 
+    // Turns an award into what the user sees. XP toasts coalesce under one mergeKey so a
+    // fast exchange accumulates ("+1" then "+2") instead of stacking a toast per message;
+    // a tier-up gets its own toast rather than being buried in that running total, since
+    // it happens rarely and means considerably more.
+    const announceAward = useCallback(
+        (award: AwardResult) => {
+            const xpToast = (total: number): ToastInput => ({
+                kind: "xp",
+                title: `+${total} XP`,
+                body: `Chat level ${getChatLevel(award.channelXp).level} · ${award.confidencePoints} confidence pts`,
+                count: total,
+                mergeKey: "xp",
+                merge: (previous) => xpToast((previous.count ?? 0) + award.xpAwarded),
+            });
+
+            showToast(xpToast(award.xpAwarded));
+
+            if (award.tierUp) {
+                showToast({
+                    kind: "milestone",
+                    title: `Confidence Tier ${award.confidenceLevel}`,
+                    body: "New badges unlocked on your profile.",
+                });
+            }
+        },
+        [showToast],
+    );
+
     // Everything that has to happen after a message is already in the channel. Never
     // throws: by the time this runs the message has gone through, so a failure here must
     // not look to the sender like the send failed.
@@ -125,13 +157,25 @@ export function useModeratedSend() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ channelCid: cid, messageId, text, promptId }),
                 })
-                    // Tell ChatXpBadge (both participants') the award has landed and it's
-                    // safe to refetch, rather than making it guess how long to wait.
-                    .then(() => channel.sendEvent({ type: "chat_xp_updated" }))
+                    .then((res) => (res.ok ? res.json() : null))
+                    .then((data: { award: AwardResult | null } | null) => {
+                        const award = data?.award;
+                        // Not every message earns something - a short one, or a second in
+                        // a row, qualifies for nothing. Firing on any 200 (what this used
+                        // to do) told the badge to refetch a number that hadn't moved and
+                        // would have made an XP toast lie.
+                        if (!award) return;
+
+                        // Tell ChatXpBadge (both participants') the award has landed and
+                        // it's safe to refetch, rather than making it guess how long.
+                        channel.sendEvent({ type: "chat_xp_updated" });
+
+                        announceAward(award);
+                    })
                     .catch(() => {});
             }
         },
-        [channel, client.userID],
+        [channel, client.userID, announceAward],
     );
 
     const notice: ModerationNotice | null =

@@ -25,6 +25,10 @@ export type ToastInput = {
     kind: ToastKind;
     title: string;
     body?: string;
+    /// How many things this toast stands for. Carried so a `merge` can accumulate
+    /// ("+1 XP" then "+2 XP") without the caller keeping its own running total, since the
+    /// toast on screen is the only record of what has already been shown.
+    count?: number;
     /// Optional identity for coalescing. Raising a toast with a `mergeKey` that is already
     /// on screen replaces it in place instead of stacking a second one - see `merge`.
     mergeKey?: string;
