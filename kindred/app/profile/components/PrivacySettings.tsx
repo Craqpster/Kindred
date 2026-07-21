@@ -8,9 +8,11 @@ import * as Select from "@radix-ui/react-select";
 import { ChevronDown, ChevronRight, Check, Shuffle } from "lucide-react";
 import type { ProfileWithRelations } from "@/lib/dal";
 
-// Fixed, not random: the same 6 seeds every time so the grid is something you can
-// actually browse and come back to, instead of a moving target like Shuffle.
-const AVATAR_SEED_OPTIONS = ["option-1", "option-2", "option-3", "option-4", "option-5", "option-6"];
+// Fixed, not random: the same seeds every time so the grid is something you can
+// actually browse and come back to, instead of a moving target like Shuffle. 12 is
+// enough to fill the row width next to the style dropdown rather than trailing off
+// with empty space.
+const AVATAR_SEED_OPTIONS = Array.from({ length: 12 }, (_, i) => `option-${i + 1}`);
 
 export function PrivacySettings({
   profile,
