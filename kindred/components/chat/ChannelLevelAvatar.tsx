@@ -4,12 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 // Stream's Event, not the DOM's - the global one shadows it otherwise.
 import type { Event } from "stream-chat";
-import {
-    ChannelAvatar,
-    useChannelStateContext,
-    useChatContext,
-    type ChannelAvatarProps,
-} from "stream-chat-react";
+import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
 import GroupNameEditor from "@/components/chat/GroupNameEditor";
 import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
@@ -32,18 +27,18 @@ import {
 // "compact" exists for the floating channel pill: at 40px the ring makes the pill as tall
 // as the header it replaced, which defeats the point of floating it.
 const RING_SIZES = {
-    default: { avatar: 40, stroke: 3, gap: 3, streamSize: "lg" as const },
-    compact: { avatar: 28, stroke: 2, gap: 2, streamSize: "md" as const },
+    default: { avatar: 40, stroke: 3, gap: 3 },
+    compact: { avatar: 28, stroke: 2, gap: 2 },
 };
 
 export type RingSize = keyof typeof RING_SIZES;
 
 function ringGeometry(size: RingSize) {
-    const { avatar, stroke, gap, streamSize } = RING_SIZES[size];
+    const { avatar, stroke, gap } = RING_SIZES[size];
     const box = avatar + (stroke + gap) * 2;
     const radius = (box - stroke) / 2;
 
-    return { box, radius, stroke, streamSize, circumference: 2 * Math.PI * radius };
+    return { box, radius, stroke, avatar, circumference: 2 * Math.PI * radius };
 }
 
 /// The channel's chat level, drawn as a progress ring around the header avatar.
@@ -51,17 +46,19 @@ function ringGeometry(size: RingSize) {
 /// Replaces the full-width bar that used to sit under the header. The bar competed with
 /// the header for the same strip of attention and spent a whole row saying something that
 /// is glanceable; a ring reads at a glance and gives the detail up only when asked.
-///
-/// Passed to <ChannelHeader Avatar={...} />, which is Stream's supported override - there
-/// is no ChannelHeader key in ComponentContext. Handling it here rather than targeting
-/// `.str-chat__avatar-group` in CSS matters: that class only exists for a group of 2+ with
-/// no channel image, so a 1:1 chat renders a bare `.str-chat__avatar` and would have been
-/// missed entirely.
+/// Takes only what it uses. It used to accept ChannelAvatarProps and forward the lot to
+/// Stream's ChannelAvatar, but that rendered a cramped stack of tiny faces in a group;
+/// one deterministic initials avatar sized to the ring reads far better at this size, and
+/// the popover lists everyone by name anyway. displayMembers/imageUrl went with it rather
+/// than lingering as props nothing reads.
 export default function ChannelLevelAvatar({
     ringSize = "default",
-    ...props
-}: ChannelAvatarProps & { ringSize?: RingSize }) {
-    const { box, radius, stroke, streamSize, circumference } = ringGeometry(ringSize);
+    userName,
+}: {
+    ringSize?: RingSize;
+    userName?: string;
+}) {
+    const { box, radius, stroke, avatar, circumference } = ringGeometry(ringSize);
     const { channel, messages } = useChannelStateContext();
     const { client } = useChatContext();
     const { showToast } = useToast();
@@ -96,13 +93,7 @@ export default function ChannelLevelAvatar({
         return () => channel.off("chat_xp_updated", handle);
     }, [channel, refetch]);
 
-    // Advancements that belong to the whole channel. The XP award only ever runs for
-    // whoever sent the message, so without these every other member's chat level and
-    // daily bonus would move in silence.
-    //
-    // Own events are skipped because the sender already toasted locally at the moment it
-    // happened. That also makes this correct whether or not Stream echoes an event back
-    // to its sender - a detail not worth depending on either way.
+    // Advancements that belong to the whole channel.
     useEffect(() => {
         const handleLevel = (event: Event) => {
             if (event.user?.id === client.userID) return;
@@ -124,8 +115,7 @@ export default function ChannelLevelAvatar({
         };
     }, [channel, client.userID, refetch, showToast]);
 
-    // Dismissal for a hand-rolled popover: the project has no popover primitive, and
-    // without both of these the panel can only be closed by clicking the ring again.
+    // Dismissal for a hand-rolled popover
     useEffect(() => {
         if (!open) return;
 
@@ -144,9 +134,6 @@ export default function ChannelLevelAvatar({
         };
     }, [open]);
 
-    // The bot posts prompts but is never added as a member, so this is exactly the
-    // humans. Same derivation ChatListRow uses; names are reliable without a DB round
-    // trip because both startChatRequest and createGroupChannel upsert users with them.
     const members = Object.values(channel.state.members).map((member) => {
         const id = member.user_id ?? member.user?.id ?? "?";
         return {
@@ -165,14 +152,15 @@ export default function ChannelLevelAvatar({
         ? { duration: 0 }
         : ({ duration: 0.2, ease: [0.22, 1, 0.36, 1] } as const);
 
+    // Fallback order for the name: explicitly passed userName -> channel name -> "Group"
+    const displayTitle = userName || channel.data?.name || "Group";
+
     return (
         <div ref={containerRef} className="relative">
             <button
                 type="button"
                 onClick={() => setOpen((current) => !current)}
                 aria-expanded={open}
-                // Only while open — pointing at an id that is not in the document is a
-                // dangling reference, and aria-expanded already carries the state.
                 aria-controls={open ? panelId : undefined}
                 aria-label={`Chat level ${level}. Show how chat XP is earned.`}
                 style={{ width: box, height: box }}
@@ -201,8 +189,6 @@ export default function ChannelLevelAvatar({
                         strokeWidth={stroke}
                         strokeLinecap="round"
                         strokeDasharray={circumference}
-                        // Drawn by shortening the dash offset rather than by animating a
-                        // path, so it stays exact at 0% and 100%.
                         initial={false}
                         animate={{ strokeDashoffset: circumference * (1 - progress) }}
                         transition={transition}
@@ -210,13 +196,10 @@ export default function ChannelLevelAvatar({
                     />
                 </svg>
 
-                {/* Wrapped, never given extra children: .str-chat__avatar-group lays its
-                    tiles out with :has()/nth-child rules that any injected element would
-                    break, and its ::after is already the presence dot.
-                    role={undefined} because Stream hardcodes role="button" on the avatar,
-                    which would otherwise nest a button inside this one. */}
-                <span className="relative">
-                    <ChannelAvatar {...props} role={undefined} size={streamSize} />
+                {/* Swapped Stream's ChannelAvatar with your custom Avatar.
+                    It uses the explicit width/height derived from the ring geometry. */}
+                <span className="relative flex items-center justify-center">
+                    <Avatar name={displayTitle} size={avatar} />
                 </span>
             </button>
 
@@ -228,13 +211,9 @@ export default function ChannelLevelAvatar({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={transition}
-                        // Centred under the avatar rather than pinned to its end edge:
-                        // the anchor now sits mid-pane inside the floating pill, where an
-                        // end-aligned panel hangs off to one side for no reason.
                         className="absolute top-full left-1/2 z-30 mt-2 w-64 -translate-x-1/2 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
                     >
-                        {/* Groups only: a 1:1's title is the other person's name, which is
-                            not ours to rewrite. */}
+                        {/* Groups only */}
                         {channel.type === "team" && channel.id && (
                             <div className="mb-3 border-b border-bone-200 pb-3">
                                 <GroupNameEditor
@@ -244,8 +223,6 @@ export default function ChannelLevelAvatar({
                             </div>
                         )}
 
-                        {/* Who is actually here: clicking a face is a question about people
-                            before it is a question about progress. */}
                         <p className="text-label text-ink-600 uppercase">
                             In this chat · {members.length}
                         </p>
@@ -290,8 +267,6 @@ export default function ChannelLevelAvatar({
                             </li>
                         </ul>
 
-                        {/* A goal you cannot see is not a goal. Shows the caller's own
-                            tally, since that is the part they can act on. */}
                         <div className="mt-3 rounded-xl bg-bone-100 px-3 py-2">
                             {bonusEarnedToday ? (
                                 <p className="text-meta text-ink-900">

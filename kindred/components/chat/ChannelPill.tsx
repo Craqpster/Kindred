@@ -33,9 +33,9 @@ const MAIN_PANEL_CLASS = "str-chat__main-panel-inner str-chat__message-list-main
 export default function ChannelPill({ children }: PropsWithChildren) {
     const { channel } = useChannelStateContext();
     const { client } = useChatContext();
-    const { displayImage, displayTitle, groupChannelDisplayInfo } = useChannelPreviewInfo({
-        channel,
-    });
+    // Only the title: the avatar is our own initials one, and the member faces come from
+    // channel.state.members below rather than Stream's display-info shape.
+    const { displayTitle } = useChannelPreviewInfo({ channel });
     const { othersWatching, isDm } = useChatPresence();
 
     // Same test Stream's own header subtitle uses: other people, in this channel rather
@@ -105,15 +105,11 @@ export default function ChannelPill({ children }: PropsWithChildren) {
                     ref={pillRef}
                     className="pointer-events-auto flex w-full max-w-md min-w-xs items-center gap-3 rounded-full border border-ink-900/8 bg-surface/70 py-2 pr-5 pl-2 shadow-card backdrop-blur-xl"
                 >
-                    {/* displayMembers and imageUrl are what make a GROUP render its avatar
-                        stack rather than a single initial - the same three values
-                        ChannelHeader feeds its own avatar. */}
-                    <ChannelLevelAvatar
-                        size="lg"
-                        displayMembers={groupChannelDisplayInfo?.members}
-                        imageUrl={displayImage}
-                        userName={displayTitle}
-                    />
+                    {/* One initials avatar sized to the ring, not Stream's member stack -
+                        that stack was cramped and illegible at this size. The group's
+                        faces live to the right of the name instead, and the popover lists
+                        everyone properly. */}
+                    <ChannelLevelAvatar userName={displayTitle} />
 
                     <div className="flex min-w-0 flex-1 flex-col">
                         {/* A centred pill has far less room than the full-width grid this
