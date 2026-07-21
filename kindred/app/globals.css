@@ -116,6 +116,32 @@ body {
 .str-chat.str-chat {
     --str-chat__chrome-0: var(--color-bone-100);
     --composer-bg: var(--color-bone-100);
+
+    /* Bubbles. Stream maps these onto --chat-bg / --chat-text per direction on
+       .str-chat__message--me / --other, so setting the source tokens is enough and no
+       per-message selector is needed.
+
+       Incoming is a raised card on the bone page, the same relationship MatchCard has.
+       Outgoing borrows the accent Button's fill-and-text pairing so "mine" reads as the
+       app's action colour rather than a third new blue.
+
+       Both explicit overrides below are required, not tidiness: chat-bg-incoming chains
+       through background-core-surface-default to chrome-100, NOT chrome-0, so warming
+       chrome-0 alone would leave incoming bubbles on Stream's slate ramp. And
+       chat-text-outgoing defaults to brand-900, which is blue on blue once the fill is
+       sapphire. */
+    --str-chat__chat-bg-incoming: var(--color-surface);
+    --str-chat__chat-text-incoming: var(--color-ink-900);
+    --str-chat__chat-border-incoming: var(--color-bone-300);
+    --str-chat__chat-bg-attachment-incoming: var(--color-bone-200);
+
+    --str-chat__chat-bg-outgoing: var(--color-accent-600);
+    --str-chat__chat-text-outgoing: var(--color-surface);
+    --str-chat__chat-border-outgoing: var(--color-accent-600);
+    --str-chat__chat-bg-attachment-outgoing: var(--color-accent-700);
+
+    --str-chat__chat-text-username: var(--color-ink-600);
+    --str-chat__chat-text-timestamp: var(--color-ink-600);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
