@@ -2,16 +2,16 @@
 
 import { motion, useReducedMotion } from "motion/react";
 
-export type ChatTab = "active" | "requests";
+export type ChatTab = "active" | "pending";
 
 export default function ChatTabs({
     tab,
     onChange,
-    requestCount,
+    pendingCount,
 }: {
     tab: ChatTab;
     onChange: (tab: ChatTab) => void;
-    requestCount: number;
+    pendingCount: number;
 }) {
     const reduceMotion = useReducedMotion();
 
@@ -27,7 +27,7 @@ export default function ChatTabs({
 
     const options: readonly { value: ChatTab; label: string }[] = [
         { value: "active", label: "Active" },
-        { value: "requests", label: "Requests" },
+        { value: "pending", label: "Pending" },
     ];
 
     return (
@@ -49,7 +49,7 @@ export default function ChatTabs({
                         {active && pill}
                         <span className="relative z-10 flex items-center gap-1.5">
                             {label}
-                            {value === "requests" && requestCount > 0 && (
+                            {value === "pending" && pendingCount > 0 && (
                                 <>
                                     <span
                                         aria-hidden="true"
@@ -59,11 +59,11 @@ export default function ChatTabs({
                                                 : "bg-ink-900 text-surface"
                                         }`}
                                     >
-                                        {requestCount}
+                                        {pendingCount}
                                     </span>
                                     <span className="sr-only">
-                                        {requestCount} pending{" "}
-                                        {requestCount === 1 ? "request" : "requests"}
+                                        {pendingCount} pending{" "}
+                                        {pendingCount === 1 ? "request" : "requests"}
                                     </span>
                                 </>
                             )}

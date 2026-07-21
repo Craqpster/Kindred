@@ -1,11 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import type { Channel as StreamChannel, ChannelFilters, ChannelOptions, ChannelSort, LocalMessage, Message, SendMessageOptions } from "stream-chat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Channel as StreamChannel, LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
     ChannelHeader,
-    ChannelList,
     MessageComposer,
     MessageList,
     Thread,
@@ -15,11 +14,9 @@ import {
     useChatContext,
 } from "stream-chat-react";
 
-import { acceptRequest } from "@/app/(app)/chats/actions";
+import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
-import GroupChatRow from "@/components/chat/GroupChatRow";
-import Button from "@/components/ui/Button";
-import type { Group } from "@/lib/groups";
+import { useChatChannels } from "@/components/chat/useChatChannels";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -32,83 +29,47 @@ import type { Group } from "@/lib/groups";
 export default function ChatClient({
     userId,
     greetChannelId,
-    requestCount,
-    group,
 }: {
     userId: string;
     greetChannelId?: string;
-    requestCount: number;
-    group: Group | null;
 }) {
     const [tab, setTab] = useState<ChatTab>("active");
+    const { active, pending, initialized } = useChatChannels(userId);
 
-    const sort: ChannelSort = { last_message_at: -1 };
-    const options: ChannelOptions = { limit: 10 };
+    const channels = tab === "active" ? active : pending;
 
-    const activeFilters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
-    
-    const requestFilters: ChannelFilters = {
-        type: "messaging",
-        members: { $in: [userId] },
-        requested_of: userId,
-    };
-
-    const dropPending = useCallback(
-        (channels: StreamChannel[]) =>
-            channels.filter((channel) => channel.data?.requested_of !== userId),
-        [userId],
-    );
+    // A wave lands in Pending, so look across both rather than the visible tab only.
+    useOpenGreetChannel(greetChannelId, active, pending);
 
     return (
-        // Channel-list width is fixed via the .str-chat.str-chat__channel-list rule in
-        // globals.css, not here - see that rule's comment for why an inline/ancestor
-        // override doesn't work for this particular library. The flex-1 wrapper below
-        // is still needed though: Stream's .str-chat__channel has no flex-grow of its
-        // own, so without a wrapper that claims the remaining space, it would only be
-        // as wide as its content demands.
-        <div className="flex flex-1 min-h-0">
-            {/* The channel list sits in a column so the tabs can sit above it. That flip
-                is why globals.css overrides Stream's own `flex` on
-                .str-chat__channel-list. */}
-            <div className="flex w-80 shrink-0 flex-col min-h-0">
-                <ChatTabs tab={tab} onChange={setTab} requestCount={requestCount} />
+        // Stream's .str-chat__channel has no flex-grow of its own, so without a wrapper
+        // claiming the remaining space it would only be as wide as its content demands.
+        <div className="flex flex-1 min-h-0 bg-bone-100">
+            <div className="flex w-80 shrink-0 flex-col min-h-0 border-r border-ink-900/8">
+                <ChatTabs tab={tab} onChange={setTab} pendingCount={pending.length} />
 
-                {/* Both lists stay MOUNTED and the inactive one is hidden, rather than
-                    rendering one at a time. Unmounting would re-query on every switch and,
-                    worse, ChannelList calls setActiveChannel on mount — so returning to a
-                    tab would yank the open conversation out from under the user. `contents`
-                    keeps the wrapper out of the layout so the list is still the column's
-                    flex child and the globals.css sizing rule applies to it. */}
-                <div className={tab === "active" ? "contents" : "hidden"}>
-                    {group?.streamChannelId && (
-                        <GroupChatRow group={group} channelId={group.streamChannelId} />
+                <div className="flex-1 overflow-y-auto px-2 pb-3">
+                    {!initialized ? (
+                        <p className="p-3 text-sm text-ink-600">Loading…</p>
+                    ) : channels.length === 0 ? (
+                        <p className="p-3 text-sm text-ink-600">
+                            {tab === "active"
+                                ? "No chats yet. Say hi to someone on Meet."
+                                : "Nothing waiting on a reply."}
+                        </p>
+                    ) : (
+                        channels.map((channel) => (
+                            <ChatListRow key={channel.cid} channel={channel} />
+                        ))
                     )}
-                    <ChannelList
-                        filters={activeFilters}
-                        sort={sort}
-                        options={options}
-                        channelRenderFilterFn={dropPending}
-                        customActiveChannel={greetChannelId}
-                    />
-                </div>
-
-                <div className={tab === "requests" ? "contents" : "hidden"}>
-                    <ChannelList
-                        filters={requestFilters}
-                        sort={sort}
-                        options={options}
-                        // This list is hidden on load, so letting it claim the message pane
-                        // would open a request the user never asked to see.
-                        setActiveChannelOnMount={false}
-                    />
                 </div>
             </div>
+
             <div className="flex flex-1 min-w-0">
                 <Channel>
                     <Window>
                         <ChannelHeader />
                         <MessageList />
-                        <AcceptRequestBanner />
                         <PrefillGreeting targetId={greetChannelId} />
                         <ModeratedMessageComposer />
                     </Window>
@@ -119,41 +80,31 @@ export default function ChatClient({
     );
 }
 
-// Accepting lives here rather than on the list row. Stream's row seams are awkward for
-// this — ChannelListItemActionButtons receives no channel prop, and a custom
-// ChannelListItemUI would mean reimplementing the avatar, name, preview and timestamp just
-// to bolt a button on. Putting it above the composer also reads better: you see who waved
-// and what they said, then decide.
-function AcceptRequestBanner() {
-    const { channel } = useChannelStateContext();
-    const { client } = useChatContext();
-    const [pending, start] = useTransition();
+/// Opens the channel from `?c=` once the list has loaded it.
+///
+/// This used to be ChannelList's `customActiveChannel`. Without that component we do it
+/// ourselves, and only once — re-running would drag the user back to the wave every time
+/// the channel list reordered.
+function useOpenGreetChannel(
+    greetChannelId: string | undefined,
+    active: StreamChannel[],
+    pending: StreamChannel[],
+) {
+    const { setActiveChannel } = useChatContext();
+    const opened = useRef(false);
 
-    // Only the recipient sees this. For the sender, requested_of is the other person.
-    if (channel?.data?.requested_of !== client.userID) return null;
+    useEffect(() => {
+        if (opened.current || !greetChannelId) return;
 
-    return (
-        <div className="flex items-center gap-3 border-t border-bone-300 bg-bone-100 px-4 py-3">
-            <p className="flex-1 text-sm text-ink-900">
-                Someone new wants to chat. Accept to move this into your active chats.
-            </p>
-            <Button
-                variant="accent"
-                size="sm"
-                disabled={pending}
-                onClick={() =>
-                    start(async () => {
-                        const formData = new FormData();
-                        // channel.id, not cid — acceptChatRequest queries Stream by id.
-                        formData.set("channel_id", channel.id ?? "");
-                        await acceptRequest(formData);
-                    })
-                }
-            >
-                {pending ? "Accepting…" : "Accept"}
-            </Button>
-        </div>
-    );
+        // `?c=` carries the channel id, not the cid.
+        const target = [...active, ...pending].find(
+            (channel) => channel.id === greetChannelId,
+        );
+        if (!target) return;
+
+        opened.current = true;
+        setActiveChannel(target);
+    }, [greetChannelId, active, pending, setActiveChannel]);
 }
 
 const GREETING = "👋";
