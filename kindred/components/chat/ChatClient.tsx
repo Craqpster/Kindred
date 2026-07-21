@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChannelFilters, ChannelOptions, ChannelSort, LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
@@ -11,12 +11,24 @@ import {
     Thread,
     Window,
     useChannelActionContext,
+    useChannelStateContext,
 } from "stream-chat-react";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
 // layout, so ChannelList/Channel pick up client + theme from context on their own.
-export default function ChatClient({ userId }: { userId: string }) {
+//
+// greetChannelId comes from `?c=` when the user just waved at someone on /meet: that
+// conversation opens straight away with the greeting prefilled but unsent.
+//
+// An id, not a cid — customActiveChannel queries by id, and a cid throws.
+export default function ChatClient({
+    userId,
+    greetChannelId,
+}: {
+    userId: string;
+    greetChannelId?: string;
+}) {
     const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
     const sort: ChannelSort = { last_message_at: -1 };
     const options: ChannelOptions = { limit: 10 };
@@ -29,12 +41,18 @@ export default function ChatClient({ userId }: { userId: string }) {
         // own, so without a wrapper that claims the remaining space, it would only be
         // as wide as its content demands.
         <div className="flex flex-1 min-h-0">
-            <ChannelList filters={filters} sort={sort} options={options} />
+            <ChannelList
+                filters={filters}
+                sort={sort}
+                options={options}
+                customActiveChannel={greetChannelId}
+            />
             <div className="flex flex-1 min-w-0">
                 <Channel>
                     <Window>
                         <ChannelHeader />
                         <MessageList />
+                        <PrefillGreeting targetId={greetChannelId} />
                         <ModeratedMessageComposer />
                     </Window>
                     <Thread />
@@ -42,6 +60,32 @@ export default function ChatClient({ userId }: { userId: string }) {
             </div>
         </div>
     );
+}
+
+const GREETING = "👋";
+
+// Types the greeting into the composer without sending it, so the wave still ends with
+// a deliberate press of Send by the person doing the waving.
+//
+//
+function PrefillGreeting({ targetId }: { targetId?: string }) {
+    const { channel } = useChannelStateContext();
+    const filled = useRef(false);
+
+    useEffect(() => {
+        if (filled.current) return;
+        // channel.id, not channel.cid — `?c=` carries the id half of the cid, matching
+        // what customActiveChannel needs.
+        if (!targetId || !channel || channel.id !== targetId) return;
+
+        const { textComposer } = channel.messageComposer;
+        if (!textComposer.textIsEmpty) return;
+
+        textComposer.setText(GREETING);
+        filled.current = true;
+    }, [targetId, channel]);
+
+    return null;
 }
 
 // Stream's own moderation turned out to need a paid plan we don't have (see the PR

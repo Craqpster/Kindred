@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ProfileWithRelations } from "@/lib/dal";
+import { isEaseIn, type EaseIn } from "@/lib/ease-in";
 import { prisma } from "@/lib/prisma";
 
 const MAX_MATCHES = 10;
@@ -10,8 +11,13 @@ export type Match = {
     username: string;
     /// Hobby and interest names the two profiles have in common.
     sharedTags: string[];
-    /// True when both picked the same onboarding ease_in answer.
-    sharedEaseIn: boolean;
+    /// Their remaining hobby and interest names — everything not in sharedTags. Not part
+    /// of why they matched, so a card must keep these visually subordinate.
+    otherTags: string[];
+    /// The onboarding ease_in answer both picked, or null if they differ. Carries the
+    /// value rather than a boolean so a card can name the style, not just note there
+    /// was one.
+    sharedEaseIn: EaseIn | null;
 };
 
 // Candidate pool: everyone who shares at least one hobby or interest, minus the current
@@ -49,19 +55,35 @@ export async function getMatchesFor(profile: ProfileWithRelations): Promise<Matc
     });
 
     const scored = candidates.map((candidate) => {
-        const sharedHobbies = candidate.profile_hobbies
-            .map((row) => row.hobby.name)
-            .filter((name) => myHobbyNames.has(name));
-        const sharedInterests = candidate.profile_interests
-            .map((row) => row.interest.name)
-            .filter((name) => myInterestNames.has(name));
-        const sharedTags = [...sharedHobbies, ...sharedInterests];
+        const theirHobbies = candidate.profile_hobbies.map((row) => row.hobby.name);
+        const theirInterests = candidate.profile_interests.map((row) => row.interest.name);
 
+        const sharedTags = [
+            ...theirHobbies.filter((name) => myHobbyNames.has(name)),
+            ...theirInterests.filter((name) => myInterestNames.has(name)),
+        ];
+
+        // The complement, from the same already-loaded relations — no extra query.
+        const otherTags = [
+            ...theirHobbies.filter((name) => !myHobbyNames.has(name)),
+            ...theirInterests.filter((name) => !myInterestNames.has(name)),
+        ];
+
+        // Null covers both "we differ" and "one of us skipped the question", which are
+        // the same thing as far as a card is concerned: there is no shared style to name.
         const sharedEaseIn =
-            profile.ease_in != null && candidate.ease_in === profile.ease_in;
+            isEaseIn(profile.ease_in) && candidate.ease_in === profile.ease_in
+                ? profile.ease_in
+                : null;
 
         return {
-            match: { id: candidate.id, username: candidate.username, sharedTags, sharedEaseIn },
+            match: {
+                id: candidate.id,
+                username: candidate.username,
+                sharedTags,
+                otherTags,
+                sharedEaseIn,
+            },
             score: sharedTags.length + (sharedEaseIn ? 1 : 0),
         };
     });
