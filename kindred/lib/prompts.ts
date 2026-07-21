@@ -1,10 +1,7 @@
 import "server-only";
 
+import { KINDRED_BOT_ID, KINDRED_BOT_NAME } from "@/lib/kindred-bot";
 import { streamServerClient } from "@/lib/stream";
-
-// A dedicated Stream user representing the app itself, so icebreaker prompts show up
-// as coming from "Kindred" rather than either participant.
-export const KINDRED_BOT_ID = "kindred-bot";
 
 const ICEBREAKER_PROMPTS = [
     "What's a hobby you picked up recently that surprised you?",
@@ -29,7 +26,7 @@ const ICEBREAKER_PROMPTS = [
 /// directly - callers are startChatRequest (right when a chat is created) and
 /// /api/chat-prompts (on-demand button + the client-side "chat gone quiet" check).
 export async function postIcebreakerPrompt(channelCid: string): Promise<void> {
-    await streamServerClient.upsertUser({ id: KINDRED_BOT_ID, name: "Kindred" });
+    await streamServerClient.upsertUser({ id: KINDRED_BOT_ID, name: KINDRED_BOT_NAME });
 
     const [channelType, channelId] = channelCid.split(":");
     const channel = streamServerClient.channel(channelType, channelId);

@@ -5,6 +5,7 @@ import type { Event } from "stream-chat";
 import { Chat, useCreateChatClient } from "stream-chat-react";
 import "stream-chat-react/dist/css/index.css";
 import { useToast } from "@/components/ui/ToastStack";
+import { KINDRED_BOT_ID } from "@/lib/kindred-bot";
 
 const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!;
 
@@ -55,13 +56,31 @@ export default function ChatConnectionProvider({
             const message = event.message;
             if (!message || message.user?.id === userId) return;
 
+            // Icebreakers are posted by the bot, not by either person, so the "is this
+            // mine?" check above never caught them - which is why asking for a prompt
+            // toasted your own request back at you as "Kindred: ...". The card in the
+            // timeline announces a prompt far better than a toast can anyway.
+            if (
+                message.user?.id === KINDRED_BOT_ID ||
+                message.messageType === "icebreaker_prompt"
+            ) {
+                return;
+            }
+
+            // An answer is announced WITHOUT its text. IcebreakerCard deliberately keeps
+            // other people's answers out of the DOM until you have written your own, and
+            // putting the text in a toast would hand it over anyway - the notification
+            // would quietly undo the whole mechanism.
+            const isAnswer = message.messageType === "prompt_response";
+            const name = message.user?.name ?? "Someone";
+
             // Merged per sender, not per message: several messages arriving in a row from
             // one person is one event to the reader, and stacking a toast for each buries
             // everything else. The newest text wins.
             showToast({
                 kind: "message",
-                title: message.user?.name ?? "Someone",
-                body: message.text ?? "",
+                title: isAnswer ? `${name} answered the icebreaker` : name,
+                body: isAnswer ? undefined : (message.text ?? ""),
                 mergeKey: `message:${message.user?.id ?? "unknown"}`,
             });
         };
