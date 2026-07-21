@@ -23,14 +23,27 @@ import {
     XP_PER_PROMPT_ANSWER,
 } from "@/lib/confidence-xp";
 
-// Geometry of the ring. The avatar Stream renders at size="lg" is 40px; the ring sits
-// just outside it, and the whole control is sized to the ring rather than the avatar.
-const AVATAR_SIZE = 40;
-const RING_STROKE = 3;
-const RING_GAP = 3;
-const BOX = AVATAR_SIZE + (RING_STROKE + RING_GAP) * 2;
-const RADIUS = (BOX - RING_STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// Geometry of the ring, derived rather than hardcoded so the two sizes cannot drift out
+// of proportion with each other. The ring sits OUTSIDE the avatar, so the whole control
+// measures larger than the avatar it wraps - which is what the header has to make room
+// for.
+//
+// "compact" exists for the floating channel pill: at 40px the ring makes the pill as tall
+// as the header it replaced, which defeats the point of floating it.
+const RING_SIZES = {
+    default: { avatar: 40, stroke: 3, gap: 3, streamSize: "lg" as const },
+    compact: { avatar: 28, stroke: 2, gap: 2, streamSize: "md" as const },
+};
+
+export type RingSize = keyof typeof RING_SIZES;
+
+function ringGeometry(size: RingSize) {
+    const { avatar, stroke, gap, streamSize } = RING_SIZES[size];
+    const box = avatar + (stroke + gap) * 2;
+    const radius = (box - stroke) / 2;
+
+    return { box, radius, stroke, streamSize, circumference: 2 * Math.PI * radius };
+}
 
 /// The channel's chat level, drawn as a progress ring around the header avatar.
 ///
@@ -43,7 +56,11 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /// `.str-chat__avatar-group` in CSS matters: that class only exists for a group of 2+ with
 /// no channel image, so a 1:1 chat renders a bare `.str-chat__avatar` and would have been
 /// missed entirely.
-export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
+export default function ChannelLevelAvatar({
+    ringSize = "default",
+    ...props
+}: ChannelAvatarProps & { ringSize?: RingSize }) {
+    const { box, radius, stroke, streamSize, circumference } = ringGeometry(ringSize);
     const { channel, messages } = useChannelStateContext();
     const { client } = useChatContext();
     const { showToast } = useToast();
@@ -157,36 +174,36 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
                 // dangling reference, and aria-expanded already carries the state.
                 aria-controls={open ? panelId : undefined}
                 aria-label={`Chat level ${level}. Show how chat XP is earned.`}
-                style={{ width: BOX, height: BOX }}
+                style={{ width: box, height: box }}
                 className="relative flex cursor-pointer items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
             >
                 <svg
-                    width={BOX}
-                    height={BOX}
-                    viewBox={`0 0 ${BOX} ${BOX}`}
+                    width={box}
+                    height={box}
+                    viewBox={`0 0 ${box} ${box}`}
                     aria-hidden
                     className="absolute inset-0 -rotate-90"
                 >
                     <circle
-                        cx={BOX / 2}
-                        cy={BOX / 2}
-                        r={RADIUS}
+                        cx={box / 2}
+                        cy={box / 2}
+                        r={radius}
                         fill="none"
-                        strokeWidth={RING_STROKE}
+                        strokeWidth={stroke}
                         className="stroke-bone-300"
                     />
                     <motion.circle
-                        cx={BOX / 2}
-                        cy={BOX / 2}
-                        r={RADIUS}
+                        cx={box / 2}
+                        cy={box / 2}
+                        r={radius}
                         fill="none"
-                        strokeWidth={RING_STROKE}
+                        strokeWidth={stroke}
                         strokeLinecap="round"
-                        strokeDasharray={CIRCUMFERENCE}
+                        strokeDasharray={circumference}
                         // Drawn by shortening the dash offset rather than by animating a
                         // path, so it stays exact at 0% and 100%.
                         initial={false}
-                        animate={{ strokeDashoffset: CIRCUMFERENCE * (1 - progress) }}
+                        animate={{ strokeDashoffset: circumference * (1 - progress) }}
                         transition={transition}
                         className="stroke-accent-600"
                     />
@@ -198,7 +215,7 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
                     role={undefined} because Stream hardcodes role="button" on the avatar,
                     which would otherwise nest a button inside this one. */}
                 <span className="relative">
-                    <ChannelAvatar {...props} role={undefined} size="lg" />
+                    <ChannelAvatar {...props} role={undefined} size={streamSize} />
                 </span>
             </button>
 
@@ -210,7 +227,10 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -6, scale: 0.98 }}
                         transition={transition}
-                        className="absolute end-0 top-full z-30 mt-2 w-64 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
+                        // Centred under the avatar rather than pinned to its end edge:
+                        // the anchor now sits mid-pane inside the floating pill, where an
+                        // end-aligned panel hangs off to one side for no reason.
+                        className="absolute top-full left-1/2 z-30 mt-2 w-64 -translate-x-1/2 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
                     >
                         {/* Who is actually here, first: clicking a face is a question
                             about people before it is a question about progress. */}
