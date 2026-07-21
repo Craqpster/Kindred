@@ -5,9 +5,11 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
     ChannelAvatar,
     useChannelStateContext,
+    useChatContext,
     type ChannelAvatarProps,
 } from "stream-chat-react";
 
+import Avatar from "@/components/ui/Avatar";
 import { getChatLevel, XP_PER_LEVEL_STEP } from "@/lib/chat-level";
 import { XP_PER_MESSAGE, XP_PER_PROMPT_ANSWER } from "@/lib/confidence-xp";
 
@@ -33,6 +35,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /// missed entirely.
 export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
     const { channel, messages } = useChannelStateContext();
+    const { client } = useChatContext();
     const [xp, setXp] = useState<number | null>(null);
     const [open, setOpen] = useState(false);
 
@@ -78,6 +81,18 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
             document.removeEventListener("keydown", onKeyDown);
         };
     }, [open]);
+
+    // The bot posts prompts but is never added as a member, so this is exactly the
+    // humans. Same derivation ChatListRow uses; names are reliable without a DB round
+    // trip because both startChatRequest and createGroupChannel upsert users with them.
+    const members = Object.values(channel.state.members).map((member) => {
+        const id = member.user_id ?? member.user?.id ?? "?";
+        return {
+            id,
+            name: member.user?.name ?? id,
+            isYou: id === client.userID,
+        };
+    });
 
     const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(xp ?? 0);
     const progress = xpForNextLevel === 0 ? 0 : xpIntoLevel / xpForNextLevel;
@@ -152,7 +167,25 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
                         transition={transition}
                         className="absolute end-0 top-full z-30 mt-2 w-64 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
                     >
-                        <p className="text-label text-ink-600 uppercase">Chat level</p>
+                        {/* Who is actually here, first: clicking a face is a question
+                            about people before it is a question about progress. */}
+                        <p className="text-label text-ink-600 uppercase">
+                            In this chat · {members.length}
+                        </p>
+                        <ul className="mt-2 flex flex-col gap-2">
+                            {members.map((member) => (
+                                <li key={member.id} className="flex items-center gap-2">
+                                    <Avatar name={member.name} size={22} />
+                                    <span className="truncate text-meta text-ink-900">
+                                        {member.isYou ? "You" : member.name}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+
+                        <p className="mt-3 border-t border-bone-200 pt-3 text-label text-ink-600 uppercase">
+                            Chat level
+                        </p>
                         <p className="mt-0.5 text-title text-ink-900">Level {level}</p>
 
                         <div className="mt-3 h-1.5 w-full rounded-full bg-bone-200">
