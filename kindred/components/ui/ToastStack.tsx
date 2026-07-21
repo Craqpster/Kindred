@@ -156,7 +156,12 @@ function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id:
             aria-live="polite"
             // z-[90] clears the dock's z-50 — a toast that slides under the nav is worse
             // than no toast, since it looks like a rendering fault rather than a message.
-            className="pointer-events-none fixed right-4 bottom-4 z-90 flex w-[min(20rem,calc(100vw-2rem))] flex-col gap-2"
+            // Top right, not bottom: the dock and the composer both live along the bottom
+            // edge, so a toast there competed with the controls the user was reaching for.
+            //
+            // z-90 clears the dock's z-50 — a toast that slides under the nav is worse
+            // than no toast, since it looks like a rendering fault rather than a message.
+            className="pointer-events-none fixed top-4 right-4 z-90 flex w-[min(24rem,calc(100vw-2rem))] flex-col gap-2.5"
         >
             <AnimatePresence initial={false} mode="popLayout">
                 {toasts.map((toast) => (
@@ -199,7 +204,9 @@ function ToastCard({
               transition: { duration: 0.15 },
           }
         : {
-              initial: { opacity: 0, y: 22, scale: 0.96, filter: "blur(10px)" },
+              // Negative y now that the stack sits at the top: a toast should travel in
+              // from the edge it belongs to, not appear to climb up from below it.
+              initial: { opacity: 0, y: -22, scale: 0.96, filter: "blur(10px)" },
               animate: { opacity: 1, y: 0, scale: 1, filter: "blur(0px)" },
               exit: { opacity: 0, x: 32, scale: 0.96, transition: { duration: 0.18 } },
               transition: { type: "spring" as const, stiffness: 420, damping: 34, mass: 0.75 },
@@ -209,11 +216,11 @@ function ToastCard({
         <motion.div
             layout={!reduceMotion}
             {...motionProps}
-            className={`pointer-events-auto flex items-start gap-3 rounded-card border p-3 shadow-card ${KIND_STYLES[toast.kind]}`}
+            className={`pointer-events-auto flex items-start gap-3 rounded-card border p-4 shadow-hero ${KIND_STYLES[toast.kind]}`}
         >
             <div className="min-w-0 flex-1">
-                <p className="text-meta font-medium text-ink-900">{toast.title}</p>
-                {toast.body && <p className="mt-0.5 text-label text-ink-600">{toast.body}</p>}
+                <p className="text-body font-semibold text-ink-900">{toast.title}</p>
+                {toast.body && <p className="mt-1 text-meta text-ink-600">{toast.body}</p>}
             </div>
 
             <button
