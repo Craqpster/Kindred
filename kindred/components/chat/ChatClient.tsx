@@ -1,6 +1,6 @@
 "use client";
 
-import { Lightbulb, Plus, SendHorizontal } from "lucide-react";
+import { Plus, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
@@ -21,6 +21,7 @@ import {
     type SendButtonProps,
 } from "stream-chat-react";
 
+import AttachmentMenu from "@/components/chat/AttachmentMenu";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import IcebreakerCard from "@/components/chat/IcebreakerCard";
@@ -93,7 +94,6 @@ export default function ChatClient({
                             <AutoPromptTrigger />
                             <MessageList Message={ChatMessage} />
                             <PrefillGreeting targetId={greet ? openChannelId : undefined} />
-                            <PromptButton />
                             <ModeratedMessageComposer />
                         </Window>
                         <Thread />
@@ -141,6 +141,7 @@ function ComposerComponents({ children }: { children: React.ReactNode }) {
             ...existing,
             SendButton: KindredSendButton,
             AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
+            AttachmentSelector: AttachmentMenu,
         }),
         [existing],
     );
@@ -243,39 +244,6 @@ function AutoPromptTrigger() {
     }, [channel, messages]);
 
     return null;
-}
-
-// The on-demand version of AutoPromptTrigger - drops a new random icebreaker into the
-// chat right now, regardless of how recently someone last spoke.
-function PromptButton() {
-    const { channel } = useChannelStateContext();
-    const [loading, setLoading] = useState(false);
-
-    const handleClick = async () => {
-        setLoading(true);
-        try {
-            await fetch("/api/chat-prompts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ channelCid: channel.cid }),
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <button
-            type="button"
-            onClick={handleClick}
-            disabled={loading}
-            title="Get an icebreaker prompt"
-            className="flex cursor-pointer items-center gap-1.5 border-t border-bone-200 bg-bone-100 px-4 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-        >
-            <Lightbulb size={14} strokeWidth={1.5} aria-hidden />
-            {loading ? "Sending…" : "Send an icebreaker"}
-        </button>
-    );
 }
 
 // Renders an icebreaker prompt as a distinct card with a "Respond" button, and a reply

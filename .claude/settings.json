@@ -18,7 +18,8 @@
       "Bash(kill 61860)",
       "Bash(kill -9 61860)",
       "Bash(lsof -ti:3000)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH -m 20 \"http://localhost:3000/api/profile/badges\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH -m 20 \"http://localhost:3000/api/profile/badges\")",
+      "Bash(node -e ' *)"
     ]
   }
 }
