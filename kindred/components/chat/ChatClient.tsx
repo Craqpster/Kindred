@@ -13,6 +13,7 @@ import {
     useChannelActionContext,
     useChannelStateContext,
 } from "stream-chat-react";
+import { getChatLevel } from "@/lib/chat-level";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -51,6 +52,7 @@ export default function ChatClient({
                 <Channel>
                     <Window>
                         <ChannelHeader />
+                        <ChatXpBadge />
                         <MessageList />
                         <PrefillGreeting targetId={greetChannelId} />
                         <ModeratedMessageComposer />
@@ -66,8 +68,6 @@ const GREETING = "👋";
 
 // Types the greeting into the composer without sending it, so the wave still ends with
 // a deliberate press of Send by the person doing the waving.
-//
-//
 function PrefillGreeting({ targetId }: { targetId?: string }) {
     const { channel } = useChannelStateContext();
     const filled = useRef(false);
@@ -88,6 +88,58 @@ function PrefillGreeting({ targetId }: { targetId?: string }) {
     return null;
 }
 
+// A single XP total shared by everyone in this chat (not a per-person stat - that's
+// profiles.confidence_level, shown elsewhere). Refetches whenever the message count
+// changes, so it stays current whether the XP-worthy message was sent by this user or
+// the other person - lib/confidence.ts awards it to channel_xp regardless of sender.
+function ChatXpBadge() {
+    const { channel, messages } = useChannelStateContext();
+    const [xp, setXp] = useState<number | null>(null);
+
+    const refetch = useCallback(() => {
+        fetch(`/api/chat-xp?channelCid=${encodeURIComponent(channel.cid)}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (data) setXp(data.xp);
+            })
+            .catch(() => {});
+    }, [channel]);
+
+    useEffect(refetch, [refetch, messages?.length]);
+
+    // A new message means the badge should re-check right away, but confidence.ts
+    // awards XP in a background call that lands slightly after the message itself, so
+    // that first refetch can still read the old value. This event fires once the award
+    // has actually landed (see ModeratedMessageComposer below), for a second, correctly
+    // timed refetch - for both participants, not just whoever sent the message.
+    useEffect(() => {
+        const handleXpUpdated = () => refetch();
+        channel.on("chat_xp_updated", handleXpUpdated);
+        return () => channel.off("chat_xp_updated", handleXpUpdated);
+    }, [channel, refetch]);
+
+    if (xp === null) return null;
+
+    const { level, xpIntoLevel, xpPerLevel } = getChatLevel(xp);
+
+    return (
+        <div className="border-b border-metro-blue/20 bg-mist px-4 py-1.5">
+            <div className="flex items-center justify-between text-sm text-star-sapphire">
+                <span>Chat Level {level}</span>
+                <span className="text-xs text-metro-blue">
+                    {xpIntoLevel}/{xpPerLevel} to next level
+                </span>
+            </div>
+            <div className="mt-1 h-1.5 w-full rounded-full bg-metro-blue/15">
+                <div
+                    className="h-1.5 rounded-full bg-metro-blue transition-all"
+                    style={{ width: `${(xpIntoLevel / xpPerLevel) * 100}%` }}
+                />
+            </div>
+        </div>
+    );
+}
+
 // Stream's own moderation turned out to need a paid plan we don't have (see the PR
 // notes), so this checks messages against OpenAI's free Moderation endpoint instead,
 // via our own /api/moderate-message route (keeps the OpenAI key server-side only).
@@ -99,6 +151,7 @@ function PrefillGreeting({ targetId }: { targetId?: string }) {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
+    const { channel } = useChannelStateContext();
     const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [showWarning, setShowWarning] = useState(false);
@@ -128,6 +181,7 @@ function ModeratedMessageComposer() {
 
     const overrideSubmitHandler = useCallback(
         async ({
+            cid,
             localMessage,
             message,
             sendOptions,
@@ -172,8 +226,23 @@ function ModeratedMessageComposer() {
             }
 
             await sendMessage({ localMessage, message, options: sendOptions });
+
+            // Best-effort, background signal for confidence_level growth - never
+            // awaited in a way that could delay or fail the send itself, since the
+            // message has already gone through by this point.
+            if (message.text?.trim()) {
+                fetch("/api/confidence", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ channelCid: cid, messageId: localMessage.id, text: message.text }),
+                })
+                    // Tell ChatXpBadge (both participants') the award has landed and it's
+                    // safe to refetch, rather than making it guess how long to wait.
+                    .then(() => channel.sendEvent({ type: "chat_xp_updated" }))
+                    .catch(() => {});
+            }
         },
-        [sendMessage],
+        [sendMessage, channel],
     );
 
     return (

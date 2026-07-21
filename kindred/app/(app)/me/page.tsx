@@ -1,37 +1,51 @@
 import SignOutForm from "@/components/auth/SignOutForm";
-import Avatar from "@/components/ui/Avatar";
 import { ageFrom } from "@/lib/age";
 import { requireProfile } from "@/lib/dal";
+import { prisma } from "@/lib/prisma";
+import { BadgesSection } from "@/app/profile/components/BadgesSection";
+import { ConfidenceCard } from "@/app/profile/components/ConfidenceCard";
+import { InterestsEditor } from "@/app/profile/components/InterestsEditor";
+import { PrivacySettings } from "@/app/profile/components/PrivacySettings";
+import { ProfileHeader } from "@/app/profile/components/ProfileHeader";
 
 export default async function MePage() {
     const profile = await requireProfile();
 
-    const hobbies = profile.profile_hobbies.map(({ hobby }) => hobby.name);
-    const interests = profile.profile_interests.map(({ interest }) => interest.name);
+    const allHobbies = await prisma.hobbies.findMany({ orderBy: { name: "asc" } });
+    const allInterests = await prisma.interests.findMany({ orderBy: { name: "asc" } });
+
+    const userHobbies = profile.profile_hobbies.map(({ hobby_id }) => hobby_id);
+    const userInterests = profile.profile_interests.map(({ interest_id }) => interest_id);
 
     return (
         <div className="mx-auto w-full max-w-2xl px-6 py-10 font-body text-ink-900">
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Avatar name={profile.username} size={56} />
-                    <h1 className="font-display text-title">{profile.username}</h1>
-                </div>
+            <div className="flex justify-end">
                 <SignOutForm />
             </div>
 
-            <dl className="mt-8 grid grid-cols-[8rem_1fr] gap-y-3 text-body">
-                <dt className="text-ink-600">Age</dt>
-                <dd>{ageFrom(profile.birth_date) ?? "—"}</dd>
+            <div className="mt-4 space-y-12">
+                <ProfileHeader profile={profile} />
 
-                <dt className="text-ink-600">Gender</dt>
-                <dd>{profile.gender?.label ?? "—"}</dd>
+                <dl className="grid grid-cols-[8rem_1fr] gap-y-3 text-body">
+                    <dt className="text-ink-600">Age</dt>
+                    <dd>{ageFrom(profile.birth_date) ?? "—"}</dd>
 
-                <dt className="text-ink-600">Hobbies</dt>
-                <dd>{hobbies.length ? hobbies.join(", ") : "—"}</dd>
+                    <dt className="text-ink-600">Gender</dt>
+                    <dd>{profile.gender?.label ?? "—"}</dd>
+                </dl>
 
-                <dt className="text-ink-600">Interests</dt>
-                <dd>{interests.length ? interests.join(", ") : "—"}</dd>
-            </dl>
+                <div className="space-y-8">
+                    <ConfidenceCard level={profile.confidence_level} points={profile.confidence_points ?? 0} />
+                    <BadgesSection profileBadges={profile.profile_badges} />
+                    <PrivacySettings profile={profile} />
+                    <InterestsEditor
+                        hobbies={allHobbies}
+                        interests={allInterests}
+                        userHobbies={userHobbies}
+                        userInterests={userInterests}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
