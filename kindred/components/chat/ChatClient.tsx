@@ -289,7 +289,20 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     // if a caller explicitly overrides it, which MessageList's Message={ChatMessage}
     // wiring doesn't do. useMessageContext() is the actual source of truth here.
     const { message } = useMessageContext("ChatMessage");
+    const { messages } = useChannelStateContext();
     const { setActivePrompt } = useActivePrompt();
+
+    // A reply to a prompt is rendered inside that prompt's card, so it must not also
+    // appear as a bubble of its own. Conditional on the prompt actually being loaded:
+    // `messages` is one page of history, so an older prompt can be scrolled past, and a
+    // reply whose card isn't on screen has to fall through to a normal bubble rather
+    // than disappearing from the conversation entirely.
+    if (message?.messageType === "prompt_response" && message.promptId) {
+        const promptIsLoaded = messages?.some(
+            (m) => m.id === message.promptId && m.messageType === "icebreaker_prompt",
+        );
+        if (promptIsLoaded) return null;
+    }
 
     if (message?.messageType === "icebreaker_prompt") {
         return (
@@ -303,17 +316,6 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
                 >
                     Respond
                 </button>
-            </div>
-        );
-    }
-
-    if (message?.messageType === "prompt_response") {
-        return (
-            <div>
-                <p className="mb-0.5 text-center text-[10px] font-medium text-metro-blue">
-                    ✨ Prompt response — XP earned
-                </p>
-                <MessageUI {...props} />
             </div>
         );
     }
