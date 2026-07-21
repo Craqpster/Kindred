@@ -1,7 +1,8 @@
 "use client";
 
 import { Lightbulb } from "lucide-react";
-import { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { LocalMessage } from "stream-chat";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
@@ -28,6 +29,20 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     const [answering, setAnswering] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+
+    const reduceMotion = useReducedMotion();
+    const regionId = useId();
+    const inputRef = useRef<HTMLTextAreaElement>(null);
+
+    const transition = reduceMotion
+        ? { duration: 0 }
+        : ({ type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const);
+
+    // Opening the box should put the caret in it — the click that opened it was already
+    // the decision to answer, so making the user click again is a wasted step.
+    useEffect(() => {
+        if (answering) inputRef.current?.focus();
+    }, [answering]);
 
     const answers = (messages ?? []).filter(
         (m) => m.messageType === "prompt_response" && m.promptId === message.id,
@@ -70,9 +85,20 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
         }
     };
 
+    const cancel = () => {
+        setAnswering(false);
+        setDraft("");
+    };
+
     return (
         <div className="my-3 flex justify-center">
-            <div className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card">
+            {/* layout so the card grows into the input and each new answer rather than
+                snapping to its new height under the message list. */}
+            <motion.div
+                layout={!reduceMotion}
+                transition={transition}
+                className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card"
+            >
                 <p className="flex items-center gap-1.5 text-label text-ink-600 uppercase">
                     <Lightbulb size={13} strokeWidth={1.5} aria-hidden />
                     Icebreaker
@@ -88,21 +114,33 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
 
                 {answers.length > 0 && (
                     <ul className="mt-3 flex flex-col gap-2.5 border-t border-bone-200 pt-3">
-                        {answers.map((answer) => (
-                            <li key={answer.id} className="flex gap-2">
-                                <Avatar name={answer.user?.name ?? answer.user?.id ?? "?"} size={24} />
-                                <div className="min-w-0">
-                                    <p className="text-label text-ink-600">
-                                        {answer.user?.id === client.userID
-                                            ? "You"
-                                            : (answer.user?.name ?? answer.user?.id)}
-                                    </p>
-                                    <p className="text-meta break-words text-ink-900">
-                                        {answer.text}
-                                    </p>
-                                </div>
-                            </li>
-                        ))}
+                        <AnimatePresence initial={false}>
+                            {answers.map((answer) => (
+                                <motion.li
+                                    key={answer.id}
+                                    layout={!reduceMotion}
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={transition}
+                                    className="flex gap-2"
+                                >
+                                    <Avatar
+                                        name={answer.user?.name ?? answer.user?.id ?? "?"}
+                                        size={24}
+                                    />
+                                    <div className="min-w-0">
+                                        <p className="text-label text-ink-600">
+                                            {answer.user?.id === client.userID
+                                                ? "You"
+                                                : (answer.user?.name ?? answer.user?.id)}
+                                        </p>
+                                        <p className="text-meta wrap-break-word text-ink-900">
+                                            {answer.text}
+                                        </p>
+                                    </div>
+                                </motion.li>
+                            ))}
+                        </AnimatePresence>
                     </ul>
                 )}
 
@@ -112,59 +150,80 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                     </p>
                 )}
 
-                {!youAnswered &&
-                    (answering ? (
-                        <div className="mt-3">
-                            <textarea
-                                value={draft}
-                                onChange={(event) => setDraft(event.target.value)}
-                                onKeyDown={(event) => {
-                                    // Enter sends, Shift+Enter breaks the line — the
-                                    // convention every chat input in the world uses, and
-                                    // what Stream's own composer does.
-                                    if (event.key === "Enter" && !event.shiftKey) {
-                                        event.preventDefault();
-                                        void send();
-                                    }
-                                }}
-                                rows={2}
-                                maxLength={500}
-                                placeholder="Your answer…"
-                                aria-label="Your answer"
-                                className="w-full resize-none rounded-xl border border-bone-300 bg-bone-100 px-3 py-2 text-meta text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40"
-                            />
+                {!youAnswered && (
+                    <>
+                        <AnimatePresence initial={false}>
+                            {answering && (
+                                <motion.div
+                                    key="answer-box"
+                                    id={regionId}
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={transition}
+                                    className="overflow-hidden"
+                                >
+                                    <div className="pt-3">
+                                        <textarea
+                                            ref={inputRef}
+                                            value={draft}
+                                            onChange={(event) => setDraft(event.target.value)}
+                                            onKeyDown={(event) => {
+                                                // Enter sends, Shift+Enter breaks the
+                                                // line — what Stream's own composer does,
+                                                // so the two inputs behave alike.
+                                                if (event.key === "Enter" && !event.shiftKey) {
+                                                    event.preventDefault();
+                                                    void send();
+                                                }
+                                                if (event.key === "Escape") cancel();
+                                            }}
+                                            rows={2}
+                                            maxLength={500}
+                                            placeholder="Your answer…"
+                                            aria-label="Your answer"
+                                            className="w-full resize-none rounded-xl border border-bone-300 bg-bone-100 px-3 py-2 text-meta text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40"
+                                        />
 
-                            <div className="mt-2 flex items-center justify-end gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setAnswering(false);
-                                        setDraft("");
-                                    }}
-                                    className="cursor-pointer rounded-full px-3 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={send}
-                                    disabled={!draft.trim() || sending}
-                                    className="cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
-                                >
-                                    {sending ? "Sending…" : "Send"}
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <button
-                            type="button"
-                            onClick={() => setAnswering(true)}
-                            className="mt-3 cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
-                        >
-                            Answer
-                        </button>
-                    ))}
-            </div>
+                                        <div className="mt-2 flex items-center justify-end gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={cancel}
+                                                className="cursor-pointer rounded-full px-3 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={send}
+                                                disabled={!draft.trim() || sending}
+                                                className="cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+                                            >
+                                                {sending ? "Sending…" : "Send"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {!answering && (
+                            <button
+                                type="button"
+                                onClick={() => setAnswering(true)}
+                                aria-expanded={answering}
+                                // Only while open: the region is unmounted when collapsed,
+                                // and pointing aria-controls at an id that is not in the
+                                // document is a dangling reference.
+                                aria-controls={answering ? regionId : undefined}
+                                className="mt-3 cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                            >
+                                Answer
+                            </button>
+                        )}
+                    </>
+                )}
+            </motion.div>
         </div>
     );
 }
