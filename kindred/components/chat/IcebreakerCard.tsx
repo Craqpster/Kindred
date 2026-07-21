@@ -125,20 +125,35 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                         </span>
                     </p>
 
-                    {!youAnswered && !answering && (
+                    <span className="flex shrink-0 items-center gap-1">
+                        {/* Quoting puts the question above the main composer, which is the
+                            only way to answer a prompt that has scrolled out of reach of
+                            this card, or to add a second thought after the inline box is
+                            gone. ModeratedMessageComposer notices the quote and tags the
+                            send as an answer, so it still lands back in this card. */}
                         <button
                             type="button"
-                            onClick={() => setAnswering(true)}
-                            aria-expanded={answering}
-                            // Only while open: the region is unmounted when collapsed, and
-                            // pointing aria-controls at an id that is not in the document
-                            // is a dangling reference.
-                            aria-controls={answering ? regionId : undefined}
-                            className="shrink-0 cursor-pointer rounded-full bg-accent-600 px-3.5 py-1 text-label text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                            onClick={() => channel.messageComposer.setQuotedMessage(message)}
+                            className="cursor-pointer rounded-full px-2.5 py-1 text-label text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
                         >
-                            Answer
+                            Quote
                         </button>
-                    )}
+
+                        {!youAnswered && !answering && (
+                            <button
+                                type="button"
+                                onClick={() => setAnswering(true)}
+                                aria-expanded={answering}
+                                // Only while open: the region is unmounted when collapsed,
+                                // and pointing aria-controls at an id that is not in the
+                                // document is a dangling reference.
+                                aria-controls={answering ? regionId : undefined}
+                                className="cursor-pointer rounded-full bg-accent-600 px-3.5 py-1 text-label text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                            >
+                                Answer
+                            </button>
+                        )}
+                    </span>
                 </div>
 
                 {answers.length > 0 && (
