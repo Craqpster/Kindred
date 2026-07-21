@@ -214,10 +214,11 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                 The height animations below own the growth on their own. */}
             <div
                 ref={cardRef}
-                className={`w-full max-w-md rounded-card border bg-surface p-4 transition-[border-color,box-shadow] duration-250 ease-smooth ${
-                    isHighlighted
-                        ? "border-accent-600 shadow-hero ring-2 ring-accent-600/30"
-                        : "border-bone-300 shadow-card"
+                // The pulse itself lives in globals.css as a keyframe, so the animation
+                // and the reduced-motion fallback sit next to each other rather than
+                // being split between a stylesheet and inline styles here.
+                className={`w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card ${
+                    isHighlighted ? "kindred-card-highlight" : ""
                 }`}
             >
                 <p className="flex items-center gap-1.5 text-label text-ink-600 uppercase">

@@ -179,7 +179,7 @@ body {
        "also sent in channel" link produces - that button has no highlight styling of its
        own, it just triggers a jump), the pinned-message backdrop, and highlighted
        thread-list items. */
-    --str-chat__background-core-highlight: var(--color-accent-50);
+    --str-chat__background-core-highlight: var(--color-bone-200);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
@@ -247,6 +247,47 @@ body {
    covers both. */
 .str-chat .str-chat__quoted-message-indicator {
     display: none;
+}
+
+/* The icebreaker card's "you jumped here" treatment.
+   Stream's own highlight class is applied inside MessageUI, which IcebreakerCard replaces
+   outright, so the card never receives it and has to say so itself.
+
+   The border and shadow carry it, not the fill: tinting the whole card washed out the
+   answers and the withheld-answer placeholders sitting on it, and a card that changes
+   colour reads as a different KIND of card rather than the same one being pointed at.
+   A single static border swap was too easy to miss on a card the list had just scrolled
+   to, so it pulses twice and then leaves nothing behind.
+
+   Namespaced because @keyframes names are global and resolved by source order — Stream
+   ships 22 of its own, including unprefixed ones like `rotate`. */
+@keyframes kindred-card-pulse {
+    0%,
+    100% {
+        border-color: var(--color-bone-300);
+        box-shadow: var(--shadow-card);
+    }
+    25%,
+    75% {
+        border-color: var(--color-accent-600);
+        box-shadow: var(--shadow-hero);
+    }
+}
+
+/* 0.8s x 2 = 1.6s, matching HIGHLIGHT_MS in KindredQuotedMessage.tsx so the animation
+   ends exactly as Stream clears the highlight state. */
+.kindred-card-highlight {
+    animation: kindred-card-pulse 0.8s ease-in-out 2;
+}
+
+/* Reduced motion still needs to answer "which card?" — it just answers with a steady
+   tint instead of movement. */
+@media (prefers-reduced-motion: reduce) {
+    .kindred-card-highlight {
+        animation: none;
+        border-color: var(--color-accent-600);
+        box-shadow: var(--shadow-hero);
+    }
 }
 
 /* The line above the composer is on the CONTAINER, not on the compose area — the rounded
