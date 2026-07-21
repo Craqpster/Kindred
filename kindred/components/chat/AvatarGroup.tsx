@@ -15,7 +15,13 @@ export default function AvatarGroup({ names, size = 32 }: { names: string[]; siz
         <span aria-hidden="true" className="flex shrink-0 items-center">
             {shown.map((name, i) => (
                 <Avatar
-                    key={name}
+                    // Index, not name. Callers pass display names, and nothing guarantees
+                    // those are distinct - two members can share one, and a caller that
+                    // means "one face per person" can pass the same name twice by mistake
+                    // (IcebreakerCard did exactly that once an answer could be given
+                    // twice). This list is display-only and aria-hidden, so positional
+                    // identity is fine and cannot produce a duplicate key.
+                    key={i}
                     name={name}
                     size={size}
                     // rounded-full on Avatar's root is load-bearing: that root is a square

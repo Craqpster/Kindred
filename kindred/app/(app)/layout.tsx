@@ -1,5 +1,6 @@
 import ChatConnectionProvider from "@/components/chat/ChatConnectionProvider";
 import AppDock from "@/components/app/AppDock";
+import { ToastProvider } from "@/components/ui/ToastStack";
 import { requireProfile } from "@/lib/dal";
 
 // The authenticated shell. requireProfile() gates every tab in one place: no session
@@ -24,14 +25,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         // frosted glass only reads if content passes behind it. `absolute` (not `fixed`)
         // is right because this shell never scrolls — <main> does.
         //
-        <div className="relative flex h-dvh flex-col overflow-hidden">
-            <AppDock username={profile.username} />
+        // ToastProvider wraps the shell rather than sitting inside <main>: the stack
+        // portals to the body, but the provider still has to be an ancestor of everything
+        // that raises a toast, chat included.
+        <ToastProvider>
+            <div className="relative flex h-dvh flex-col overflow-hidden">
+                <AppDock username={profile.username} />
 
-            <main className="flex flex-1 flex-col overflow-y-auto bg-bone-100 pb-24 sm:pb-0 sm:pl-24">
-                <ChatConnectionProvider userId={profile.id} username={profile.username}>
-                    {children}
-                </ChatConnectionProvider>
-            </main>
-        </div>
+                <main className="flex flex-1 flex-col overflow-y-auto bg-bone-100 pb-24 sm:pb-0 sm:pl-24">
+                    <ChatConnectionProvider userId={profile.id} username={profile.username}>
+                        {children}
+                    </ChatConnectionProvider>
+                </main>
+            </div>
+        </ToastProvider>
     );
 }

@@ -17,11 +17,9 @@ export function ConfidenceCard({ level, points }: { level: number; points: numbe
         colors: ["#689cd5", "#3f79af", "#153d74"],
       });
 
-      fetch("/api/profile/badges", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newTier: level }),
-      }).catch(console.error);
+      // No body: the route derives the tier from the stored points itself, since a
+      // client-asserted tier was a free upgrade to anyone who called it directly.
+      fetch("/api/profile/badges", { method: "PATCH" }).catch(console.error);
 
       prevLevel.current = level;
     }
