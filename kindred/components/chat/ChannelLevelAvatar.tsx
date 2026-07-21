@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+// Stream's Event, not the DOM's - the global one shadows it otherwise.
+import type { Event } from "stream-chat";
 import {
     ChannelAvatar,
     useChannelStateContext,
@@ -9,7 +11,9 @@ import {
     type ChannelAvatarProps,
 } from "stream-chat-react";
 
+import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
 import Avatar from "@/components/ui/Avatar";
+import { useToast } from "@/components/ui/ToastStack";
 import { getChatLevel, XP_PER_LEVEL_STEP } from "@/lib/chat-level";
 import {
     dailyBonusThreshold,
@@ -42,6 +46,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
     const { channel, messages } = useChannelStateContext();
     const { client } = useChatContext();
+    const { showToast } = useToast();
     const [xp, setXp] = useState<number | null>(null);
     const [messagesToday, setMessagesToday] = useState(0);
     const [bonusEarnedToday, setBonusEarnedToday] = useState(false);
@@ -72,6 +77,34 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
         channel.on("chat_xp_updated", handle);
         return () => channel.off("chat_xp_updated", handle);
     }, [channel, refetch]);
+
+    // Advancements that belong to the whole channel. The XP award only ever runs for
+    // whoever sent the message, so without these every other member's chat level and
+    // daily bonus would move in silence.
+    //
+    // Own events are skipped because the sender already toasted locally at the moment it
+    // happened. That also makes this correct whether or not Stream echoes an event back
+    // to its sender - a detail not worth depending on either way.
+    useEffect(() => {
+        const handleLevel = (event: Event) => {
+            if (event.user?.id === client.userID) return;
+            if (event.chatLevel) showToast(chatLevelToast(event.chatLevel));
+            refetch();
+        };
+
+        const handleBonus = (event: Event) => {
+            if (event.user?.id === client.userID) return;
+            if (event.bonusXp) showToast(dailyBonusToast(event.bonusXp));
+            refetch();
+        };
+
+        channel.on("chat_level_up", handleLevel);
+        channel.on("chat_daily_bonus", handleBonus);
+        return () => {
+            channel.off("chat_level_up", handleLevel);
+            channel.off("chat_daily_bonus", handleBonus);
+        };
+    }, [channel, client.userID, refetch, showToast]);
 
     // Dismissal for a hand-rolled popover: the project has no popover primitive, and
     // without both of these the panel can only be closed by clicking the ring again.

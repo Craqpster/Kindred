@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
 import { acceptRequest } from "@/app/(app)/chats/actions";
+import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
 import { useToast, type ToastInput } from "@/components/ui/ToastStack";
 import type { AwardResult } from "@/lib/confidence";
 import { getChatLevel } from "@/lib/chat-level";
@@ -113,13 +114,18 @@ export function useModeratedSend() {
             if (award.messageXp > 0) showToast(xpToast(award.messageXp));
 
             // Its own toast, not folded into the running XP total: it is the day's payoff
-            // and it took both people, so burying it in a "+11 XP" tally undersells it.
+            // and it took everyone, so burying it in a "+11 XP" tally undersells it.
+            //
+            // Raised locally AND broadcast: the award only ever runs for the sender, so
+            // without the event the other members' XP would move in silence. They toast
+            // from the event; the sender toasts here. Doing both means it works whether or
+            // not Stream echoes an event back to whoever sent it - the listener ignores
+            // its own user either way.
             if (award.dailyBonusEarned) {
-                showToast({
-                    kind: "milestone",
-                    title: `+${award.bonusXp} XP · Daily bonus`,
-                    body: "You both showed up today.",
-                });
+                showToast(dailyBonusToast(award.bonusXp));
+                channel
+                    .sendEvent({ type: "chat_daily_bonus", bonusXp: award.bonusXp })
+                    .catch(() => {});
             }
 
             // The award tells us the new channel total and what it just added, so the
@@ -128,11 +134,10 @@ export function useModeratedSend() {
             const levelNow = getChatLevel(award.channelXp).level;
 
             if (levelNow > levelBefore) {
-                showToast({
-                    kind: "milestone",
-                    title: `Chat Level ${levelNow}`,
-                    body: "This conversation levelled up.",
-                });
+                showToast(chatLevelToast(levelNow));
+                channel
+                    .sendEvent({ type: "chat_level_up", chatLevel: levelNow })
+                    .catch(() => {});
             }
 
             if (award.tierUp) {
@@ -143,7 +148,7 @@ export function useModeratedSend() {
                 });
             }
         },
-        [showToast],
+        [showToast, channel],
     );
 
     // Everything that has to happen after a message is already in the channel. Never
