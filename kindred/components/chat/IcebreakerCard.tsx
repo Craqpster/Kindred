@@ -54,7 +54,18 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
         (m) => m.messageType === "prompt_response" && m.promptId === message.id,
     );
     const youAnswered = answers.some((a) => a.user?.id === client.userID);
-    const answeredNames = answers.map((a) => a.user?.name ?? a.user?.id ?? "?");
+
+    // Answerers, not answers. Quoting a prompt lets the same person answer it more than
+    // once, so mapping over `answers` counted one of them twice - which showed their face
+    // twice and let "N of M answered" climb past M. Both are questions about *people*.
+    const answeredNames = [
+        ...new Map(
+            answers.map((a) => [
+                a.user?.id ?? a.id,
+                a.user?.name ?? a.user?.id ?? "?",
+            ]),
+        ).values(),
+    ];
 
     // The bot posts prompts but is never added as a member, so this is exactly the
     // humans - no filtering needed beyond it.
@@ -120,7 +131,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                     <p className="flex min-w-0 items-center gap-2 text-meta text-ink-600">
                         <AvatarGroup names={answeredNames} size={20} />
                         <span className="truncate">
-                            {answers.length} of {memberCount} answered
+                            {answeredNames.length} of {memberCount} answered
                             {!youAnswered && answers.length > 0 && " · answer to reveal"}
                         </span>
                     </p>
