@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus, SendHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
     ChannelHeader,
+    ComponentProvider,
     MessageComposer,
     MessageList,
     Thread,
@@ -12,6 +14,9 @@ import {
     useChannelActionContext,
     useChannelStateContext,
     useChatContext,
+    useComponentContext,
+    useMessageComposerHasSendableData,
+    type SendButtonProps,
 } from "stream-chat-react";
 
 import { acceptRequest } from "@/app/(app)/chats/actions";
@@ -77,13 +82,15 @@ export default function ChatClient({
 
             <div className="flex flex-1 min-w-0">
                 <Channel>
-                    <Window>
-                        <ChannelHeader />
-                        <MessageList />
-                        <PrefillGreeting targetId={greet ? openChannelId : undefined} />
-                        <ModeratedMessageComposer />
-                    </Window>
-                    <Thread />
+                    <ComposerComponents>
+                        <Window>
+                            <ChannelHeader />
+                            <MessageList />
+                            <PrefillGreeting targetId={greet ? openChannelId : undefined} />
+                            <ModeratedMessageComposer />
+                        </Window>
+                        <Thread />
+                    </ComposerComponents>
                 </Channel>
             </div>
         </div>
@@ -111,6 +118,56 @@ function useOpenChannel(channelId: string | undefined, type: "messaging" | "team
         // An id, not a cid — client.channel() rejects a cid here.
         setActiveChannel(client.channel(type, channelId));
     }, [channelId, type, client, setActiveChannel]);
+}
+
+// Swaps two of Stream's composer components for ours.
+//
+// In v14 these are NOT props on <Channel> — ChannelProps carries no component keys, and the
+// composer reads them from ComponentContext. So this re-provides that context from inside
+// <Channel>, spreading the existing value first: ComponentProvider replaces the context
+// wholesale, and dropping the ~60 defaults Channel put there would blank out most of the UI.
+function ComposerComponents({ children }: { children: React.ReactNode }) {
+    const existing = useComponentContext();
+
+    const value = useMemo(
+        () => ({
+            ...existing,
+            SendButton: KindredSendButton,
+            AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
+        }),
+        [existing],
+    );
+
+    return <ComponentProvider value={value}>{children}</ComponentProvider>;
+}
+
+// Stream hands an override only `sendMessage` — `disabled` is NOT passed, and the default
+// computes it itself. Without this hook the button stays live on an empty composer.
+//
+// Sized and weighted explicitly: Stream sizes its own icons via `.str-chat__icon--send`,
+// which a lucide icon never matches, and lucide's default stroke (2 at 24px) is heavier than
+// Stream's (1.5 at 20px) next to the emoji and attachment icons.
+function KindredSendButton({ sendMessage, ...rest }: SendButtonProps) {
+    const canSend = useMessageComposerHasSendableData();
+
+    return (
+        <button
+            type="button"
+            aria-label="Send"
+            disabled={!canSend}
+            onClick={sendMessage}
+            {...rest}
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+        >
+            <SendHorizontal size={18} strokeWidth={1.5} aria-hidden />
+        </button>
+    );
+}
+
+// Only the icon inside the "+" button, which leaves Stream's file input, popover and portal
+// machinery untouched. Replacing the whole AttachmentSelector would mean rebuilding those.
+function KindredAttachmentIcon() {
+    return <Plus size={20} strokeWidth={1.5} aria-hidden />;
 }
 
 const GREETING = "👋";

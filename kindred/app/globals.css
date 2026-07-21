@@ -142,6 +142,25 @@ body {
 
     --str-chat__chat-text-username: var(--color-ink-600);
     --str-chat__chat-text-timestamp: var(--color-ink-600);
+
+    /* Composer. Set as custom properties rather than direct declarations because they
+       inherit down to the composer from here, which sidesteps the specificity fight
+       entirely — Stream's composer rules are (0,2,0) and its button rules (0,4,0), so a
+       direct override would have to out-class those.
+
+       The first two are fixing Stream bugs, not overriding choices. --composer-bg is read
+       twice and declared nowhere, so the input pill renders transparent; likewise
+       --str-chat__attachment-selector-button-icon-color falls back to
+       --button-style-outline-text, which is also never defined.
+
+       surface on a bone-100 bar, so the input reads as a raised field — the same
+       relationship MatchCard has with the page behind it. */
+    --composer-bg: var(--color-surface);
+    --str-chat__attachment-selector-button-icon-color: var(--color-ink-600);
+    --str-chat__attachment-selector-button-icon-color-hover: var(--color-ink-900);
+    --str-chat__border-core-default: var(--color-bone-300);
+    --str-chat__input-text-default: var(--color-ink-900);
+    --str-chat__input-text-placeholder: var(--color-ink-600);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
