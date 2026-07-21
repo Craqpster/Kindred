@@ -3,7 +3,9 @@ import { requireProfile } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { ProfileHeader } from "@/app/profile/components/ProfileHeader";
 import { ConfidenceCard } from "@/app/profile/components/ConfidenceCard";
-import { BadgesSection } from "@/app/profile/components/BadgesSection";
+import BadgesClient from "@/app/profile/components/BadgesClient";
+import BadgesConfetti from "@/app/profile/components/BadgesConfetti";
+import BadgesProvider from "@/app/profile/components/BadgesProvider";
 import { InterestsEditor } from "@/app/profile/components/InterestsEditor";
 import { PrivacySettings } from "@/app/profile/components/PrivacySettings";
 
@@ -31,8 +33,13 @@ export default async function MePage() {
             level={profile.confidence_level} 
             points={profile.confidence_points || 0} 
           />
-          <BadgesSection profileBadges={profile.profile_badges || []} />
+          <BadgesProvider>
+            <BadgesConfetti initialProfileBadges={profile.profile_badges || []} />
+            <BadgesClient initialProfileBadges={profile.profile_badges || []} />
+          </BadgesProvider>
+
           <PrivacySettings profile={profile} />
+
           <InterestsEditor 
             hobbies={allHobbies} 
             interests={allInterests}

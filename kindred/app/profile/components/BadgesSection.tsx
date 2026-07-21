@@ -1,31 +1,100 @@
-export function BadgesSection({ profileBadges }: { profileBadges: any[] }) {
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import confetti from "canvas-confetti";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
+export function BadgesSection({ badges }: { badges?: any[] }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Unlock hints with emojis to show how to get each badge
+  const unlockHints: Record<string, string> = {
+    "Ice Breaker": "Say hi to someone 👋",
+    "Social Butterfly": "Reach Tier 2 🦋",
+    "Kindred Spirit": "Reach Tier 3 ✨",
+    "Early Bird": "Be active before 9am ⏰",
+    "Night Owl": "Be active before 3am 🌙",
+    "Community Helper": "Help in a group chat 🛠️",
+    "Daily Streak": "Log in 3 days in a row 🔥",
+    "Game Starter": "Start a game 🎲",
+    "Game Winner": "Win a game 🏆",
+    "Chat Explorer": "Visit 5 unique rooms 🧭",
+    "Emoji Master": "Send 50 emoji messages 😄",
+    "Conversation Starter": "Start 10 chats 💬",
+    "Friend Maker": "Make 3 friends 🌿",
+  };
+
+  const order = [
+    "Ice Breaker",
+    "Social Butterfly",
+    "Kindred Spirit",
+    "Early Bird",
+    "Night Owl",
+    "Community Helper",
+    "Daily Streak",
+    "Game Starter",
+    "Game Winner",
+    "Chat Explorer",
+    "Emoji Master",
+    "Conversation Starter",
+    "Friend Maker",
+  ];
+
   return (
     <div>
       <div className="mb-4">
-        <h2 className="text-xl font-bold text-star-sapphire font-[var(--font-lora)]">Achievements</h2>
-        <p className="text-gray-600 text-sm">Badges earned</p>
+        <h2 className="text-xl font-bold text-star-sapphire font-[var(--font-lora)] select-none">Achievements</h2>
+        <p className="text-gray-600 text-sm select-none">Badges earned</p>
       </div>
 
-      {profileBadges.length === 0 ? (
-        <div className="text-gray-500 text-sm p-4 text-center bg-mist rounded-xl">
-          Complete goals to earn badges!
+      <div
+        className="flex justify-between items-center mb-4 cursor-pointer group"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="h-5 w-5 text-gray-400 group-hover:text-star-sapphire transition-colors" />
+          ) : (
+            <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-star-sapphire transition-colors" />
+          )}
+          <div>
+            <h2 className="text-xl font-bold text-star-sapphire font-[var(--font-lora)] select-none">View badges</h2>
+            <p className="text-gray-600 text-sm select-none">See all badges and how to unlock them</p>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {profileBadges.map((pb) => {
-            const badge = pb.badge;
-            return (
-              <div
-                key={badge.id}
-                className="flex flex-col items-center justify-center text-center p-4 rounded-2xl border transition-all duration-300 bg-mist border-mist"
-              >
-                {badge.icon && <div className="text-3xl mb-2">{badge.icon}</div>}
-                <h3 className="font-semibold text-sm text-star-sapphire">
-                  {badge.name}
-                </h3>
-              </div>
-            );
-          })}
+      </div>
+
+      {isExpanded && (
+        <div className="pl-7 animate-in slide-in-from-top-2 fade-in duration-200">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {order.map((name) => {
+              const b =
+                (badges || []).find((x: any) => x.name === name) || {
+                  name,
+                  description: "",
+                  icon: "",
+                };
+
+              const unlocked = !!b.unlocked;
+
+              const classes = `flex flex-col items-center justify-center text-center p-4 rounded-2xl border transition-all duration-300 ${
+                unlocked ? "opacity-100" : "opacity-50 grayscale cursor-default"
+              }`;
+
+              const unlockInfo = unlockHints[name] || b.description || "";
+              const title = unlocked ? b.description || unlockInfo : `Locked — ${unlockInfo}`;
+
+              return (
+                <div key={name} className={classes} title={title}>
+                  {b.icon && <div className="text-3xl mb-2">{b.icon}</div>}
+                  <h3 className="font-semibold text-sm text-star-sapphire">{b.name}</h3>
+                  <p className="text-xs text-gray-600 mt-2">
+                    {unlocked ? b.description || unlockInfo : unlockInfo}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
