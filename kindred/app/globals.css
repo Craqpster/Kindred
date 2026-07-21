@@ -199,8 +199,34 @@ body {
    Set on .str-chat__channel-header itself rather than a wrapper: Stream declares this
    custom property directly on the element, so an ancestor never wins. Doubled class for
    the same source-order reason as the block above. */
-.str-chat .str-chat__channel-header.str-chat__channel-header {
-    --str-chat__channel-header-height: 84px;
+/* The floating channel pill (ChannelPill.tsx) replaced the full-width header, so nothing
+   in the main panel reads --str-chat__channel-header-height any more. It is left alone
+   deliberately - the thread panel and thread-list header still use it, and overriding it
+   here would move those for no reason.
+
+   One number for the space the pill occupies: its own height plus the top-3 offset it
+   floats at. Both the list padding and the date-chip offset below read it, so they cannot
+   drift apart. */
+.str-chat.str-chat {
+    --kindred-pill-space: 60px;
+}
+
+/* Nothing may hide under the pill.
+
+   Stream's only top breathing room is `padding-top: 4.5rem` on the first list item, and a
+   sibling rule CANCELS it whenever a date separator leads the list - which is most of the
+   time. So the clearance has to be stated here rather than inherited from that. Applied
+   to the scroll content, not the scroll container, so it scrolls with the messages
+   instead of pinning a permanent gap. */
+.str-chat .str-chat__message-list-scroll.str-chat__message-list-scroll {
+    padding-top: var(--kindred-pill-space);
+}
+
+/* Stream pins a duplicate date chip at top: 0 of the same relative box the pill floats
+   in, so without this they land on top of each other. Pushed below the pill, which is
+   also where it reads best - the pill says who, the chip says when. */
+.str-chat .str-chat__date-separator--floating.str-chat__date-separator--floating {
+    top: var(--kindred-pill-space);
 }
 
 /* A quoted message inside one of YOUR bubbles was rendering near-black on navy, about

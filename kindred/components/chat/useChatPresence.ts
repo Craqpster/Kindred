@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { isDmChannel, useChannelStateContext, useChatContext } from "stream-chat-react";
 
 /// How many OTHER people currently have this conversation open.
@@ -24,36 +24,34 @@ export function useChatPresence() {
     const ownId = client.userID;
     const isDm = isDmChannel({ channel, ownUserId: ownId });
 
-    // Own id is excluded up front and on every event: the local user starts watching the
-    // moment they open the channel, so counting them would make every conversation look
-    // like the other person is right there.
-    const [watcherIds, setWatcherIds] = useState<string[]>(() =>
-        Object.keys(channel.state?.watchers ?? {}).filter((id) => id !== ownId),
+    // Watchers are an external store that Stream already maintains, so this reads them
+    // rather than mirroring them into React state. Two things fall out of that: no
+    // setState-inside-an-effect (which React Compiler rightly flags as cascading renders),
+    // and no stale copy to re-seed when the channel changes.
+    //
+    // The snapshot is a NUMBER on purpose. useSyncExternalStore compares snapshots by
+    // identity, so returning the watcher array would allocate a new one on every read and
+    // spin forever; a count compares cleanly.
+    const subscribe = useCallback(
+        (onStoreChange: () => void) => {
+            const start = channel.on("user.watching.start", onStoreChange);
+            const stop = channel.on("user.watching.stop", onStoreChange);
+            return () => {
+                start.unsubscribe();
+                stop.unsubscribe();
+            };
+        },
+        [channel],
     );
 
-    useEffect(() => {
-        setWatcherIds(Object.keys(channel.state?.watchers ?? {}).filter((id) => id !== ownId));
+    // Own id excluded: the local user starts watching the moment they open the channel,
+    // so counting them would make every conversation look like someone else is present.
+    const othersWatching = useSyncExternalStore(
+        subscribe,
+        () => Object.keys(channel.state?.watchers ?? {}).filter((id) => id !== ownId).length,
+        // Server render: nobody is watching as far as the HTML is concerned.
+        () => 0,
+    );
 
-        const onStart = (event: { user?: { id?: string } }) => {
-            const id = event.user?.id;
-            if (!id || id === ownId) return;
-            setWatcherIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-        };
-
-        const onStop = (event: { user?: { id?: string } }) => {
-            const id = event.user?.id;
-            if (!id) return;
-            setWatcherIds((prev) => prev.filter((watcher) => watcher !== id));
-        };
-
-        const startSub = channel.on("user.watching.start", onStart);
-        const stopSub = channel.on("user.watching.stop", onStop);
-
-        return () => {
-            startSub.unsubscribe();
-            stopSub.unsubscribe();
-        };
-    }, [channel, ownId]);
-
-    return { othersWatching: watcherIds.length, isDm };
+    return { othersWatching, isDm };
 }

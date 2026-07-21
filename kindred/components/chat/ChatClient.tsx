@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
-    ChannelHeader,
     ComponentProvider,
     MessageComposer,
     MessageList,
@@ -22,7 +21,7 @@ import {
 } from "stream-chat-react";
 
 import AttachmentMenu from "@/components/chat/AttachmentMenu";
-import ChannelLevelAvatar from "@/components/chat/ChannelLevelAvatar";
+import ChannelPill from "@/components/chat/ChannelPill";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import IcebreakerCard from "@/components/chat/IcebreakerCard";
@@ -90,9 +89,10 @@ export default function ChatClient({
                 <Channel>
                     <ComposerComponents>
                         <Window>
-                            {/* The chat level lives in the header avatar's ring now, not
-                                in a bar of its own below it. */}
-                            <ChannelHeader Avatar={ChannelLevelAvatar} />
+                            {/* No <ChannelHeader>: the channel's name, avatar and status
+                                now float over the message list as ChannelPill, which is
+                                injected through ComponentContext.MessageListMainPanel
+                                below rather than sitting in this column. */}
                             <AutoPromptTrigger />
                             <MessageList Message={ChatMessage} />
                             <PrefillGreeting targetId={greet ? openChannelId : undefined} />
@@ -145,6 +145,7 @@ function ComposerComponents({ children }: { children: React.ReactNode }) {
             AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
             AttachmentSelector: AttachmentMenu,
             QuotedMessage: KindredQuotedMessage,
+            MessageListMainPanel: ChannelPill,
         }),
         [existing],
     );
