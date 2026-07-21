@@ -147,8 +147,11 @@ model profile_interests {
 /// A tier reward on the profile page redesign - unlocked once confidence_points crosses
 /// tierRequirement. Reference table, like hobbies/interests: readable by any signed-in
 /// user, writable by none of them.
+///
+/// id has no DB-side default (the live table was hand-created via a raw script, not a
+/// migration) - @default(uuid()) generates it in Prisma instead, which works either way.
 model badges {
-  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id              String  @id @default(uuid()) @db.Uuid
   name            String
   description     String
   icon            String?
@@ -166,7 +169,6 @@ model profile_badges {
   badge      badges   @relation(fields: [badge_id], references: [id], onDelete: Cascade)
 
   @@id([profile_id, badge_id])
-  @@index([badge_id])
   @@schema("public")
 }
 
