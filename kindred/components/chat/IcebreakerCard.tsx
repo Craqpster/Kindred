@@ -59,7 +59,6 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     // The bot posts prompts but is never added as a member, so this is exactly the
     // humans - no filtering needed beyond it.
     const memberCount = Object.keys(channel.state.members).length;
-    const isGroup = channel.type === "team";
 
     const send = async () => {
         const text = draft.trim();
@@ -112,24 +111,35 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
 
                 <p className="mt-1.5 text-body font-medium text-ink-900">{message.text}</p>
 
-                {(isGroup || answers.length > 0) && (
-                    <p className="mt-2 flex items-center gap-2 text-meta text-ink-600">
-                        {isGroup && (
-                            <>
-                                <AvatarGroup names={answeredNames} size={20} />
-                                <span>
-                                    {answers.length} of {memberCount} answered
-                                </span>
-                            </>
-                        )}
-                        {!isGroup && !youAnswered && answers.length > 0 && (
-                            <span>{answers[0].user?.name ?? "They"} answered</span>
-                        )}
-                        {!youAnswered && answers.length > 0 && (
-                            <span className="text-ink-600">· answer to reveal</span>
-                        )}
+                {/* Count and button share a row: the button is secondary to the question,
+                    and stacking it under the count put two competing things a few pixels
+                    apart. The count applies to a 1:1 as much as a group — "1 of 2" is the
+                    same nudge as "2 of 4", and leaving it out of DMs made the card look
+                    like it was missing something. */}
+                <div className="mt-3 flex items-center justify-between gap-3">
+                    <p className="flex min-w-0 items-center gap-2 text-meta text-ink-600">
+                        <AvatarGroup names={answeredNames} size={20} />
+                        <span className="truncate">
+                            {answers.length} of {memberCount} answered
+                            {!youAnswered && answers.length > 0 && " · answer to reveal"}
+                        </span>
                     </p>
-                )}
+
+                    {!youAnswered && !answering && (
+                        <button
+                            type="button"
+                            onClick={() => setAnswering(true)}
+                            aria-expanded={answering}
+                            // Only while open: the region is unmounted when collapsed, and
+                            // pointing aria-controls at an id that is not in the document
+                            // is a dangling reference.
+                            aria-controls={answering ? regionId : undefined}
+                            className="shrink-0 cursor-pointer rounded-full bg-accent-600 px-3.5 py-1 text-label text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                        >
+                            Answer
+                        </button>
+                    )}
+                </div>
 
                 {answers.length > 0 && (
                     <ul className="mt-3 flex flex-col gap-2.5 border-t border-bone-200 pt-3">
@@ -193,77 +203,60 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                 )}
 
                 {!youAnswered && (
-                    <>
-                        <AnimatePresence initial={false}>
-                            {answering && (
-                                <motion.div
-                                    key="answer-box"
-                                    id={regionId}
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: "auto" }}
-                                    exit={{ opacity: 0, height: 0 }}
-                                    transition={transition}
-                                    className="overflow-hidden"
-                                >
-                                    <div className="pt-3">
-                                        <textarea
-                                            ref={inputRef}
-                                            value={draft}
-                                            onChange={(event) => setDraft(event.target.value)}
-                                            onKeyDown={(event) => {
-                                                // Enter sends, Shift+Enter breaks the
-                                                // line — what Stream's own composer does,
-                                                // so the two inputs behave alike.
-                                                if (event.key === "Enter" && !event.shiftKey) {
-                                                    event.preventDefault();
-                                                    void send();
-                                                }
-                                                if (event.key === "Escape") cancel();
-                                            }}
-                                            rows={2}
-                                            maxLength={500}
-                                            placeholder="Your answer…"
-                                            aria-label="Your answer"
-                                            className="w-full resize-none rounded-xl border border-bone-300 bg-bone-100 px-3 py-2 text-meta text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40"
-                                        />
-
-                                        <div className="mt-2 flex items-center justify-end gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={cancel}
-                                                className="cursor-pointer rounded-full px-3 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={send}
-                                                disabled={!draft.trim() || sending}
-                                                className="cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
-                                            >
-                                                {sending ? "Sending…" : "Send"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {!answering && (
-                            <button
-                                type="button"
-                                onClick={() => setAnswering(true)}
-                                aria-expanded={answering}
-                                // Only while open: the region is unmounted when collapsed,
-                                // and pointing aria-controls at an id that is not in the
-                                // document is a dangling reference.
-                                aria-controls={answering ? regionId : undefined}
-                                className="mt-3 cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                    <AnimatePresence initial={false}>
+                        {answering && (
+                            <motion.div
+                                key="answer-box"
+                                id={regionId}
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={transition}
+                                className="overflow-hidden"
                             >
-                                Answer
-                            </button>
+                                <div className="pt-3">
+                                    <textarea
+                                        ref={inputRef}
+                                        value={draft}
+                                        onChange={(event) => setDraft(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            // Enter sends, Shift+Enter breaks the line —
+                                            // what Stream's own composer does, so the two
+                                            // inputs behave alike.
+                                            if (event.key === "Enter" && !event.shiftKey) {
+                                                event.preventDefault();
+                                                void send();
+                                            }
+                                            if (event.key === "Escape") cancel();
+                                        }}
+                                        rows={2}
+                                        maxLength={500}
+                                        placeholder="Your answer…"
+                                        aria-label="Your answer"
+                                        className="w-full resize-none rounded-xl border border-bone-300 bg-bone-100 px-3 py-2 text-meta text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40"
+                                    />
+
+                                    <div className="mt-2 flex items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={cancel}
+                                            className="cursor-pointer rounded-full px-3 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={send}
+                                            disabled={!draft.trim() || sending}
+                                            className="cursor-pointer rounded-full bg-accent-600 px-4 py-1.5 text-meta font-medium text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+                                        >
+                                            {sending ? "Sending…" : "Send"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
                         )}
-                    </>
+                    </AnimatePresence>
                 )}
             </div>
         </div>
