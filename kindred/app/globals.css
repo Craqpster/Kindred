@@ -193,3 +193,24 @@ body {
 .str-chat .str-chat__channel-header.str-chat__channel-header {
     --str-chat__channel-header-height: 84px;
 }
+
+/* A quoted message inside one of YOUR bubbles was rendering near-black on navy, about
+   1.3:1.
+
+   Two independent halves met. The background is --chat-bg-attachment, which for an own
+   message resolves to --str-chat__chat-bg-attachment-outgoing (accent-700 above). The
+   text comes from a Stream rule that hard-codes color: var(--str-chat__chat-text-incoming)
+   on quoted body text — it is NOT direction-aware, so a sent message still got the
+   incoming (dark) colour. The tell was the author line rendering white while the body
+   rendered black: the author correctly reads --chat-text, the body does not.
+
+   Fixed by redefining the incoming text token for the duration of an own message. This
+   works through custom-property INHERITANCE, not specificity: a declaration on the element
+   beats one inherited from .str-chat, so it never has to out-specify Stream's (0,5,0)
+   rule. Stream declares --chat-text/--chat-bg on this element but not this token, so
+   nothing here competes.
+
+   Incoming messages are untouched — their inset is bone-200 under ink-900, which passes. */
+.str-chat .str-chat__message--me {
+    --str-chat__chat-text-incoming: var(--color-surface);
+}
