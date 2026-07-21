@@ -1,6 +1,6 @@
 "use client";
 
-import { Lightbulb } from "lucide-react";
+import { Lightbulb, Quote } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { LocalMessage } from "stream-chat";
@@ -22,6 +22,23 @@ import { useModeratedSend } from "@/components/chat/useModeratedSend";
 ///
 /// Answers are matched to their prompt by promptId and rendered here, so ChatMessage
 /// suppresses their normal bubbles (see the prompt_response branch there).
+/// Icon-only, per the convention KindredSendButton follows: an aria-label carries the
+/// name and the glyph is hidden, so the control is announced as what it does rather than
+/// as a punctuation mark.
+function QuoteButton({ label, onClick }: { label: string; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-label={label}
+            title={label}
+            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+        >
+            <Quote size={14} strokeWidth={1.5} aria-hidden />
+        </button>
+    );
+}
+
 export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     const { channel, messages } = useChannelStateContext();
     const { client } = useChatContext();
@@ -142,13 +159,10 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                             this card, or to add a second thought after the inline box is
                             gone. ModeratedMessageComposer notices the quote and tags the
                             send as an answer, so it still lands back in this card. */}
-                        <button
-                            type="button"
+                        <QuoteButton
+                            label="Quote this icebreaker"
                             onClick={() => channel.messageComposer.setQuotedMessage(message)}
-                            className="cursor-pointer rounded-full px-2.5 py-1 text-label text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
-                        >
-                            Quote
-                        </button>
+                        />
 
                         {!youAnswered && !answering && (
                             <button
@@ -183,11 +197,32 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                         size={24}
                                     />
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-label text-ink-600">
-                                            {answer.user?.id === client.userID
-                                                ? "You"
-                                                : (answer.user?.name ?? answer.user?.id)}
-                                        </p>
+                                        <div className="flex items-center justify-between gap-2 text-label text-ink-600">
+                                            <span className="truncate">
+                                                {answer.user?.id === client.userID
+                                                    ? "You"
+                                                    : (answer.user?.name ?? answer.user?.id)}
+                                            </span>
+
+                                            {/* Only on answers that are actually legible:
+                                                offering to quote text the viewer cannot
+                                                read would be a button that produces a
+                                                blank. Unlike quoting the prompt, this is
+                                                an ordinary reply - the composer only tags
+                                                a send as an answer when the quoted message
+                                                is the icebreaker itself, so this earns the
+                                                usual +1 and stays in the timeline. */}
+                                            {youAnswered && (
+                                                <QuoteButton
+                                                    label={`Quote ${answer.user?.name ?? "this answer"}`}
+                                                    onClick={() =>
+                                                        channel.messageComposer.setQuotedMessage(
+                                                            answer,
+                                                        )
+                                                    }
+                                                />
+                                            )}
+                                        </div>
 
                                         {youAnswered ? (
                                             <p className="text-meta wrap-break-word text-ink-900">
