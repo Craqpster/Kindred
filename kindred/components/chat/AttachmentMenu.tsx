@@ -22,6 +22,18 @@ import {
 /// filter ends in `return true`, so a custom type is passed through untouched and gets no
 /// default modal attached. This is a supported extension point, not a workaround.
 
+// Stream sizes its own menu icons through a rule keyed on `.str-chat__icon`, which a
+// lucide icon never carries - so without an explicit size ours fell back to lucide's
+// default 24 and sat noticeably larger than the file and poll icons beside it. 16px is
+// what Stream's menu items actually render at (20px is the composer's "+" trigger, a
+// different rule).
+//
+// Module scope, not inline in the render: ContextMenuButton takes Icon as a component
+// type, and a new function identity each pass would remount the icon every render.
+function IcebreakerIcon(props: React.ComponentProps<"svg">) {
+    return <Lightbulb {...props} width={16} height={16} strokeWidth={1.5} />;
+}
+
 function SendIcebreakerButton({}: AttachmentSelectorActionProps) {
     const { channel } = useChannelStateContext();
     // closeMenu comes from the ContextMenu this button is rendered inside - the same way
@@ -47,7 +59,7 @@ function SendIcebreakerButton({}: AttachmentSelectorActionProps) {
     };
 
     return (
-        <ContextMenuButton Icon={Lightbulb} onClick={send} disabled={sending}>
+        <ContextMenuButton Icon={IcebreakerIcon} onClick={send} disabled={sending}>
             Send an icebreaker
         </ContextMenuButton>
     );
