@@ -24,6 +24,7 @@ import {
 import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
+import IcebreakerCard from "@/components/chat/IcebreakerCard";
 import { useChatChannels } from "@/components/chat/useChatChannels";
 import { useModeratedSend } from "@/components/chat/useModeratedSend";
 import { getChatLevel } from "@/lib/chat-level";
@@ -290,7 +291,6 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     // wiring doesn't do. useMessageContext() is the actual source of truth here.
     const { message } = useMessageContext("ChatMessage");
     const { messages } = useChannelStateContext();
-    const { setActivePrompt } = useActivePrompt();
 
     // A reply to a prompt is rendered inside that prompt's card, so it must not also
     // appear as a bubble of its own. Conditional on the prompt actually being loaded:
@@ -305,19 +305,7 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     }
 
     if (message?.messageType === "icebreaker_prompt") {
-        return (
-            <div className="my-2 mx-auto max-w-sm rounded-2xl border border-metro-blue/20 bg-mist px-4 py-3 text-center">
-                <p className="mb-1 text-xs font-medium text-metro-blue">Icebreaker</p>
-                <p className="mb-2 text-sm text-star-sapphire">{message.text}</p>
-                <button
-                    type="button"
-                    onClick={() => setActivePrompt({ id: message.id, text: message.text ?? "" })}
-                    className="rounded-full bg-metro-blue px-3 py-1 text-xs font-medium text-white hover:bg-metro-blue/90"
-                >
-                    Respond
-                </button>
-            </div>
-        );
+        return <IcebreakerCard message={message} />;
     }
 
     return <MessageUI {...props} />;
