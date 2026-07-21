@@ -94,6 +94,31 @@ export async function acceptChatRequest(channelId: string, userId: string) {
     await channel.updatePartial({ unset: ["requested_of"] });
 }
 
+/// Renames a group chat. Any member may do it.
+///
+/// Membership IS the authorization, proved the same way acceptChatRequest proves it: the
+/// `members: { $in: [userId] }` filter means a non-member gets zero rows back and never
+/// reaches the write. The id comes from the client, so it is never trusted on its own.
+///
+/// Runs server-side rather than from the browser deliberately. A client-side
+/// channel.updatePartial would depend on channel_member holding `update-channel` for the
+/// team type - a Stream dashboard setting, not something this repo can see or guarantee -
+/// and granting it would grant every field, not just the name.
+///
+/// updatePartial, not update(): update() replaces the whole custom-data object, which
+/// would silently drop anything else living on the channel.
+export async function renameGroupChannel(channelId: string, userId: string, name: string) {
+    const [channel] = await streamServerClient.queryChannels({
+        type: "team",
+        id: channelId,
+        members: { $in: [userId] },
+    });
+
+    if (!channel) throw new Error("No such group, or you are not a member of it");
+
+    await channel.updatePartial({ set: { name } });
+}
+
 /// Opens the channel for a group formed by lib/groups.ts.
 ///
 /// Type "team", not "messaging", so filters scoped to `{ type: "messaging" }` leave group

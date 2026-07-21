@@ -211,7 +211,12 @@ model game_sessions {
 model groups {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  /// The top tag the members share, computed once at formation and then frozen.
+  /// The group's name. Seeded at formation with the top tag its members share, and
+  /// renameable by any member afterwards (renameGroup in chats/actions.ts).
+  ///
+  /// Stream's channel `name` is what every chat surface actually displays; this copy is
+  /// kept in step because findMyGroup's repair branch pushes it back onto the channel,
+  /// so a stale value here would silently undo a rename.
   title String
 
   stream_channel_id String? @unique

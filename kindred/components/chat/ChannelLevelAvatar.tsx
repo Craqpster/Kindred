@@ -11,6 +11,7 @@ import {
     type ChannelAvatarProps,
 } from "stream-chat-react";
 
+import GroupNameEditor from "@/components/chat/GroupNameEditor";
 import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
 import Avatar from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/ToastStack";
@@ -232,8 +233,19 @@ export default function ChannelLevelAvatar({
                         // end-aligned panel hangs off to one side for no reason.
                         className="absolute top-full left-1/2 z-30 mt-2 w-64 -translate-x-1/2 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
                     >
-                        {/* Who is actually here, first: clicking a face is a question
-                            about people before it is a question about progress. */}
+                        {/* Groups only: a 1:1's title is the other person's name, which is
+                            not ours to rewrite. */}
+                        {channel.type === "team" && channel.id && (
+                            <div className="mb-3 border-b border-bone-200 pb-3">
+                                <GroupNameEditor
+                                    channelId={channel.id}
+                                    name={channel.data?.name ?? "Group"}
+                                />
+                            </div>
+                        )}
+
+                        {/* Who is actually here: clicking a face is a question about people
+                            before it is a question about progress. */}
                         <p className="text-label text-ink-600 uppercase">
                             In this chat · {members.length}
                         </p>
