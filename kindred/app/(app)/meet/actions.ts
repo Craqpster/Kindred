@@ -50,7 +50,18 @@ export async function sayHi(formData: FormData) {
     // written, so the card stays on Meet and the wave can be retried. The other order
     // would hide the person with no conversation to show for it. The opposite failure
     // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
-    const cid = await startChatRequest(userId, otherId);
+    // Did they wave at us first? Answered from Postgres rather than Stream because we already
+    // write a connections row per wave, so this is one lookup on that table's primary key.
+    //
+    // Safe to stamp a request when this is false: getMatchesFor excludes anyone the user
+    // already has a connections row for, so a non-mutual wave is always genuine first
+    // contact and can never re-open a live conversation as Pending.
+    const theyWavedFirst = await prisma.connections.findUnique({
+        where: { user_id_other_id: { user_id: otherId, other_id: userId } },
+        select: { user_id: true },
+    });
+
+    const cid = await startChatRequest(userId, otherId, { mutual: !!theyWavedFirst });
 
     await prisma.connections.upsert({
         where: { user_id_other_id: { user_id: userId, other_id: otherId } },
