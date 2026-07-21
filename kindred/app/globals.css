@@ -148,14 +148,13 @@ body {
        entirely — Stream's composer rules are (0,2,0) and its button rules (0,4,0), so a
        direct override would have to out-class those.
 
-       The first two are fixing Stream bugs, not overriding choices. --composer-bg is read
-       twice and declared nowhere, so the input pill renders transparent; likewise
-       --str-chat__attachment-selector-button-icon-color falls back to
-       --button-style-outline-text, which is also never defined.
+       --str-chat__attachment-selector-button-icon-color is fixing a Stream bug rather than
+       overriding a choice: it falls back to --button-style-outline-text, which the
+       stylesheet never defines.
 
-       surface on a bone-100 bar, so the input reads as a raised field — the same
-       relationship MatchCard has with the page behind it. */
-    --composer-bg: var(--color-surface);
+       The input pill's own fill is --composer-bg, declared once at the top of this block.
+       It is bone-100, the same as the bar behind it, so the two read as a single surface
+       and the pill's bone-300 outline is what separates them. */
     --str-chat__attachment-selector-button-icon-color: var(--color-ink-600);
     --str-chat__attachment-selector-button-icon-color-hover: var(--color-ink-900);
     --str-chat__border-core-default: var(--color-bone-300);
