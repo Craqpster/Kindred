@@ -123,12 +123,7 @@ export function useModeratedSend() {
                 fetch("/api/confidence", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        channelCid: cid,
-                        messageId,
-                        text,
-                        isPromptResponse: !!promptId,
-                    }),
+                    body: JSON.stringify({ channelCid: cid, messageId, text, promptId }),
                 })
                     // Tell ChatXpBadge (both participants') the award has landed and it's
                     // safe to refetch, rather than making it guess how long to wait.

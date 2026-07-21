@@ -9,7 +9,8 @@
       "Bash(node -e \"const m=require\\('stream-chat-react'\\); console.log\\('ComponentProvider:', typeof m.ComponentProvider, '| useComponentContext:', typeof m.useComponentContext, '| useMessageComposerHasSendableData:', typeof m.useMessageComposerHasSendableData\\)\")",
       "Bash(git merge *)",
       "Bash(cp .claude/settings.json /private/tmp/claude-501/-Users-rafemsu-Documents-seo-Kindred/f514d14f-c512-49aa-9e9e-9dbe2a028cc6/scratchpad/settings.json.current)",
-      "Bash(git status *)"
+      "Bash(git status *)",
+      "Bash(npx prisma *)"
     ]
   }
 }

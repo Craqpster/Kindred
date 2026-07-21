@@ -59,6 +59,7 @@ model profiles {
   profile_interests profile_interests[]
   profile_badges    profile_badges[]
   group_member      group_members?
+  prompt_awards     prompt_awards[]
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
@@ -97,6 +98,27 @@ model channel_xp {
   created_at  DateTime @default(now()) @db.Timestamptz(6)
   updated_at  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
+  @@schema("public")
+}
+
+/// One row per person per icebreaker prompt they have been awarded XP for.
+///
+/// Answering a prompt grants XP unconditionally - skipping the length and back-and-forth
+/// checks every other message has to pass (see lib/confidence.ts). Without a record of
+/// what has already been paid out, that exemption is an unlimited faucet: the same prompt
+/// can be answered over and over, and the request that awards it can simply be replayed.
+/// This table is what makes the guarantee once-per-person-per-prompt.
+///
+/// prompt_id is a Stream message id, so - like channel_xp.channel_cid - it has no foreign
+/// key to anything of ours. Stream owns the message; we only record that we paid for it.
+model prompt_awards {
+  prompt_id  String   @db.Text
+  profile_id String   @db.Uuid
+  awarded_at DateTime @default(now()) @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([prompt_id, profile_id])
   @@schema("public")
 }
 

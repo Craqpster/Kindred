@@ -25,16 +25,23 @@ const MIN_MESSAGE_LENGTH = 15;
 /// never something that should surface an error to the sender - callers should not
 /// await this in a way that blocks or fails the actual message send.
 ///
-/// `guaranteed` skips both checks above - used for replies to an icebreaker prompt
-/// (ChatClient.tsx), which should always count even if short, since responding to one
-/// at all is the "real effort" signal rather than length or turn-taking.
+/// `promptId` marks this as a reply to an icebreaker (IcebreakerCard.tsx), which should
+/// always count even if short, since responding to one at all is the "real effort" signal
+/// rather than length or turn-taking. That exemption is granted at most once per person
+/// per prompt, and only after Stream confirms the message really is that person's reply
+/// to that prompt - see promptReplyIsUnclaimed. A second answer to the same prompt, or a
+/// forged one, falls back to the normal checks rather than being refused outright.
 export async function awardConfidenceForMessage(
     userId: string,
     channelCid: string,
     messageId: string,
     text: string,
-    guaranteed = false,
+    promptId?: string,
 ): Promise<void> {
+    const guaranteed = promptId
+        ? await promptReplyIsUnclaimed(userId, messageId, promptId)
+        : false;
+
     if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) return;
 
     await prisma.$transaction(async (tx) => {
@@ -70,6 +77,49 @@ export async function awardConfidenceForMessage(
             update: { xp: { increment: 1 } },
         });
     });
+}
+
+/// Whether this really is `userId`'s first answer to `promptId`, claiming it if so.
+///
+/// Everything the caller knows comes from the request body, which is attacker-controlled:
+/// on its own, "this was a prompt reply" is a claim anyone can make about any message to
+/// mint the guaranteed award. So the message is fetched back from Stream - the system of
+/// record - and has to actually be this user's, actually be a prompt_response, and
+/// actually name this prompt.
+///
+/// The insert is the claim: the composite primary key means a replayed or repeated award
+/// loses the race and lands here as P2002, whether it arrives a second later or a week.
+async function promptReplyIsUnclaimed(
+    userId: string,
+    messageId: string,
+    promptId: string,
+): Promise<boolean> {
+    try {
+        const { message } = await streamServerClient.getMessage(messageId);
+
+        if (
+            message.user?.id !== userId ||
+            message.messageType !== "prompt_response" ||
+            message.promptId !== promptId
+        ) {
+            return false;
+        }
+    } catch {
+        // Can't reach Stream to confirm - decline the exemption rather than hand it out
+        // unverified. The message still earns XP the ordinary way if it qualifies.
+        return false;
+    }
+
+    try {
+        await prisma.prompt_awards.create({
+            data: { prompt_id: promptId, profile_id: userId },
+        });
+        return true;
+    } catch {
+        // Already claimed (P2002 on the composite key). Prisma 7's driver adapters dropped
+        // error.meta.target, so there is nothing more specific to match on here.
+        return false;
+    }
 }
 
 async function isGenuineBackAndForth(

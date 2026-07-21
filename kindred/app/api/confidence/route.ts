@@ -12,14 +12,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { channelCid, messageId, text, isPromptResponse } = await request.json();
+  const { channelCid, messageId, text, promptId } = await request.json();
 
   if (!channelCid || !messageId || typeof text !== "string") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
   try {
-    await awardConfidenceForMessage(user.id, channelCid, messageId, text, !!isPromptResponse);
+    // promptId is only a claim at this point - awardConfidenceForMessage checks it
+    // against Stream before letting it unlock the guaranteed award.
+    await awardConfidenceForMessage(
+      user.id,
+      channelCid,
+      messageId,
+      text,
+      typeof promptId === "string" ? promptId : undefined,
+    );
   } catch {
     // Best-effort - never surface this to the sender.
   }
