@@ -3,9 +3,7 @@
 import { useEffect, useRef } from "react";
 import * as Progress from "@radix-ui/react-progress";
 import confetti from "canvas-confetti";
-
-const TIER_THRESHOLDS = [0, 31, 71, 121];
-const MAX_TIER = 3;
+import { TIER_THRESHOLDS, MAX_TIER } from "@/lib/confidence-tiers";
 
 export function ConfidenceCard({ level, points }: { level: number; points: number }) {
   const prevLevel = useRef(level);

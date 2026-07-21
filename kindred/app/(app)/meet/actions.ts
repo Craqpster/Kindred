@@ -8,8 +8,9 @@ import { z } from "zod";
 import { requireProfile, verifySession } from "@/lib/dal";
 import { formGroupFor, getGroupFor, type FormGroupFailure } from "@/lib/groups";
 import { MEET_VIEW_COOKIE, meetViewSchema } from "@/lib/meet-view";
+import { postIcebreakerPrompt } from "@/lib/prompts";
 import { prisma } from "@/lib/prisma";
-import { createGroupChannel, startChatRequest } from "@/lib/stream";
+import { createGroupChannel, startChatRequest, streamServerClient } from "@/lib/stream";
 
 const targetId = z.uuid();
 
@@ -46,12 +47,9 @@ export async function sayHi(formData: FormData) {
 
     const otherId = parsed.data;
 
-    // Stream first, Postgres second. If channel creation fails, no connections row is
-    // written, so the card stays on Meet and the wave can be retried. The other order
-    // would hide the person with no conversation to show for it. The opposite failure
-    // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
-    // Did they wave at us first? Answered from Postgres rather than Stream because we already
-    // write a connections row per wave, so this is one lookup on that table's primary key.
+    // Did they wave at us first? Answered from Postgres rather than Stream because we
+    // already write a connections row per wave, so this is one lookup on that table's
+    // primary key.
     //
     // Safe to stamp a request when this is false: getMatchesFor excludes anyone the user
     // already has a connections row for, so a non-mutual wave is always genuine first
@@ -61,7 +59,20 @@ export async function sayHi(formData: FormData) {
         select: { user_id: true },
     });
 
-    const cid = await startChatRequest(userId, otherId, { mutual: !!theyWavedFirst });
+    // Stream first, Postgres second. If channel creation fails, no connections row is
+    // written, so the card stays on Meet and the wave can be retried. The other order
+    // would hide the person with no conversation to show for it. The opposite failure
+    // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
+    const id = await startChatRequest(userId, otherId, { mutual: !!theyWavedFirst });
+
+    // Only drop an icebreaker into a genuinely fresh conversation - startChatRequest
+    // reuses the same "distinct" channel if this pair already has one (a retried wave,
+    // say), and re-posting a prompt into an already-started chat would just be noise.
+    const channel = streamServerClient.channel("messaging", id);
+    const { messages } = await channel.query({ messages: { limit: 1 } });
+    if (messages.length === 0) {
+        await postIcebreakerPrompt(channel.cid);
+    }
 
     await prisma.connections.upsert({
         where: { user_id_other_id: { user_id: userId, other_id: otherId } },
@@ -73,8 +84,9 @@ export async function sayHi(formData: FormData) {
 
     // greet=1 is what prefills the 👋 — opening a channel no longer implies greeting it,
     // since forming a group redirects here too and should arrive with an empty composer.
-    redirect(`/chats?c=${encodeURIComponent(cid)}&type=messaging&greet=1`);
+    redirect(`/chats?c=${encodeURIComponent(id)}&type=messaging&greet=1`);
 }
+
 // void covers the success path: it redirects instead of returning, so the caller only ever
 // receives a value when something went wrong.
 export type FindMyGroupResult = { ok: false; reason: FormGroupFailure } | void;
@@ -135,6 +147,14 @@ async function finishChannel(
     createdById: string,
 ) {
     await createGroupChannel(groupId, title, members, createdById);
+
+    // A freshly created group channel has no messages yet - same "genuinely fresh
+    // conversation" check as sayHi above, just with type: "team" instead of "messaging".
+    const channel = streamServerClient.channel("team", groupId);
+    const { messages } = await channel.query({ messages: { limit: 1 } });
+    if (messages.length === 0) {
+        await postIcebreakerPrompt(channel.cid);
+    }
 
     // Only now is the group usable, so only now does the card stop offering to retry.
     await prisma.groups.update({

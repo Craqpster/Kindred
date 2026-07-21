@@ -24,10 +24,9 @@ export const streamServerClient = StreamChat.getInstance(api_key, api_secret);
 ///
 /// Returns the channel *id* so the caller can redirect straight into the conversation.
 ///
-/// An id, not a cid. ChannelList's `customActiveChannel` matches on `chan.id` and falls
-/// back to `queryChannels({ id })`, so handing it a cid ("messaging:!members-…") fails at
-/// query time with "invalid id value, did you pass a channel cid instead of channel id?"
-/// rather than at compile time.
+/// An id, not a cid — client.channel() (and Stream's channel-by-id lookups generally)
+/// rejects a cid ("messaging:!members-…") and fails at query time rather than at compile
+/// time.
 ///
 /// `mutual` means the recipient already waved at the sender, so this wave is a reply rather
 /// than a new request: both people have now reached out, which is exactly the condition the
@@ -97,9 +96,9 @@ export async function acceptChatRequest(channelId: string, userId: string) {
 
 /// Opens the channel for a group formed by lib/groups.ts.
 ///
-/// Type "team", not "messaging", so ChannelList's existing `{ type: "messaging" }` filter
-/// leaves group channels out of the 1:1 list without a single change to that filter.
-/// The two types ship with identical config and channel_member permissions.
+/// Type "team", not "messaging", so filters scoped to `{ type: "messaging" }` leave group
+/// channels out of the 1:1 list without a single change to that filter. The two types ship
+/// with identical config and channel_member permissions.
 ///
 /// Takes an explicit id — the group's uuid — which is the opposite of startChatRequest's
 /// deliberately id-less distinct channel, and for a different reason: it makes create()

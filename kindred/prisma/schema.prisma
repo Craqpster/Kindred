@@ -17,6 +17,10 @@ model profiles {
   birth_date DateTime? @db.Date
   gender_id  Int?      @db.SmallInt
   avatar_id  String?
+  /// Dicebear seed. Falls back to username when unset (ProfileHeader.tsx) - this only
+  /// exists so "shuffle" can give a different-looking avatar within the same avatar_id
+  /// style, since Dicebear renders the same picture every time for a given seed+style.
+  avatar_seed String?
 
   /// The onboarding "how do you want to ease in?" answer: 'openers' | 'gradual' | 'volume'.
   /// Constrained by a CHECK that Prisma cannot model — see the migration. Used by the
@@ -27,32 +31,38 @@ model profiles {
   /// interact with people. Onboarding does not ask for it.
   /// Not derived data: the interactions live in Stream Chat, never in Postgres.
   /// A chat's difficulty level is a property of the chat and does not belong here.
-  /// Uncapped, floored at 1 by a CHECK that Prisma cannot model — see the migration.
+  /// This is the TIER, not the raw counter — it only changes when confidence_points
+  /// crosses a badge's tierRequirement. Floored at 1 by a CHECK Prisma can't model —
+  /// see the migration.
   confidence_level Int @default(1)
 
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  /// The raw, ever-incrementing counter behind confidence_level. lib/confidence.ts adds
+  /// to this on genuine back-and-forth messages; confidence_level only moves up when this
+  /// crosses a badges.tierRequirement threshold. Nullable in the DB (no NOT NULL was set
+  /// when this column was added) even though every row has the default - matches actual
+  /// column state, not a stylistic choice.
+  confidence_points Int? @default(0)
 
-  // Privacy & Redesign settings
+  /// Profile page redesign settings - how the profile displays itself and what it shares.
+  /// Nullable in the DB for the same reason as confidence_points above.
   display_name_mode String?  @default("username")
   dms_open          Boolean? @default(true)
   show_confidence   Boolean? @default(true)
   show_interests    Boolean? @default(true)
-  
-  // Confidence leveling
-  confidence_points Int?     @default(0)
+
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
   users             users               @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   gender            genders?            @relation(fields: [gender_id], references: [id], onDelete: SetNull)
   profile_hobbies   profile_hobbies[]
   profile_interests profile_interests[]
   profile_badges    profile_badges[]
+  group_member      group_members?
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
   connections_received connections[] @relation("connection_target")
-
-  group_member group_members?
 
   @@index([gender_id])
   @@schema("public")
@@ -72,6 +82,21 @@ model connections {
 
   @@id([user_id, other_id])
   @@index([other_id])
+  @@schema("public")
+}
+
+/// One shared XP total per Stream chat channel (group or DM) - not per person. Both/all
+/// participants in a channel see the same number; it reflects how "warmed up" that
+/// specific conversation is, separate from profiles.confidence_level (a per-person,
+/// global stat). channel_cid is Stream's own channel id (e.g. "messaging:abc123"),
+/// which is why this has no foreign key to any of our own tables - Stream owns
+/// channels, we just keep a counter next to one.
+model channel_xp {
+  channel_cid String   @id
+  xp          Int      @default(0)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
   @@schema("public")
 }
 
@@ -154,14 +179,20 @@ model profile_interests {
   @@schema("public")
 }
 
+/// A tier reward on the profile page redesign - unlocked once confidence_points crosses
+/// tierRequirement. Reference table, like hobbies/interests: readable by any signed-in
+/// user, writable by none of them.
+///
+/// id has no DB-side default (the live table was hand-created via a raw script, not a
+/// migration) - @default(uuid()) generates it in Prisma instead, which works either way.
 model badges {
-  id              String   @id @default(uuid()) @db.Uuid
+  id              String  @id @default(uuid()) @db.Uuid
   name            String
   description     String
   icon            String?
   tierRequirement Int?
-  
-  profile_badges  profile_badges[]
+
+  profile_badges profile_badges[]
 
   @@schema("public")
 }

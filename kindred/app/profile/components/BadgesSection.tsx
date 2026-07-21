@@ -1,4 +1,10 @@
-export function BadgesSection({ profileBadges }: { profileBadges: any[] }) {
+import type { ProfileWithRelations } from "@/lib/dal";
+
+export function BadgesSection({
+  profileBadges,
+}: {
+  profileBadges: ProfileWithRelations["profile_badges"];
+}) {
   return (
     <div>
       <div className="mb-4">
