@@ -11,7 +11,13 @@ import {
 
 import Avatar from "@/components/ui/Avatar";
 import { getChatLevel, XP_PER_LEVEL_STEP } from "@/lib/chat-level";
-import { XP_PER_MESSAGE, XP_PER_PROMPT_ANSWER } from "@/lib/confidence-xp";
+import {
+    dailyBonusThreshold,
+    dailyBonusXp,
+    DAILY_MESSAGE_XP_CAP,
+    XP_PER_MESSAGE,
+    XP_PER_PROMPT_ANSWER,
+} from "@/lib/confidence-xp";
 
 // Geometry of the ring. The avatar Stream renders at size="lg" is 40px; the ring sits
 // just outside it, and the whole control is sized to the ring rather than the avatar.
@@ -37,6 +43,8 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
     const { channel, messages } = useChannelStateContext();
     const { client } = useChatContext();
     const [xp, setXp] = useState<number | null>(null);
+    const [messagesToday, setMessagesToday] = useState(0);
+    const [bonusEarnedToday, setBonusEarnedToday] = useState(false);
     const [open, setOpen] = useState(false);
 
     const reduceMotion = useReducedMotion();
@@ -47,7 +55,10 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
         fetch(`/api/chat-xp?channelCid=${encodeURIComponent(channel.cid)}`)
             .then((res) => (res.ok ? res.json() : null))
             .then((data) => {
-                if (data) setXp(data.xp);
+                if (!data) return;
+                setXp(data.xp);
+                setMessagesToday(data.messagesToday ?? 0);
+                setBonusEarnedToday(!!data.bonusEarnedToday);
             })
             .catch(() => {});
     }, [channel]);
@@ -95,6 +106,7 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
     });
 
     const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(xp ?? 0);
+    const bonusThreshold = dailyBonusThreshold(level);
     const progress = xpForNextLevel === 0 ? 0 : xpIntoLevel / xpForNextLevel;
     const remaining = xpForNextLevel - xpIntoLevel;
 
@@ -203,9 +215,43 @@ export default function ChannelLevelAvatar(props: ChannelAvatarProps) {
                             How to earn
                         </p>
                         <ul className="mt-1.5 flex flex-col gap-1 text-meta text-ink-600">
-                            <li>+{XP_PER_MESSAGE} a real reply</li>
+                            <li>
+                                +{XP_PER_MESSAGE} a real reply, up to {DAILY_MESSAGE_XP_CAP} a
+                                day
+                            </li>
                             <li>+{XP_PER_PROMPT_ANSWER} answering an icebreaker</li>
+                            <li>
+                                +{dailyBonusXp(level)} when you all send {bonusThreshold} today
+                            </li>
                         </ul>
+
+                        {/* A goal you cannot see is not a goal. Shows the caller's own
+                            tally, since that is the part they can act on. */}
+                        <div className="mt-3 rounded-xl bg-bone-100 px-3 py-2">
+                            {bonusEarnedToday ? (
+                                <p className="text-meta text-ink-900">
+                                    Daily bonus earned · see you tomorrow
+                                </p>
+                            ) : (
+                                <>
+                                    <p className="text-meta text-ink-900">
+                                        {Math.min(messagesToday, bonusThreshold)}/
+                                        {bonusThreshold} messages today
+                                    </p>
+                                    <div className="mt-1.5 h-1 w-full rounded-full bg-bone-200">
+                                        <div
+                                            className="h-1 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
+                                            style={{
+                                                width: `${Math.min(1, messagesToday / bonusThreshold) * 100}%`,
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="mt-1 text-label text-ink-600">
+                                        Everyone here has to reach it
+                                    </p>
+                                </>
+                            )}
+                        </div>
 
                         <p className="mt-3 text-label text-ink-600">
                             Each level costs {XP_PER_LEVEL_STEP} XP more than the last.
