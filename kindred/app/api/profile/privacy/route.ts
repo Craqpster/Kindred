@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 const PrivacySchema = z.object({
   avatar_id: z.string().optional(),
+  avatar_seed: z.string().optional(),
   display_name_mode: z.string().optional(),
   dms_open: z.boolean().optional(),
   show_confidence: z.boolean().optional(),

@@ -17,6 +17,10 @@ model profiles {
   birth_date DateTime? @db.Date
   gender_id  Int?      @db.SmallInt
   avatar_id  String?
+  /// Dicebear seed. Falls back to username when unset (ProfileHeader.tsx) - this only
+  /// exists so "shuffle" can give a different-looking avatar within the same avatar_id
+  /// style, since Dicebear renders the same picture every time for a given seed+style.
+  avatar_seed String?
 
   /// The onboarding "how do you want to ease in?" answer: 'openers' | 'gradual' | 'volume'.
   /// Constrained by a CHECK that Prisma cannot model — see the migration. Used by the

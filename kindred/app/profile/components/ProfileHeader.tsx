@@ -3,7 +3,8 @@ import * as Avatar from "@radix-ui/react-avatar";
 
 export function ProfileHeader({ profile }: { profile: ProfileWithRelations }) {
   const style = profile.avatar_id || "adventurer";
-  const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${profile.username}`;
+  const seed = profile.avatar_seed || profile.username;
+  const avatarUrl = `https://api.dicebear.com/9.x/${style}/svg?seed=${seed}`;
   const tier = profile.confidence_level;
   
   const earnedBadgesCount = profile.profile_badges?.length || 0;

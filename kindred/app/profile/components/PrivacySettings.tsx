@@ -1,15 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import * as Switch from "@radix-ui/react-switch";
 import * as Select from "@radix-ui/react-select";
-import { ChevronDown, ChevronRight, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Check, Shuffle } from "lucide-react";
 import type { ProfileWithRelations } from "@/lib/dal";
 
-export function PrivacySettings({ profile }: { profile: ProfileWithRelations }) {
+export function PrivacySettings({
+  profile,
+  onAvatarPreview,
+}: {
+  profile: ProfileWithRelations;
+  /// Called immediately when the avatar style/seed changes, before Save - lets the
+  /// avatar at the top of the page update live instead of waiting on a round-trip.
+  onAvatarPreview?: (update: { avatar_id?: string; avatar_seed?: string }) => void;
+}) {
+  const router = useRouter();
   const [isExpanded, setIsExpanded] = useState(false);
   const [settings, setSettings] = useState({
     avatar_id: profile.avatar_id || "adventurer",
+    avatar_seed: profile.avatar_seed || profile.username,
     display_name_mode: profile.display_name_mode || "username",
     dms_open: profile.dms_open ?? true,
     show_confidence: profile.show_confidence ?? true,
@@ -20,6 +31,15 @@ export function PrivacySettings({ profile }: { profile: ProfileWithRelations }) 
 
   const updateSetting = (key: string, value: string | boolean) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    if (key === "avatar_id" && typeof value === "string") onAvatarPreview?.({ avatar_id: value });
+  };
+
+  // Dicebear renders the same picture every time for a given style+seed, so a random
+  // seed is the only way to get a different-looking avatar within the same style.
+  const handleShuffle = () => {
+    const newSeed = Math.random().toString(36).slice(2, 10);
+    setSettings(prev => ({ ...prev, avatar_seed: newSeed }));
+    onAvatarPreview?.({ avatar_seed: newSeed });
   };
 
   const handleSave = async (e: React.MouseEvent) => {
@@ -36,6 +56,7 @@ export function PrivacySettings({ profile }: { profile: ProfileWithRelations }) 
       if (!res.ok) throw new Error("Failed");
       setMessage("Saved!");
       setTimeout(() => setMessage(""), 2000);
+      router.refresh();
     } catch {
       setMessage("Error saving.");
     } finally {
@@ -81,38 +102,49 @@ export function PrivacySettings({ profile }: { profile: ProfileWithRelations }) 
                 <h3 className="font-medium text-ink text-sm">Avatar Style</h3>
                 <p className="text-xs text-gray-500">Choose your Dicebear style</p>
               </div>
-              
-              <Select.Root 
-                value={settings.avatar_id} 
-                onValueChange={(val: string) => updateSetting("avatar_id", val)}
-              >
-                <Select.Trigger className="inline-flex items-center justify-between rounded-lg px-3 py-1.5 text-sm gap-2 bg-mist text-star-sapphire outline-none">
-                  <Select.Value />
-                  <Select.Icon><ChevronDown className="h-4 w-4" /></Select.Icon>
-                </Select.Trigger>
-                <Select.Portal>
-                  <Select.Content className="overflow-hidden bg-white rounded-lg shadow-lg border border-gray-100 z-50">
-                    <Select.Viewport className="p-1">
-                      {[
-                        { val: "adventurer", label: "Adventurer" },
-                        { val: "avataaars", label: "Avataaars" },
-                        { val: "bottts", label: "Bottts" },
-                        { val: "fun-emoji", label: "Fun Emoji" },
-                        { val: "identicon", label: "Identicon" },
-                        { val: "lorelei", label: "Lorelei" },
-                        { val: "notionists", label: "Notionists" },
-                        { val: "open-peeps", label: "Open Peeps" },
-                        { val: "pixel-art", label: "Pixel Art" }
-                      ].map(style => (
-                        <Select.Item key={style.val} value={style.val} className="relative flex items-center px-8 py-2 text-sm text-ink rounded-md select-none hover:bg-mist cursor-pointer outline-none">
-                          <Select.ItemText>{style.label}</Select.ItemText>
-                          <Select.ItemIndicator className="absolute left-2"><Check className="h-3 w-3 text-metro-blue" /></Select.ItemIndicator>
-                        </Select.Item>
-                      ))}
-                    </Select.Viewport>
-                  </Select.Content>
-                </Select.Portal>
-              </Select.Root>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleShuffle}
+                  title="Get a different look in this style"
+                  className="p-1.5 rounded-lg bg-mist text-star-sapphire hover:bg-iceland/20 transition-colors"
+                >
+                  <Shuffle className="h-4 w-4" />
+                </button>
+
+                <Select.Root
+                  value={settings.avatar_id}
+                  onValueChange={(val: string) => updateSetting("avatar_id", val)}
+                >
+                  <Select.Trigger className="inline-flex items-center justify-between rounded-lg px-3 py-1.5 text-sm gap-2 bg-mist text-star-sapphire outline-none">
+                    <Select.Value />
+                    <Select.Icon><ChevronDown className="h-4 w-4" /></Select.Icon>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content className="overflow-hidden bg-white rounded-lg shadow-lg border border-gray-100 z-50">
+                      <Select.Viewport className="p-1">
+                        {[
+                          { val: "adventurer", label: "Adventurer" },
+                          { val: "avataaars", label: "Avataaars" },
+                          { val: "bottts", label: "Bottts" },
+                          { val: "fun-emoji", label: "Fun Emoji" },
+                          { val: "identicon", label: "Identicon" },
+                          { val: "lorelei", label: "Lorelei" },
+                          { val: "notionists", label: "Notionists" },
+                          { val: "open-peeps", label: "Open Peeps" },
+                          { val: "pixel-art", label: "Pixel Art" }
+                        ].map(style => (
+                          <Select.Item key={style.val} value={style.val} className="relative flex items-center px-8 py-2 text-sm text-ink rounded-md select-none hover:bg-mist cursor-pointer outline-none">
+                            <Select.ItemText>{style.label}</Select.ItemText>
+                            <Select.ItemIndicator className="absolute left-2"><Check className="h-3 w-3 text-metro-blue" /></Select.ItemIndicator>
+                          </Select.Item>
+                        ))}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+              </div>
             </div>
 
             <div className="flex items-center justify-between py-2 border-b border-gray-100">
