@@ -214,3 +214,22 @@ body {
 .str-chat .str-chat__message--me {
     --str-chat__chat-text-incoming: var(--color-surface);
 }
+
+/* The line above the composer is on the CONTAINER, not on the compose area — the rounded
+   outline around the input itself is a separate, wanted border and stays.
+   border-top has no variable of its own, and its colour token is shared with that outline
+   and with every input border, so nulling the token was not an option: this has to be a
+   rule.
+
+   Thinner bar, closer to a modern mobile chat: the container's own padding is a real
+   variable, so halving it is a one-line change. The controls row's 11px comes from
+   spacing-sm, which is global — scoping the override to the controls element is what keeps
+   it off every other input and button in the app. Together: ~83px down to ~58px. */
+.str-chat .str-chat__message-composer-container.str-chat__message-composer-container {
+    border-top: none;
+    --str-chat__message-composer-padding: var(--str-chat__spacing-xs);
+}
+
+.str-chat .str-chat__message-composer-controls.str-chat__message-composer-controls {
+    --str-chat__spacing-sm: var(--str-chat__spacing-xs);
+}
