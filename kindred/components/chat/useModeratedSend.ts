@@ -91,22 +91,36 @@ export function useModeratedSend() {
         return { blocked: true };
     }, []);
 
-    // Turns an award into what the user sees. XP toasts coalesce under one mergeKey so a
-    // fast exchange accumulates ("+1" then "+2") instead of stacking a toast per message;
-    // a tier-up gets its own toast rather than being buried in that running total, since
-    // it happens rarely and means considerably more.
+    // Turns an award into what the user sees: one fact per toast, up to three.
+    //
+    // The XP toast used to carry chat level and confidence points in its body, which made
+    // the interesting events - crossing a level - the least visible part of the least
+    // prominent line. Each now gets its own toast, and only the XP one coalesces: levels
+    // are rare, and merging two of them would mean silently dropping one.
     const announceAward = useCallback(
         (award: AwardResult) => {
             const xpToast = (total: number): ToastInput => ({
                 kind: "xp",
                 title: `+${total} XP`,
-                body: `Chat level ${getChatLevel(award.channelXp).level} · ${award.confidencePoints} confidence pts`,
                 count: total,
                 mergeKey: "xp",
                 merge: (previous) => xpToast((previous.count ?? 0) + award.xpAwarded),
             });
 
             showToast(xpToast(award.xpAwarded));
+
+            // The award tells us the new channel total and what it just added, so the
+            // level before this message is simply the difference - no extra round trip.
+            const levelBefore = getChatLevel(award.channelXp - award.xpAwarded).level;
+            const levelNow = getChatLevel(award.channelXp).level;
+
+            if (levelNow > levelBefore) {
+                showToast({
+                    kind: "milestone",
+                    title: `Chat Level ${levelNow}`,
+                    body: "This conversation levelled up.",
+                });
+            }
 
             if (award.tierUp) {
                 showToast({
