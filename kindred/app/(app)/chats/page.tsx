@@ -1,5 +1,7 @@
 import ChatClient from "@/components/chat/ChatClient";
+import type { ChatTab } from "@/components/chat/ChatTabs";
 import { requireProfile } from "@/lib/dal";
+import { streamServerClient } from "@/lib/stream";
 
 // The shell already gated auth + onboarding, and ChatConnectionProvider (in the
 // layout) already holds the live Stream connection. We only need the id to filter
@@ -24,12 +26,30 @@ export default async function ChatsPage({
         searchParams,
     ]);
 
+    const channelType = type === "team" ? "team" : "messaging";
+
+    // Which tab to open on. A fresh wave is Pending, so defaulting to Active would land the
+    // user on a list that doesn't contain the conversation they were just sent to. Read from
+    // the channel rather than passed in the redirect, so it stays true if the state changed
+    // between the redirect being built and the page loading.
+    //
+    // Server-side to avoid rendering Active and correcting once the channel list arrives.
+    // Only runs on the redirect path — a normal visit to /chats has no `?c=`.
+    const initialTab = c ? await tabFor(channelType, c) : "active";
+
     return (
         <ChatClient
             userId={profile.id}
             openChannelId={c}
-            openChannelType={type === "team" ? "team" : "messaging"}
+            openChannelType={channelType}
             greet={greet === "1"}
+            initialTab={initialTab}
         />
     );
+}
+
+async function tabFor(type: "messaging" | "team", id: string): Promise<ChatTab> {
+    const [channel] = await streamServerClient.queryChannels({ type, id });
+    // Groups never carry requested_of, so they land on Active without a special case.
+    return channel?.data?.requested_of ? "pending" : "active";
 }

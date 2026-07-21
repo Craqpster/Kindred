@@ -34,13 +34,17 @@ export default function ChatClient({
     openChannelId,
     openChannelType = "messaging",
     greet = false,
+    initialTab = "active",
 }: {
     userId: string;
     openChannelId?: string;
     openChannelType?: "messaging" | "team";
     greet?: boolean;
+    initialTab?: ChatTab;
 }) {
-    const [tab, setTab] = useState<ChatTab>("active");
+    // Seeded from the server so arriving at a pending conversation doesn't drop the user on
+    // Active, where its row isn't. Only the initial value — switching tabs is local state.
+    const [tab, setTab] = useState<ChatTab>(initialTab);
     const { active, pending, initialized } = useChatChannels(userId);
 
     const channels = tab === "active" ? active : pending;
