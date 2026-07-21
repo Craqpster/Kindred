@@ -270,10 +270,10 @@ function PromptButton() {
             onClick={handleClick}
             disabled={loading}
             title="Get an icebreaker prompt"
-            className="flex items-center gap-1.5 border-t border-metro-blue/20 bg-mist px-4 py-1.5 text-xs font-medium text-metro-blue hover:bg-iceland/20 disabled:opacity-50"
+            className="flex cursor-pointer items-center gap-1.5 border-t border-bone-200 bg-bone-100 px-4 py-1.5 text-meta font-medium text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
-            <Lightbulb className="h-3.5 w-3.5" />
-            {loading ? "Sending..." : "Send an icebreaker"}
+            <Lightbulb size={14} strokeWidth={1.5} aria-hidden />
+            {loading ? "Sending…" : "Send an icebreaker"}
         </button>
     );
 }
