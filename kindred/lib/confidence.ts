@@ -8,7 +8,30 @@ import { tierForPoints } from "@/lib/confidence-tiers";
 // single emoji, etc. Chosen to be generous rather than strict for v1.
 const MIN_MESSAGE_LENGTH = 15;
 
-/// Awards +1 to both profiles.confidence_points (the sender's own, global, per-person
+/// What a qualifying message is worth. An icebreaker answer pays more because it is the
+/// harder thing to do - it asks someone to volunteer something about themselves to a
+/// stranger, which is exactly the behaviour the confidence ladder exists to encourage.
+///
+/// Note that confidence-tiers.ts's thresholds were picked when everything paid 1, so
+/// tiers arrive faster now. Deliberate for the moment; retune there, not here.
+export const XP_PER_MESSAGE = 1;
+export const XP_PER_PROMPT_ANSWER = 3;
+
+/// What an award actually did, for callers that want to tell the user about it.
+/// `null` from awardConfidenceForMessage means nothing was awarded - which the old
+/// void return could not express, leaving the client unable to tell "earned XP" from
+/// "didn't qualify".
+export type AwardResult = {
+    xpAwarded: number;
+    /// The channel's new shared total, feeding the chat level.
+    channelXp: number;
+    /// The sender's new personal total, feeding their confidence tier.
+    confidencePoints: number;
+    confidenceLevel: number;
+    tierUp: boolean;
+};
+
+/// Awards XP to both profiles.confidence_points (the sender's own, global, per-person
 /// counter) AND channel_xp (a single number shared by everyone in that specific
 /// conversation) when a just-sent message is substantial (see MIN_MESSAGE_LENGTH) AND
 /// is a genuine back-and-forth turn - the previous message in the channel was from the
@@ -21,9 +44,10 @@ const MIN_MESSAGE_LENGTH = 15;
 /// the next tier's threshold. Everything below is one transaction so a tier-up can never
 /// happen without the badge that goes with it, or vice versa.
 ///
-/// Silently does nothing if either condition isn't met. This is a background signal,
-/// never something that should surface an error to the sender - callers should not
-/// await this in a way that blocks or fails the actual message send.
+/// Returns null when nothing was awarded, and an AwardResult describing the new totals
+/// when something was. This is still a background signal - callers should not await it in
+/// a way that blocks or fails the actual message send - but the caller needs to be able to
+/// tell the difference in order to say "+3 XP" honestly.
 ///
 /// `promptId` marks this as a reply to an icebreaker (IcebreakerCard.tsx), which should
 /// always count even if short, since responding to one at all is the "real effort" signal
@@ -37,22 +61,31 @@ export async function awardConfidenceForMessage(
     messageId: string,
     text: string,
     promptId?: string,
-): Promise<void> {
+): Promise<AwardResult | null> {
     const guaranteed = promptId
         ? await promptReplyIsUnclaimed(userId, messageId, promptId)
         : false;
 
-    if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) return;
+    if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) {
+        return null;
+    }
 
-    await prisma.$transaction(async (tx) => {
+    // Only a claimed first answer earns the larger award. A second answer to the same
+    // prompt still gets here if it passes the ordinary checks, but it is an ordinary
+    // message as far as payment goes.
+    const amount = guaranteed ? XP_PER_PROMPT_ANSWER : XP_PER_MESSAGE;
+
+    return prisma.$transaction(async (tx) => {
         const profile = await tx.profiles.update({
             where: { id: userId },
-            data: { confidence_points: { increment: 1 } },
+            data: { confidence_points: { increment: amount } },
             select: { confidence_points: true, confidence_level: true },
         });
 
         const newTier = tierForPoints(profile.confidence_points ?? 0);
-        if (newTier > profile.confidence_level) {
+        const tierUp = newTier > profile.confidence_level;
+
+        if (tierUp) {
             const unlockedBadges = await tx.badges.findMany({
                 where: { tierRequirement: { lte: newTier } },
             });
@@ -71,11 +104,20 @@ export async function awardConfidenceForMessage(
             });
         }
 
-        await tx.channel_xp.upsert({
+        const channel = await tx.channel_xp.upsert({
             where: { channel_cid: channelCid },
-            create: { channel_cid: channelCid, xp: 1 },
-            update: { xp: { increment: 1 } },
+            create: { channel_cid: channelCid, xp: amount },
+            update: { xp: { increment: amount } },
+            select: { xp: true },
         });
+
+        return {
+            xpAwarded: amount,
+            channelXp: channel.xp,
+            confidencePoints: profile.confidence_points ?? 0,
+            confidenceLevel: tierUp ? newTier : profile.confidence_level,
+            tierUp,
+        };
     });
 }
 
