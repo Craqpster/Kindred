@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import * as Switch from "@radix-ui/react-switch";
 import * as Select from "@radix-ui/react-select";
 import { ChevronDown, ChevronRight, Check, Shuffle } from "lucide-react";
 import type { ProfileWithRelations } from "@/lib/dal";
+
+// Fixed, not random: the same 6 seeds every time so the grid is something you can
+// actually browse and come back to, instead of a moving target like Shuffle.
+const AVATAR_SEED_OPTIONS = ["option-1", "option-2", "option-3", "option-4", "option-5", "option-6"];
 
 export function PrivacySettings({
   profile,
@@ -34,13 +39,14 @@ export function PrivacySettings({
     if (key === "avatar_id" && typeof value === "string") onAvatarPreview?.({ avatar_id: value });
   };
 
-  // Dicebear renders the same picture every time for a given style+seed, so a random
-  // seed is the only way to get a different-looking avatar within the same style.
-  const handleShuffle = () => {
-    const newSeed = Math.random().toString(36).slice(2, 10);
+  const setAvatarSeed = (newSeed: string) => {
     setSettings(prev => ({ ...prev, avatar_seed: newSeed }));
     onAvatarPreview?.({ avatar_seed: newSeed });
   };
+
+  // Dicebear renders the same picture every time for a given style+seed, so a random
+  // seed is the only way to get a different-looking avatar within the same style.
+  const handleShuffle = () => setAvatarSeed(Math.random().toString(36).slice(2, 10));
 
   const handleSave = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent toggling accordion when clicking save
@@ -144,6 +150,33 @@ export function PrivacySettings({
                     </Select.Content>
                   </Select.Portal>
                 </Select.Root>
+              </div>
+            </div>
+
+            <div className="py-2 border-b border-gray-100">
+              <p className="text-xs text-gray-500 mb-2">Or pick a specific look</p>
+              <div className="flex gap-2 flex-wrap">
+                {AVATAR_SEED_OPTIONS.map(seed => (
+                  <button
+                    key={seed}
+                    type="button"
+                    onClick={() => setAvatarSeed(seed)}
+                    title="Use this look"
+                    className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-colors ${
+                      settings.avatar_seed === seed
+                        ? "border-metro-blue"
+                        : "border-transparent hover:border-iceland/50"
+                    }`}
+                  >
+                    <Image
+                      src={`https://api.dicebear.com/9.x/${settings.avatar_id}/svg?seed=${seed}`}
+                      alt="Avatar option"
+                      width={40}
+                      height={40}
+                      unoptimized
+                    />
+                  </button>
+                ))}
               </div>
             </div>
 
