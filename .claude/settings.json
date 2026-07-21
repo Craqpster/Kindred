@@ -10,7 +10,15 @@
       "Bash(git merge *)",
       "Bash(cp .claude/settings.json /private/tmp/claude-501/-Users-rafemsu-Documents-seo-Kindred/f514d14f-c512-49aa-9e9e-9dbe2a028cc6/scratchpad/settings.json.current)",
       "Bash(git status *)",
-      "Bash(npx prisma *)"
+      "Bash(npx prisma *)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(python3 -c \"import sys,json;print\\(' ',json.loads\\(sys.stdin.readline\\(\\)\\)['timestamp']\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(ps -p 61860 -o lstart=,etime=)",
+      "Bash(kill 61860)",
+      "Bash(kill -9 61860)",
+      "Bash(lsof -ti:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH -m 20 \"http://localhost:3000/api/profile/badges\")"
     ]
   }
 }

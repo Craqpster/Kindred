@@ -56,6 +56,13 @@ export async function PATCH() {
 
     return NextResponse.json({ success: true, tier: earnedTier, unlocked: eligibleBadges.length });
   } catch (error) {
+    // verifySession() signals "not signed in" by calling redirect(), which throws rather
+    // than returning. Swallowing that here turned an ordinary unauthenticated request
+    // into a 500 and hid the redirect Next was trying to perform.
+    if (error instanceof Error && "digest" in error && typeof error.digest === "string") {
+      if (error.digest.startsWith("NEXT_REDIRECT")) throw error;
+    }
+
     console.error(error);
     return new NextResponse("Internal Error", { status: 500 });
   }
