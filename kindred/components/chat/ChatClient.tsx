@@ -21,7 +21,6 @@ import {
     type SendButtonProps,
 } from "stream-chat-react";
 
-import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import IcebreakerCard from "@/components/chat/IcebreakerCard";
@@ -87,20 +86,18 @@ export default function ChatClient({
 
             <div className="flex flex-1 min-w-0">
                 <Channel>
-                    <ActivePromptProvider>
-                        <ComposerComponents>
-                            <Window>
-                                <ChannelHeader />
-                                <ChatXpBadge />
-                                <AutoPromptTrigger />
-                                <MessageList Message={ChatMessage} />
-                                <PrefillGreeting targetId={greet ? openChannelId : undefined} />
-                                <PromptButton />
-                                <ModeratedMessageComposer />
-                            </Window>
-                            <Thread />
-                        </ComposerComponents>
-                    </ActivePromptProvider>
+                    <ComposerComponents>
+                        <Window>
+                            <ChannelHeader />
+                            <ChatXpBadge />
+                            <AutoPromptTrigger />
+                            <MessageList Message={ChatMessage} />
+                            <PrefillGreeting targetId={greet ? openChannelId : undefined} />
+                            <PromptButton />
+                            <ModeratedMessageComposer />
+                        </Window>
+                        <Thread />
+                    </ComposerComponents>
                 </Channel>
             </div>
         </div>
@@ -377,19 +374,7 @@ function ChatXpBadge() {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
-    const { activePrompt, setActivePrompt } = useActivePrompt();
     const { moderate, finalizeSend, notice } = useModeratedSend();
-
-    // Clicking "Respond" on a prompt card sets activePrompt - drop its text into the
-    // composer the same way PrefillGreeting does for a wave, so sending is still a
-    // deliberate action rather than something that happens on click alone.
-    const { channel } = useChannelStateContext();
-    useEffect(() => {
-        if (!activePrompt) return;
-        const { textComposer } = channel.messageComposer;
-        if (!textComposer.textIsEmpty) return;
-        textComposer.setText(activePrompt.text);
-    }, [activePrompt, channel]);
 
     const overrideSubmitHandler = useCallback(
         async ({
@@ -412,25 +397,17 @@ function ModeratedMessageComposer() {
                 throw new Error("Message blocked by moderation");
             }
 
-            // Tag this send as a reply to whatever prompt was active when Send was
-            // pressed - reading activePrompt here (not a stale closure) is why this
-            // callback lists it as a dependency below.
-            const respondingTo = activePrompt;
-            const messageToSend = respondingTo
-                ? { ...message, messageType: "prompt_response" as const, promptId: respondingTo.id }
-                : message;
-
-            await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
-            if (respondingTo) setActivePrompt(null);
+            // Nothing sent from here is ever a prompt reply any more - answering an
+            // icebreaker happens inside its own card, which sends for itself.
+            await sendMessage({ localMessage, message, options: sendOptions });
 
             await finalizeSend({
                 cid,
                 messageId: localMessage.id,
                 text: message.text ?? "",
-                promptId: respondingTo?.id,
             });
         },
-        [sendMessage, moderate, finalizeSend, activePrompt, setActivePrompt],
+        [sendMessage, moderate, finalizeSend],
     );
 
     return (
