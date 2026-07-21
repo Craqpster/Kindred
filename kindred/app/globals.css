@@ -204,11 +204,17 @@ body {
    deliberately - the thread panel and thread-list header still use it, and overriding it
    here would move those for no reason.
 
-   One number for the space the pill occupies: its own height plus the top-3 offset it
-   floats at. Both the list padding and the date-chip offset below read it, so they cannot
-   drift apart. */
+   One number for the space the pill occupies: its own height plus the offset it floats
+   at. Both the list padding and the date-chip offset below read it, so they cannot drift
+   apart.
+
+   ChannelPill MEASURES itself and sets this on the message-list panel at runtime. The
+   value here is only the first-paint fallback. It was a hardcoded 60px, and the moment
+   the ring inside the pill changed size the pill became 80px - so the date chip rendered
+   inside it and the first messages hid underneath. A measured value cannot fall out of
+   step with the thing it is measuring. */
 .str-chat.str-chat {
-    --kindred-pill-space: 60px;
+    --kindred-pill-space: 80px;
 }
 
 /* Nothing may hide under the pill.
