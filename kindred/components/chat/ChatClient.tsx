@@ -311,20 +311,20 @@ function ChatXpBadge() {
 
     if (xp === null) return null;
 
-    const { level, xpIntoLevel, xpPerLevel } = getChatLevel(xp);
+    const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(xp);
 
     return (
         <div className="border-b border-metro-blue/20 bg-mist px-4 py-1.5">
             <div className="flex items-center justify-between text-sm text-star-sapphire">
                 <span>Chat Level {level}</span>
                 <span className="text-xs text-metro-blue">
-                    {xpIntoLevel}/{xpPerLevel} to next level
+                    {xpIntoLevel}/{xpForNextLevel} to next level
                 </span>
             </div>
             <div className="mt-1 h-1.5 w-full rounded-full bg-metro-blue/15">
                 <div
                     className="h-1.5 rounded-full bg-metro-blue transition-all"
-                    style={{ width: `${(xpIntoLevel / xpPerLevel) * 100}%` }}
+                    style={{ width: `${(xpIntoLevel / xpForNextLevel) * 100}%` }}
                 />
             </div>
         </div>
