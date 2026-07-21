@@ -9,6 +9,7 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
     type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
@@ -116,14 +117,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     );
 }
 
+// False while rendering on the server and on the very first client render, true after.
+//
+// useSyncExternalStore rather than the usual useEffect(() => setMounted(true)) mount
+// flag: setting state straight from an effect makes React Compiler's lint (rightly)
+// complain about cascading renders, and this expresses the same thing as what it
+// actually is — a value React reads differently on the server than on the client.
+// Same shape as useHoverCapable in components/ui/Button.tsx.
+const subscribeToNothing = () => () => {};
+
+function useHasMounted() {
+    return useSyncExternalStore(
+        subscribeToNothing,
+        () => true,
+        () => false,
+    );
+}
+
 function ToastViewport({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: string) => void }) {
     const reduceMotion = useReducedMotion();
-    const [mounted, setMounted] = useState(false);
 
     // document.body doesn't exist during the server render, and the portal has to be
     // skipped on the first client render too or the markup won't match.
-    useEffect(() => setMounted(true), []);
-    if (!mounted) return null;
+    if (!useHasMounted()) return null;
 
     // Portalled to the body rather than positioned in place: in app/(app)/layout.tsx the
     // scroll container is <main>, and a `fixed` element inside a scrolling ancestor
