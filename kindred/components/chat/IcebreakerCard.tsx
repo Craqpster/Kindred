@@ -1,8 +1,8 @@
 "use client";
 
-import { Lightbulb, Quote } from "lucide-react";
+import { Lightbulb, PenLine, Quote } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import type { LocalMessage } from "stream-chat";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
@@ -25,17 +25,61 @@ import { useModeratedSend } from "@/components/chat/useModeratedSend";
 /// Icon-only, per the convention KindredSendButton follows: an aria-label carries the
 /// name and the glyph is hidden, so the control is announced as what it does rather than
 /// as a punctuation mark.
-function QuoteButton({ label, onClick }: { label: string; onClick: () => void }) {
+const SPRING = { type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const;
+
+const HOVER_QUERY = "(hover: hover)";
+
+// Hover scale must not fire on touch, where there is no hover state to leave and the
+// button would stay enlarged after a tap. Same guard Button.tsx uses.
+function useHoverCapable() {
+    return useSyncExternalStore(
+        (onStoreChange) => {
+            const query = window.matchMedia(HOVER_QUERY);
+            query.addEventListener("change", onStoreChange);
+            return () => query.removeEventListener("change", onStoreChange);
+        },
+        () => window.matchMedia(HOVER_QUERY).matches,
+        () => false,
+    );
+}
+
+/// The card's icon controls. Icon-only, per the convention KindredSendButton follows: an
+/// aria-label carries the name and the glyph is hidden, so each is announced as what it
+/// does rather than as a shape.
+///
+/// `filled` marks the primary action - answering - so it still reads as the thing to do
+/// even without a text label.
+function IconButton({
+    label,
+    icon: Icon,
+    onClick,
+    filled = false,
+}: {
+    label: string;
+    icon: typeof Quote;
+    onClick: () => void;
+    filled?: boolean;
+}) {
+    const reduceMotion = useReducedMotion();
+    const canHover = useHoverCapable();
+
     return (
-        <button
+        <motion.button
             type="button"
             onClick={onClick}
             aria-label={label}
             title={label}
-            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-bone-200 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
+            whileHover={reduceMotion || !canHover ? undefined : { scale: 1.12 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.9 }}
+            transition={SPRING}
+            className={`flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none ${
+                filled
+                    ? "bg-accent-600 text-surface hover:bg-accent-700"
+                    : "text-ink-600 hover:bg-bone-200 hover:text-ink-900"
+            }`}
         >
-            <Quote size={14} strokeWidth={1.5} aria-hidden />
-        </button>
+            <Icon size={14} strokeWidth={1.5} aria-hidden />
+        </motion.button>
     );
 }
 
@@ -173,24 +217,23 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                             this card, or to add a second thought after the inline box is
                             gone. ModeratedMessageComposer notices the quote and tags the
                             send as an answer, so it still lands back in this card. */}
-                        <QuoteButton
+                        <IconButton
                             label="Quote this icebreaker"
+                            icon={Quote}
                             onClick={() => channel.messageComposer.setQuotedMessage(message)}
                         />
 
+                        {/* Filled, so the primary action still reads as primary now that
+                            it has no text label. The trade is real: an icon is less
+                            discoverable than the word "Answer", which is why it keeps both
+                            an aria-label and a title. */}
                         {!youAnswered && !answering && (
-                            <button
-                                type="button"
+                            <IconButton
+                                label="Answer this icebreaker"
+                                icon={PenLine}
                                 onClick={openAnswerBox}
-                                aria-expanded={answering}
-                                // Only while open: the region is unmounted when collapsed,
-                                // and pointing aria-controls at an id that is not in the
-                                // document is a dangling reference.
-                                aria-controls={answering ? regionId : undefined}
-                                className="cursor-pointer rounded-full bg-accent-600 px-3.5 py-1 text-label text-surface transition-colors hover:bg-accent-700 focus-visible:ring-2 focus-visible:ring-accent-600/40 focus-visible:outline-none"
-                            >
-                                Answer
-                            </button>
+                                filled
+                            />
                         )}
                     </span>
                 </div>
@@ -230,8 +273,9 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                             this earns the usual +1 and stays in the
                                             timeline. */}
                                         {youAnswered && (
-                                            <QuoteButton
+                                            <IconButton
                                                 label={`Quote ${answer.user?.name ?? "this answer"}`}
+                                                icon={Quote}
                                                 onClick={() =>
                                                     channel.messageComposer.setQuotedMessage(
                                                         answer,
