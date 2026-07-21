@@ -64,7 +64,9 @@ export async function sayHi(formData: FormData) {
     // since forming a group redirects here too and should arrive with an empty composer.
     redirect(`/chats?c=${encodeURIComponent(cid)}&type=messaging&greet=1`);
 }
-export type FindMyGroupResult = { ok: true } | { ok: false; reason: FormGroupFailure };
+// void covers the success path: it redirects instead of returning, so the caller only ever
+// receives a value when something went wrong.
+export type FindMyGroupResult = { ok: false; reason: FormGroupFailure } | void;
 
 /// Assigns the caller a group and opens its Stream channel.
 ///
@@ -88,7 +90,7 @@ export async function findMyGroup(): Promise<FindMyGroupResult> {
             await finishChannel(existing.id, existing.title, existing.members, profile.id);
             revalidatePath("/meet");
         }
-        return { ok: true };
+        openGroup(existing.id);
     }
 
     const result = await formGroupFor(profile);
@@ -97,10 +99,22 @@ export async function findMyGroup(): Promise<FindMyGroupResult> {
     await finishChannel(result.group.id, result.group.title, result.group.members, profile.id);
 
     // The card lives here, but the group itself surfaces on /chats — revalidate both so
-    // the Active tab has it the moment the user switches over.
+    // the Active tab has it the moment the user lands.
     revalidatePath("/meet");
     revalidatePath("/chats");
-    return { ok: true };
+
+    openGroup(result.group.id);
+}
+
+/// Sends the user into their group conversation.
+///
+/// No greet=1: unlike a wave, a group should open with an empty composer.
+///
+/// Must not be called from inside a try — redirect() signals by throwing NEXT_REDIRECT, and
+/// a catch would swallow the navigation and look like a silent no-op.
+function openGroup(groupId: string): never {
+    // The Stream channel id is the group's own uuid — see createGroupChannel.
+    redirect(`/chats?c=${encodeURIComponent(groupId)}&type=team`);
 }
 
 async function finishChannel(

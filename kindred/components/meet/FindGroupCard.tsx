@@ -43,8 +43,10 @@ function FindGroup() {
                     disabled={pending}
                     onClick={() =>
                         start(async () => {
+                            // Success redirects into the group chat and never returns a
+                            // value, so a result here always means something went wrong.
                             const result = await findMyGroup();
-                            setFailure(result.ok ? null : result.reason);
+                            if (result) setFailure(result.reason);
                         })
                     }
                 >
