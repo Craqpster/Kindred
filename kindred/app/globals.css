@@ -161,6 +161,16 @@ body {
     --str-chat__border-core-default: var(--color-bone-300);
     --str-chat__input-text-default: var(--color-ink-900);
     --str-chat__input-text-placeholder: var(--color-ink-600);
+
+    /* Receded chrome: the "Today" date separator, system messages, the new-message
+       notification and the thread-start divider all read this one token. It defaults to
+       chrome-50 -> slate-50, which is a cool grey and reads as a foreign chip once the
+       pane behind it is bone.
+
+       Override this token rather than chrome-50 upstream: chrome-50 also feeds
+       --str-chat__background-core-surface-card, so moving it would drag card backgrounds
+       along with the dividers. */
+    --str-chat__background-core-surface-subtle: var(--color-bone-200);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
