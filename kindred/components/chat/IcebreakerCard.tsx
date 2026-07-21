@@ -35,9 +35,14 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     const regionId = useId();
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
+    // A tween, not a spring. A spring loose enough to feel alive overshoots, and
+    // overshooting a height means the box opens taller than it will end up and then
+    // shrinks back — which reads as a glitch, because the final height is a fact about
+    // the content rather than something with momentum. The curve is --ease-smooth from
+    // globals.css, spelled out because Motion needs the numbers, not the CSS token.
     const transition = reduceMotion
         ? { duration: 0 }
-        : ({ type: "spring", stiffness: 500, damping: 30, mass: 0.6 } as const);
+        : ({ duration: 0.24, ease: [0.22, 1, 0.36, 1] } as const);
 
     // Opening the box should put the caret in it — the click that opened it was already
     // the decision to answer, so making the user click again is a wasted step.
@@ -94,13 +99,12 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
 
     return (
         <div className="my-3 flex justify-center">
-            {/* layout so the card grows into the input and each new answer rather than
-                snapping to its new height under the message list. */}
-            <motion.div
-                layout={!reduceMotion}
-                transition={transition}
-                className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card"
-            >
+            {/* Deliberately not a `layout` element. Motion implements layout animation as
+                a scale transform, so pairing it with a descendant animating real height
+                runs two size animations against the same box: the card scales past the
+                target while the height grows into it, then the projection snaps back.
+                The height animations below own the growth on their own. */}
+            <div className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card">
                 <p className="flex items-center gap-1.5 text-label text-ink-600 uppercase">
                     <Lightbulb size={13} strokeWidth={1.5} aria-hidden />
                     Icebreaker
@@ -133,11 +137,10 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                             {answers.map((answer) => (
                                 <motion.li
                                     key={answer.id}
-                                    layout={!reduceMotion}
-                                    initial={{ opacity: 0, y: -4 }}
-                                    animate={{ opacity: 1, y: 0 }}
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
                                     transition={transition}
-                                    className="flex gap-2"
+                                    className="flex gap-2 overflow-hidden"
                                 >
                                     <Avatar
                                         name={answer.user?.name ?? answer.user?.id ?? "?"}
@@ -262,7 +265,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                         )}
                     </>
                 )}
-            </motion.div>
+            </div>
         </div>
     );
 }
