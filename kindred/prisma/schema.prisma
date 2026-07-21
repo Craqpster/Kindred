@@ -60,6 +60,7 @@ model profiles {
   profile_badges    profile_badges[]
   group_member      group_members?
   prompt_awards     prompt_awards[]
+  daily_activity    daily_chat_activity[]
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
@@ -119,6 +120,50 @@ model prompt_awards {
   profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 
   @@id([prompt_id, profile_id])
+  @@schema("public")
+}
+
+/// How many XP-qualifying messages one person sent in one chat on one UTC day.
+///
+/// One counter serving two jobs: it caps how much ordinary chatter can pay out (see
+/// DAILY_MESSAGE_XP_CAP), and it decides when everyone in a chat has met the daily
+/// threshold for the mutual bonus. Only messages that pass the usual length and
+/// turn-taking gates are counted, so "hi" five times earns neither.
+///
+/// The tally deliberately keeps climbing past the XP cap - only the payment stops. If it
+/// stopped counting, a high-level chat whose threshold sits above the cap could never
+/// reach its own bonus.
+///
+/// `day` is a UTC date, not a timestamp: the boundary has to be the same for both people
+/// in a conversation regardless of where they are.
+model daily_chat_activity {
+  channel_cid         String   @db.Text
+  profile_id          String   @db.Uuid
+  day                 DateTime @db.Date
+  qualifying_messages Int      @default(0)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([channel_cid, profile_id, day])
+  @@schema("public")
+}
+
+/// One row per chat per day that has already paid out its mutual bonus.
+///
+/// The insert IS the claim, exactly as prompt_awards works: the composite primary key
+/// means a replay or a race between two members finishing at the same moment loses
+/// rather than paying twice.
+///
+/// channel_cid is Stream's id, so - like channel_xp - there is no foreign key to
+/// anything of ours.
+model daily_bonus_awards {
+  channel_cid String   @db.Text
+  day         DateTime @db.Date
+  xp_awarded  Int
+  awarded_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([channel_cid, day])
   @@schema("public")
 }
 
