@@ -21,11 +21,11 @@ import {
     type SendButtonProps,
 } from "stream-chat-react";
 
-import { acceptRequest } from "@/app/(app)/chats/actions";
 import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import { useChatChannels } from "@/components/chat/useChatChannels";
+import { useModeratedSend } from "@/components/chat/useModeratedSend";
 import { getChatLevel } from "@/lib/chat-level";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
@@ -376,9 +376,9 @@ function ChatXpBadge() {
     );
 }
 
-// Stream's own moderation turned out to need a paid plan we don't have (see the PR
-// notes), so this checks messages against OpenAI's free Moderation endpoint instead,
-// via our own /api/moderate-message route (keeps the OpenAI key server-side only).
+// The composer at the bottom of the window. The moderation check and the post-send
+// bookkeeping both live in useModeratedSend, shared with the icebreaker card's own input
+// so a message can't reach the channel through an unmoderated path.
 //
 // overrideSubmitHandler completely replaces MessageComposer's built-in send - it does
 // NOT run alongside it. That's why this has to call sendMessage itself for a message
@@ -387,45 +387,19 @@ function ChatXpBadge() {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
-    const { channel } = useChannelStateContext();
-    const { client } = useChatContext();
     const { activePrompt, setActivePrompt } = useActivePrompt();
-    const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
-    const [secondsLeft, setSecondsLeft] = useState(0);
-    const [showWarning, setShowWarning] = useState(false);
+    const { moderate, finalizeSend, notice } = useModeratedSend();
 
     // Clicking "Respond" on a prompt card sets activePrompt - drop its text into the
     // composer the same way PrefillGreeting does for a wave, so sending is still a
     // deliberate action rather than something that happens on click alone.
+    const { channel } = useChannelStateContext();
     useEffect(() => {
         if (!activePrompt) return;
         const { textComposer } = channel.messageComposer;
         if (!textComposer.textIsEmpty) return;
         textComposer.setText(activePrompt.text);
     }, [activePrompt, channel]);
-
-    // Ticks the countdown once a cooldown is active, and clears itself once it expires.
-    useEffect(() => {
-        if (!cooldownUntil) return;
-
-        const tick = () => {
-            const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-            setSecondsLeft(remaining);
-            if (remaining === 0) setCooldownUntil(null);
-        };
-
-        tick();
-        const interval = setInterval(tick, 1000);
-        return () => clearInterval(interval);
-    }, [cooldownUntil]);
-
-    // The first couple of flagged messages are warning-only (no cooldownUntil from the
-    // route) - show the warning for a few seconds rather than leaving it up forever.
-    useEffect(() => {
-        if (!showWarning) return;
-        const timeout = setTimeout(() => setShowWarning(false), 6000);
-        return () => clearTimeout(timeout);
-    }, [showWarning]);
 
     const overrideSubmitHandler = useCallback(
         async ({
@@ -439,34 +413,9 @@ function ModeratedMessageComposer() {
             message: Message;
             sendOptions: SendMessageOptions;
         }) => {
-            let flagged = false;
-            let newCooldownUntil: number | null = null;
+            const { blocked } = await moderate(message.text ?? "");
 
-            if (message.text?.trim()) {
-                try {
-                    const res = await fetch("/api/moderate-message", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text: message.text }),
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        flagged = data.flagged;
-                        newCooldownUntil = data.cooldownUntil ?? null;
-                    }
-                    // A non-ok response here is treated the same as flagged: false -
-                    // fail open, same policy as the route itself uses for the OpenAI call.
-                } catch {
-                    // Network error reaching our own route - fail open.
-                }
-            }
-
-            if (flagged) {
-                if (newCooldownUntil) {
-                    setCooldownUntil(newCooldownUntil);
-                } else {
-                    setShowWarning(true);
-                }
+            if (blocked) {
                 // Stream's MessageComposer shows its own generic "Send message request
                 // failed" toast whenever this throws - we can't customize that text, so
                 // the banner below carries the actual explanation instead.
@@ -484,60 +433,22 @@ function ModeratedMessageComposer() {
             await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
             if (respondingTo) setActivePrompt(null);
 
-            // Replying IS accepting: clearing requested_of moves the conversation out of
-            // Pending for both people. Only the recipient can do it — for the sender,
-            // requested_of names the other person, so this is a no-op on their side and
-            // their own wave stays pending until it's answered.
-            //
-            // After the send, not before: a message blocked by moderation should leave the
-            // request exactly as it was. The action re-checks ownership server-side, so a
-            // stale channel here can't accept anything it shouldn't.
-            if (channel?.data?.requested_of === client.userID && channel.id) {
-                const formData = new FormData();
-                // channel.id, not cid — acceptChatRequest queries Stream by id.
-                formData.set("channel_id", channel.id);
-                await acceptRequest(formData);
-            }
-
-            // Best-effort, background signal for confidence_level growth - never
-            // awaited in a way that could delay or fail the send itself, since the
-            // message has already gone through by this point.
-            if (message.text?.trim()) {
-                fetch("/api/confidence", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        channelCid: cid,
-                        messageId: localMessage.id,
-                        text: message.text,
-                        isPromptResponse: !!respondingTo,
-                    }),
-                })
-                    // Tell ChatXpBadge (both participants') the award has landed and it's
-                    // safe to refetch, rather than making it guess how long to wait.
-                    .then(() => channel.sendEvent({ type: "chat_xp_updated" }))
-                    .catch(() => {});
-            }
+            await finalizeSend({
+                cid,
+                messageId: localMessage.id,
+                text: message.text ?? "",
+                promptId: respondingTo?.id,
+            });
         },
-        [sendMessage, channel, client.userID, activePrompt, setActivePrompt],
+        [sendMessage, moderate, finalizeSend, activePrompt, setActivePrompt],
     );
 
     return (
         <>
-            {cooldownUntil && secondsLeft > 0 ? (
+            {notice && (
                 <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
-                    Please keep this chat respectful — offensive language isn&apos;t
-                    allowed here, and repeated violations may result in restrictions on
-                    your account. You can send messages again in {secondsLeft}s.
+                    {notice.text}
                 </div>
-            ) : (
-                showWarning && (
-                    <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
-                        That message wasn&apos;t sent — please keep this chat respectful.
-                        Continuing to send offensive messages will temporarily restrict
-                        you from chatting.
-                    </div>
-                )
             )}
             <MessageComposer overrideSubmitHandler={overrideSubmitHandler} />
         </>
