@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx *)",
+      "Bash(grep -E \"^\\(send-horizontal|plus\\)\\\\.js$\")",
+      "Bash(node -e \"const m=require\\('lucide-react'\\); console.log\\('SendHorizontal:', typeof m.SendHorizontal, '| Plus:', typeof m.Plus, '| ArrowUp:', typeof m.ArrowUp\\)\")",
+      "Bash(grep -o \".\\\\{600\\\\}SendButton: SendButton\\\\$1\" node_modules/stream-chat-react/dist/es/index.mjs)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"const m=require\\('stream-chat-react'\\); console.log\\('ComponentProvider:', typeof m.ComponentProvider, '| useComponentContext:', typeof m.useComponentContext, '| useMessageComposerHasSendableData:', typeof m.useMessageComposerHasSendableData\\)\")",
+      "Bash(git merge *)",
+      "Bash(cp .claude/settings.json /private/tmp/claude-501/-Users-rafemsu-Documents-seo-Kindred/f514d14f-c512-49aa-9e9e-9dbe2a028cc6/scratchpad/settings.json.current)",
+      "Bash(git status *)"
+    ]
+  }
+}
