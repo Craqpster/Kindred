@@ -5,21 +5,31 @@ import { requireProfile } from "@/lib/dal";
 // layout) already holds the live Stream connection. We only need the id to filter
 // this user's channels.
 //
-// `?c=<channel id>` is set when arriving from a wave on /meet: it opens that
-// conversation and prefills the greeting. It carries the channel id, not the cid —
-// customActiveChannel queries Stream by id and rejects a cid.
+// Three params, all set by redirects from /meet:
+//   ?c=     the channel to open. An id, not a cid.
+//   ?type=  its channel type — "team" for a group, "messaging" for a 1:1. Carried rather
+//           than guessed so the client can construct the channel directly instead of
+//           hunting for it in a list it may not be on yet.
+//   ?greet= present only for a wave, which is the one case that prefills 👋. Opening and
+//           greeting used to be the same flag, which put a 👋 in new group chats.
 //
 // searchParams is a Promise in Next 16 and must be awaited.
 export default async function ChatsPage({
     searchParams,
 }: {
-    searchParams: Promise<{ c?: string }>;
+    searchParams: Promise<{ c?: string; type?: string; greet?: string }>;
 }) {
-    const [profile, { c }] = await Promise.all([requireProfile(), searchParams]);
+    const [profile, { c, type, greet }] = await Promise.all([
+        requireProfile(),
+        searchParams,
+    ]);
 
-    // Counted server-side so the badge is right on first paint. It refreshes when a request
-    // is accepted (acceptRequest revalidates this path); a wave arriving while the page sits
-    // open won't bump it until a navigation. Wiring that to the notification.message_new
-    // listener in ChatConnectionProvider is the follow-up.
-    return <ChatClient userId={profile.id} greetChannelId={c} />;
+    return (
+        <ChatClient
+            userId={profile.id}
+            openChannelId={c}
+            openChannelType={type === "team" ? "team" : "messaging"}
+            greet={greet === "1"}
+        />
+    );
 }

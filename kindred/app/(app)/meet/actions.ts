@@ -60,7 +60,9 @@ export async function sayHi(formData: FormData) {
 
     revalidatePath("/meet");
 
-    redirect(`/chats?c=${encodeURIComponent(cid)}`);
+    // greet=1 is what prefills the 👋 — opening a channel no longer implies greeting it,
+    // since forming a group redirects here too and should arrive with an empty composer.
+    redirect(`/chats?c=${encodeURIComponent(cid)}&type=messaging&greet=1`);
 }
 export type FindMyGroupResult = { ok: true } | { ok: false; reason: FormGroupFailure };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Channel as StreamChannel, LocalMessage, Message, SendMessageOptions } from "stream-chat";
+import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
     ChannelHeader,
@@ -23,24 +23,29 @@ import { useChatChannels } from "@/components/chat/useChatChannels";
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
 // layout, so ChannelList/Channel pick up client + theme from context on their own.
 //
-// greetChannelId comes from `?c=` when the user just waved at someone on /meet: that
-// conversation opens straight away with the greeting prefilled but unsent.
+// openChannelId comes from `?c=` — set both by a wave on /meet and by forming a group.
+// openChannelType tells us which Stream channel type it is, so the channel can be built
+// directly rather than looked up. `greet` is what separates the two cases: only a wave
+// arrives with 👋 prefilled.
 //
-// An id, not a cid — customActiveChannel queries by id, and a cid throws.
+// An id, not a cid — client.channel() rejects a cid.
 export default function ChatClient({
     userId,
-    greetChannelId,
+    openChannelId,
+    openChannelType = "messaging",
+    greet = false,
 }: {
     userId: string;
-    greetChannelId?: string;
+    openChannelId?: string;
+    openChannelType?: "messaging" | "team";
+    greet?: boolean;
 }) {
     const [tab, setTab] = useState<ChatTab>("active");
     const { active, pending, initialized } = useChatChannels(userId);
 
     const channels = tab === "active" ? active : pending;
 
-    // A wave lands in Pending, so look across both rather than the visible tab only.
-    useOpenGreetChannel(greetChannelId, active, pending);
+    useOpenChannel(openChannelId, openChannelType);
 
     return (
         // Stream's .str-chat__channel has no flex-grow of its own, so without a wrapper
@@ -71,7 +76,7 @@ export default function ChatClient({
                     <Window>
                         <ChannelHeader />
                         <MessageList />
-                        <PrefillGreeting targetId={greetChannelId} />
+                        <PrefillGreeting targetId={greet ? openChannelId : undefined} />
                         <ModeratedMessageComposer />
                     </Window>
                     <Thread />
@@ -81,31 +86,27 @@ export default function ChatClient({
     );
 }
 
-/// Opens the channel from `?c=` once the list has loaded it.
+/// Opens the channel named by `?c=` / `?type=`.
 ///
-/// This used to be ChannelList's `customActiveChannel`. Without that component we do it
-/// ourselves, and only once — re-running would drag the user back to the wave every time
-/// the channel list reordered.
-function useOpenGreetChannel(
-    greetChannelId: string | undefined,
-    active: StreamChannel[],
-    pending: StreamChannel[],
-) {
-    const { setActiveChannel } = useChatContext();
+/// Constructs the channel rather than hunting for it in the loaded lists. A just-created
+/// group has no messages, so it can fall outside the first page of a last_message_at-sorted
+/// query — searching would find nothing and the redirect would land on an empty pane.
+/// client.channel() sets cid synchronously and <Channel> watches whatever it gets from
+/// context, so this needs neither list membership nor a watch() call of its own.
+///
+/// Runs once. Re-running would drag the user back to this channel every time the list
+/// reordered underneath them.
+function useOpenChannel(channelId: string | undefined, type: "messaging" | "team") {
+    const { client, setActiveChannel } = useChatContext();
     const opened = useRef(false);
 
     useEffect(() => {
-        if (opened.current || !greetChannelId) return;
-
-        // `?c=` carries the channel id, not the cid.
-        const target = [...active, ...pending].find(
-            (channel) => channel.id === greetChannelId,
-        );
-        if (!target) return;
+        if (opened.current || !channelId) return;
 
         opened.current = true;
-        setActiveChannel(target);
-    }, [greetChannelId, active, pending, setActiveChannel]);
+        // An id, not a cid — client.channel() rejects a cid here.
+        setActiveChannel(client.channel(type, channelId));
+    }, [channelId, type, client, setActiveChannel]);
 }
 
 const GREETING = "👋";
@@ -113,7 +114,8 @@ const GREETING = "👋";
 // Types the greeting into the composer without sending it, so the wave still ends with
 // a deliberate press of Send by the person doing the waving.
 //
-//
+// Gated on `?greet=1`, not merely on a channel being opened: forming a group also redirects
+// here with `?c=`, and that conversation should not arrive with a 👋 already typed.
 function PrefillGreeting({ targetId }: { targetId?: string }) {
     const { channel } = useChannelStateContext();
     const filled = useRef(false);
