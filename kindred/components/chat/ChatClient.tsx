@@ -26,6 +26,7 @@ import ChannelLevelAvatar from "@/components/chat/ChannelLevelAvatar";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import IcebreakerCard from "@/components/chat/IcebreakerCard";
+import KindredQuotedMessage from "@/components/chat/KindredQuotedMessage";
 import { useChatChannels } from "@/components/chat/useChatChannels";
 import { useModeratedSend } from "@/components/chat/useModeratedSend";
 
@@ -143,6 +144,7 @@ function ComposerComponents({ children }: { children: React.ReactNode }) {
             SendButton: KindredSendButton,
             AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
             AttachmentSelector: AttachmentMenu,
+            QuotedMessage: KindredQuotedMessage,
         }),
         [existing],
     );
