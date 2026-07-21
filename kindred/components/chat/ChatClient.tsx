@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChannelFilters, ChannelOptions, ChannelSort, LocalMessage, Message, SendMessageOptions } from "stream-chat";
+import { Lightbulb, Plus, SendHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
     ChannelHeader,
-    ChannelList,
+    ComponentProvider,
     MessageComposer,
     MessageList,
     MessageUI,
@@ -13,58 +14,91 @@ import {
     Window,
     useChannelActionContext,
     useChannelStateContext,
+    useChatContext,
+    useComponentContext,
+    useMessageComposerHasSendableData,
     useMessageContext,
+    type SendButtonProps,
 } from "stream-chat-react";
-import { Lightbulb } from "lucide-react";
-import { getChatLevel } from "@/lib/chat-level";
+
+import { acceptRequest } from "@/app/(app)/chats/actions";
 import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
+import ChatListRow from "@/components/chat/ChatListRow";
+import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
+import { useChatChannels } from "@/components/chat/useChatChannels";
+import { getChatLevel } from "@/lib/chat-level";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
 // layout, so ChannelList/Channel pick up client + theme from context on their own.
 //
-// greetChannelId comes from `?c=` when the user just waved at someone on /meet: that
-// conversation opens straight away with the greeting prefilled but unsent.
+// openChannelId comes from `?c=` — set both by a wave on /meet and by forming a group.
+// openChannelType tells us which Stream channel type it is, so the channel can be built
+// directly rather than looked up. `greet` is what separates the two cases: only a wave
+// arrives with 👋 prefilled.
 //
-// An id, not a cid — customActiveChannel queries by id, and a cid throws.
+// An id, not a cid — client.channel() rejects a cid.
 export default function ChatClient({
     userId,
-    greetChannelId,
+    openChannelId,
+    openChannelType = "messaging",
+    greet = false,
+    initialTab = "active",
 }: {
     userId: string;
-    greetChannelId?: string;
+    openChannelId?: string;
+    openChannelType?: "messaging" | "team";
+    greet?: boolean;
+    initialTab?: ChatTab;
 }) {
-    const filters: ChannelFilters = { type: "messaging", members: { $in: [userId] } };
-    const sort: ChannelSort = { last_message_at: -1 };
-    const options: ChannelOptions = { limit: 10 };
+    // Seeded from the server so arriving at a pending conversation doesn't drop the user on
+    // Active, where its row isn't. Only the initial value — switching tabs is local state.
+    const [tab, setTab] = useState<ChatTab>(initialTab);
+    const { active, pending, initialized } = useChatChannels(userId);
+
+    const channels = tab === "active" ? active : pending;
+
+    useOpenChannel(openChannelId, openChannelType);
 
     return (
-        // Channel-list width is fixed via the .str-chat.str-chat__channel-list rule in
-        // globals.css, not here - see that rule's comment for why an inline/ancestor
-        // override doesn't work for this particular library. The flex-1 wrapper below
-        // is still needed though: Stream's .str-chat__channel has no flex-grow of its
-        // own, so without a wrapper that claims the remaining space, it would only be
-        // as wide as its content demands.
-        <div className="flex flex-1 min-h-0">
-            <ChannelList
-                filters={filters}
-                sort={sort}
-                options={options}
-                customActiveChannel={greetChannelId}
-            />
+        // Stream's .str-chat__channel has no flex-grow of its own, so without a wrapper
+        // claiming the remaining space it would only be as wide as its content demands.
+        <div className="flex flex-1 min-h-0 bg-bone-100">
+            <div className="flex w-80 shrink-0 flex-col min-h-0 border-r border-ink-900/8">
+                <ChatTabs tab={tab} onChange={setTab} pendingCount={pending.length} />
+
+                <div className="flex-1 overflow-y-auto px-2 pb-3">
+                    {!initialized ? (
+                        <p className="p-3 text-sm text-ink-600">Loading…</p>
+                    ) : channels.length === 0 ? (
+                        <p className="p-3 text-sm text-ink-600">
+                            {tab === "active"
+                                ? "No chats yet. Say hi to someone on Meet."
+                                : "Nothing waiting on a reply."}
+                        </p>
+                    ) : (
+                        channels.map((channel) => (
+                            <ChatListRow key={channel.cid} channel={channel} />
+                        ))
+                    )}
+                </div>
+            </div>
+
             <div className="flex flex-1 min-w-0">
                 <Channel>
                     <ActivePromptProvider>
-                        <Window>
-                            <ChannelHeader />
-                            <ChatXpBadge />
-                            <AutoPromptTrigger />
-                            <MessageList Message={ChatMessage} />
-                            <PrefillGreeting targetId={greetChannelId} />
-                            <PromptButton />
-                            <ModeratedMessageComposer />
-                        </Window>
-                        <Thread />
+                        <ComposerComponents>
+                            <Window>
+                                <ChannelHeader />
+                                <ChatXpBadge />
+                                <AutoPromptTrigger />
+                                <MessageList Message={ChatMessage} />
+                                <PrefillGreeting targetId={greet ? openChannelId : undefined} />
+                                <PromptButton />
+                                <ModeratedMessageComposer />
+                            </Window>
+                            <Thread />
+                        </ComposerComponents>
                     </ActivePromptProvider>
                 </Channel>
             </div>
@@ -72,10 +106,86 @@ export default function ChatClient({
     );
 }
 
+/// Opens the channel named by `?c=` / `?type=`.
+///
+/// Constructs the channel rather than hunting for it in the loaded lists. A just-created
+/// group has no messages, so it can fall outside the first page of a last_message_at-sorted
+/// query — searching would find nothing and the redirect would land on an empty pane.
+/// client.channel() sets cid synchronously and <Channel> watches whatever it gets from
+/// context, so this needs neither list membership nor a watch() call of its own.
+///
+/// Runs once. Re-running would drag the user back to this channel every time the list
+/// reordered underneath them.
+function useOpenChannel(channelId: string | undefined, type: "messaging" | "team") {
+    const { client, setActiveChannel } = useChatContext();
+    const opened = useRef(false);
+
+    useEffect(() => {
+        if (opened.current || !channelId) return;
+
+        opened.current = true;
+        // An id, not a cid — client.channel() rejects a cid here.
+        setActiveChannel(client.channel(type, channelId));
+    }, [channelId, type, client, setActiveChannel]);
+}
+
+// Swaps two of Stream's composer components for ours.
+//
+// In v14 these are NOT props on <Channel> — ChannelProps carries no component keys, and the
+// composer reads them from ComponentContext. So this re-provides that context from inside
+// <Channel>, spreading the existing value first: ComponentProvider replaces the context
+// wholesale, and dropping the ~60 defaults Channel put there would blank out most of the UI.
+function ComposerComponents({ children }: { children: React.ReactNode }) {
+    const existing = useComponentContext();
+
+    const value = useMemo(
+        () => ({
+            ...existing,
+            SendButton: KindredSendButton,
+            AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
+        }),
+        [existing],
+    );
+
+    return <ComponentProvider value={value}>{children}</ComponentProvider>;
+}
+
+// Stream hands an override only `sendMessage` — `disabled` is NOT passed, and the default
+// computes it itself. Without this hook the button stays live on an empty composer.
+//
+// Sized and weighted explicitly: Stream sizes its own icons via `.str-chat__icon--send`,
+// which a lucide icon never matches, and lucide's default stroke (2 at 24px) is heavier than
+// Stream's (1.5 at 20px) next to the emoji and attachment icons.
+function KindredSendButton({ sendMessage, ...rest }: SendButtonProps) {
+    const canSend = useMessageComposerHasSendableData();
+
+    return (
+        <button
+            type="button"
+            aria-label="Send"
+            disabled={!canSend}
+            onClick={sendMessage}
+            {...rest}
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+        >
+            <SendHorizontal size={18} strokeWidth={1.5} aria-hidden />
+        </button>
+    );
+}
+
+// Only the icon inside the "+" button, which leaves Stream's file input, popover and portal
+// machinery untouched. Replacing the whole AttachmentSelector would mean rebuilding those.
+function KindredAttachmentIcon() {
+    return <Plus size={20} strokeWidth={1.5} aria-hidden />;
+}
+
 const GREETING = "👋";
 
 // Types the greeting into the composer without sending it, so the wave still ends with
 // a deliberate press of Send by the person doing the waving.
+//
+// Gated on `?greet=1`, not merely on a channel being opened: forming a group also redirects
+// here with `?c=`, and that conversation should not arrive with a 👋 already typed.
 function PrefillGreeting({ targetId }: { targetId?: string }) {
     const { channel } = useChannelStateContext();
     const filled = useRef(false);
@@ -104,6 +214,9 @@ const QUIET_THRESHOLD_MS = 48 * 60 * 60 * 1000;
 // prompt if the chat looks abandoned. Guards against re-triggering on every render (via
 // firedRef) and against stacking prompts if the last message is already one (a second
 // participant's tab could otherwise fire this around the same time).
+//
+// Channel-type agnostic - works the same for a 1:1 or a group, since it only ever looks
+// at "how long since the last message" and posts through the same channelCid-based route.
 function AutoPromptTrigger() {
     const { channel, messages } = useChannelStateContext();
     const firedRef = useRef(false);
@@ -212,6 +325,9 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
 // profiles.confidence_level, shown elsewhere). Refetches whenever the message count
 // changes, so it stays current whether the XP-worthy message was sent by this user or
 // the other person - lib/confidence.ts awards it to channel_xp regardless of sender.
+//
+// Channel-type agnostic - a group's channel_cid works exactly like a 1:1's for this
+// purpose, since channel_xp is keyed by cid, not by member count.
 function ChatXpBadge() {
     const { channel, messages } = useChannelStateContext();
     const [xp, setXp] = useState<number | null>(null);
@@ -272,6 +388,7 @@ function ChatXpBadge() {
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
     const { channel } = useChannelStateContext();
+    const { client } = useChatContext();
     const { activePrompt, setActivePrompt } = useActivePrompt();
     const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
@@ -367,6 +484,21 @@ function ModeratedMessageComposer() {
             await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
             if (respondingTo) setActivePrompt(null);
 
+            // Replying IS accepting: clearing requested_of moves the conversation out of
+            // Pending for both people. Only the recipient can do it — for the sender,
+            // requested_of names the other person, so this is a no-op on their side and
+            // their own wave stays pending until it's answered.
+            //
+            // After the send, not before: a message blocked by moderation should leave the
+            // request exactly as it was. The action re-checks ownership server-side, so a
+            // stale channel here can't accept anything it shouldn't.
+            if (channel?.data?.requested_of === client.userID && channel.id) {
+                const formData = new FormData();
+                // channel.id, not cid — acceptChatRequest queries Stream by id.
+                formData.set("channel_id", channel.id);
+                await acceptRequest(formData);
+            }
+
             // Best-effort, background signal for confidence_level growth - never
             // awaited in a way that could delay or fail the send itself, since the
             // message has already gone through by this point.
@@ -387,7 +519,7 @@ function ModeratedMessageComposer() {
                     .catch(() => {});
             }
         },
-        [sendMessage, channel, activePrompt, setActivePrompt],
+        [sendMessage, channel, client.userID, activePrompt, setActivePrompt],
     );
 
     return (
