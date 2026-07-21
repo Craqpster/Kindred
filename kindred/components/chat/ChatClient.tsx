@@ -14,6 +14,7 @@ import {
     useChatContext,
 } from "stream-chat-react";
 
+import { acceptRequest } from "@/app/(app)/chats/actions";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import { useChatChannels } from "@/components/chat/useChatChannels";
@@ -144,6 +145,8 @@ function PrefillGreeting({ targetId }: { targetId?: string }) {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
+    const { channel } = useChannelStateContext();
+    const { client } = useChatContext();
     const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [showWarning, setShowWarning] = useState(false);
@@ -217,8 +220,23 @@ function ModeratedMessageComposer() {
             }
 
             await sendMessage({ localMessage, message, options: sendOptions });
+
+            // Replying IS accepting: clearing requested_of moves the conversation out of
+            // Pending for both people. Only the recipient can do it — for the sender,
+            // requested_of names the other person, so this is a no-op on their side and
+            // their own wave stays pending until it's answered.
+            //
+            // After the send, not before: a message blocked by moderation should leave the
+            // request exactly as it was. The action re-checks ownership server-side, so a
+            // stale channel here can't accept anything it shouldn't.
+            if (channel?.data?.requested_of === client.userID && channel.id) {
+                const formData = new FormData();
+                // channel.id, not cid — acceptChatRequest queries Stream by id.
+                formData.set("channel_id", channel.id);
+                await acceptRequest(formData);
+            }
         },
-        [sendMessage],
+        [sendMessage, channel, client.userID],
     );
 
     return (
