@@ -2,6 +2,8 @@
 
 import { motion, useReducedMotion } from "motion/react";
 
+import CountBadge from "@/components/ui/CountBadge";
+
 export type ChatTab = "active" | "pending";
 
 export default function ChatTabs({
@@ -51,16 +53,14 @@ export default function ChatTabs({
                             {label}
                             {value === "pending" && pendingCount > 0 && (
                                 <>
-                                    <span
-                                        aria-hidden="true"
-                                        className={`rounded-full px-1.5 text-label tabular-nums ${
-                                            active
-                                                ? "bg-surface/25 text-surface"
-                                                : "bg-ink-900 text-surface"
-                                        }`}
-                                    >
-                                        {pendingCount}
-                                    </span>
+                                    <CountBadge
+                                        count={pendingCount}
+                                        size={18}
+                                        className="text-surface"
+                                        circleClassName={
+                                            active ? "bg-surface/25" : "bg-ink-900"
+                                        }
+                                    />
                                     <span className="sr-only">
                                         {pendingCount} pending{" "}
                                         {pendingCount === 1 ? "request" : "requests"}

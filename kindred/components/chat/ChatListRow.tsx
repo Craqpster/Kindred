@@ -10,6 +10,7 @@ import {
 
 import AvatarGroup from "@/components/chat/AvatarGroup";
 import Avatar from "@/components/ui/Avatar";
+import CountBadge from "@/components/ui/CountBadge";
 
 /// One conversation in the list — a 1:1 or a group, told apart by channel type.
 ///
@@ -91,12 +92,11 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
 
             {unread > 0 && (
                 <>
-                    <span
-                        aria-hidden="true"
-                        className="ml-1 shrink-0 rounded-full bg-accent-600 px-1.5 text-label text-surface tabular-nums"
-                    >
-                        {unread}
-                    </span>
+                    <CountBadge
+                        count={unread}
+                        className="ml-1 text-surface"
+                        circleClassName="bg-accent-600"
+                    />
                     <span className="sr-only">
                         {unread} unread {unread === 1 ? "message" : "messages"}
                     </span>
