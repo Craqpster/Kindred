@@ -84,9 +84,23 @@ body {
     font-family: var(--font-poppins), sans-serif;
 }
 
-.str-chat.str-chat__channel-list {
-    flex: 1 1 auto;
-    min-height: 0;
+/* Warm the message pane to match the rest of the app.
+
+   v14 ignores the variables you would expect here — --str-chat__background-color and
+   friends are still declared but referenced nowhere. The live chain is
+   --str-chat__chrome-0 -> --str-chat__background-core-app and all four elevation levels,
+   so overriding that one token covers the channel pane, the message list and the header.
+
+   --composer-bg is different: Stream USES it twice and never defines it, so it resolves to
+   nothing and the composer renders transparent. It has to be defined here, not overridden.
+
+   On .str-chat itself, not a wrapper — Stream sets these tokens on that element, and a
+   value declared on an element beats one inherited from an ancestor. Same reason as the
+   .str-chat__channel rule below. */
+.str-chat {
+    --str-chat__chrome-0: var(--color-bone-100);
+    --str-chat__chat-bg-incoming: var(--color-bone-200);
+    --composer-bg: var(--color-bone-100);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
