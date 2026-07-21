@@ -64,14 +64,17 @@ export async function startChatRequest(
     // Unset rather than simply not setting: this channel already exists (they waved first),
     // so it is carrying their request markers and create() will not remove them.
     if (mutual) {
-        await channel.updatePartial({ unset: ["requested_by", "requested_of"] });
-    }
+        // Cast channel.data to a generic record so TS lets us look up dynamic string keys
+        const data = channel.data as Record<string, any> | undefined;
+        
+        const fieldsToUnset = ["requested_by", "requested_of"].filter(
+            (field) => data?.[field] !== undefined
+        );
 
-    // Typed as optional because a channel has no id until it exists; create() assigns
-    // one. Checked rather than asserted so a silent undefined can't become the string
-    // "undefined" in the redirect URL.
-    if (!channel.id) {
-        throw new Error("Stream channel was created without an id");
+        if (fieldsToUnset.length > 0) {
+            // Cast the final array to any to bypass Stream's strict keyof checks
+            await channel.updatePartial({ unset: fieldsToUnset as any });
+        }
     }
 
     return channel.id;
@@ -92,6 +95,31 @@ export async function acceptChatRequest(channelId: string, userId: string) {
     }
 
     await channel.updatePartial({ unset: ["requested_of"] });
+}
+
+/// Renames a group chat. Any member may do it.
+///
+/// Membership IS the authorization, proved the same way acceptChatRequest proves it: the
+/// `members: { $in: [userId] }` filter means a non-member gets zero rows back and never
+/// reaches the write. The id comes from the client, so it is never trusted on its own.
+///
+/// Runs server-side rather than from the browser deliberately. A client-side
+/// channel.updatePartial would depend on channel_member holding `update-channel` for the
+/// team type - a Stream dashboard setting, not something this repo can see or guarantee -
+/// and granting it would grant every field, not just the name.
+///
+/// updatePartial, not update(): update() replaces the whole custom-data object, which
+/// would silently drop anything else living on the channel.
+export async function renameGroupChannel(channelId: string, userId: string, name: string) {
+    const [channel] = await streamServerClient.queryChannels({
+        type: "team",
+        id: channelId,
+        members: { $in: [userId] },
+    });
+
+    if (!channel) throw new Error("No such group, or you are not a member of it");
+
+    await channel.updatePartial({ set: { name } });
 }
 
 /// Opens the channel for a group formed by lib/groups.ts.

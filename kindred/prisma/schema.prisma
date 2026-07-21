@@ -59,6 +59,12 @@ model profiles {
   profile_interests profile_interests[]
   profile_badges    profile_badges[]
   group_member      group_members?
+  prompt_awards     prompt_awards[]
+  daily_activity    daily_chat_activity[]
+
+  // Two relations to the same model, so they need names to tell them apart.
+  games_as_player_one game_sessions[] @relation("game_player_one")
+  games_as_player_two game_sessions[] @relation("game_player_two")
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
@@ -100,11 +106,117 @@ model channel_xp {
   @@schema("public")
 }
 
+/// One row per person per icebreaker prompt they have been awarded XP for.
+///
+/// Answering a prompt grants XP unconditionally - skipping the length and back-and-forth
+/// checks every other message has to pass (see lib/confidence.ts). Without a record of
+/// what has already been paid out, that exemption is an unlimited faucet: the same prompt
+/// can be answered over and over, and the request that awards it can simply be replayed.
+/// This table is what makes the guarantee once-per-person-per-prompt.
+///
+/// prompt_id is a Stream message id, so - like channel_xp.channel_cid - it has no foreign
+/// key to anything of ours. Stream owns the message; we only record that we paid for it.
+model prompt_awards {
+  prompt_id  String   @db.Text
+  profile_id String   @db.Uuid
+  awarded_at DateTime @default(now()) @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([prompt_id, profile_id])
+  @@schema("public")
+}
+
+/// How many XP-qualifying messages one person sent in one chat on one UTC day.
+///
+/// One counter serving two jobs: it caps how much ordinary chatter can pay out (see
+/// DAILY_MESSAGE_XP_CAP), and it decides when everyone in a chat has met the daily
+/// threshold for the mutual bonus. Only messages that pass the usual length and
+/// turn-taking gates are counted, so "hi" five times earns neither.
+///
+/// The tally deliberately keeps climbing past the XP cap - only the payment stops. If it
+/// stopped counting, a high-level chat whose threshold sits above the cap could never
+/// reach its own bonus.
+///
+/// `day` is a UTC date, not a timestamp: the boundary has to be the same for both people
+/// in a conversation regardless of where they are.
+model daily_chat_activity {
+  channel_cid         String   @db.Text
+  profile_id          String   @db.Uuid
+  day                 DateTime @db.Date
+  qualifying_messages Int      @default(0)
+  updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([channel_cid, profile_id, day])
+  @@schema("public")
+}
+
+/// One row per chat per day that has already paid out its mutual bonus.
+///
+/// The insert IS the claim, exactly as prompt_awards works: the composite primary key
+/// means a replay or a race between two members finishing at the same moment loses
+/// rather than paying twice.
+///
+/// channel_cid is Stream's id, so - like channel_xp - there is no foreign key to
+/// anything of ours.
+model daily_bonus_awards {
+  channel_cid String   @db.Text
+  day         DateTime @db.Date
+  xp_awarded  Int
+  awarded_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([channel_cid, day])
+  @@schema("public")
+}
+
+/// One game played inside a chat.
+///
+/// Reconstructed from the live database: the two migrations that created this table were
+/// applied directly to the shared Supabase instance and existed in no branch, so a fresh
+/// environment replayed from migrations would not have had it. The SQL was introspected
+/// from the running table rather than authored, so it matches what is actually there.
+///
+/// Two CHECK constraints cannot be modelled by Prisma and live in the migration SQL:
+///   game_type IN ('tic-tac-toe', 'connect-four')
+///   status    IN ('in_progress', 'completed', 'abandoned')
+///
+/// So does a partial unique index enforcing one active game per pair of players per
+/// channel - see 20260722000000_game_sessions_concurrent_pairs.
+///
+/// channel_cid is Stream's own id, which is why - as with channel_xp - it carries no
+/// foreign key to anything of ours.
+model game_sessions {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_cid       String   @db.Text
+  game_type         String   @db.Text
+  player_one_id     String   @db.Uuid
+  player_two_id     String   @db.Uuid
+  state             Json     @db.JsonB
+  status            String   @default("in_progress") @db.Text
+  invite_message_id String?  @unique @db.Text
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+
+  player_one profiles @relation("game_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
+  player_two profiles @relation("game_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
+
+  @@index([channel_cid])
+  @@index([player_two_id])
+  @@schema("public")
+}
+
 /// A 3-4 person group chat, assembled from shared hobbies and interests.
 model groups {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  /// The top tag the members share, computed once at formation and then frozen.
+  /// The group's name. Seeded at formation with the top tag its members share, and
+  /// renameable by any member afterwards (renameGroup in chats/actions.ts).
+  ///
+  /// Stream's channel `name` is what every chat surface actually displays; this copy is
+  /// kept in step because findMyGroup's repair branch pushes it back onto the channel,
+  /// so a stale value here would silently undo a rename.
   title String
 
   stream_channel_id String? @unique

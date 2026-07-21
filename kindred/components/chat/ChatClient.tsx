@@ -1,11 +1,10 @@
 "use client";
 
-import { Lightbulb, Plus, SendHorizontal } from "lucide-react";
+import { Plus, SendHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
 import {
     Channel,
-    ChannelHeader,
     ComponentProvider,
     MessageComposer,
     MessageList,
@@ -21,12 +20,14 @@ import {
     type SendButtonProps,
 } from "stream-chat-react";
 
-import { acceptRequest } from "@/app/(app)/chats/actions";
-import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
+import AttachmentMenu from "@/components/chat/AttachmentMenu";
+import ChannelPill from "@/components/chat/ChannelPill";
 import ChatListRow from "@/components/chat/ChatListRow";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
+import IcebreakerCard from "@/components/chat/IcebreakerCard";
+import KindredQuotedMessage from "@/components/chat/KindredQuotedMessage";
 import { useChatChannels } from "@/components/chat/useChatChannels";
-import { getChatLevel } from "@/lib/chat-level";
+import { useModeratedSend } from "@/components/chat/useModeratedSend";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -86,20 +87,19 @@ export default function ChatClient({
 
             <div className="flex flex-1 min-w-0">
                 <Channel>
-                    <ActivePromptProvider>
-                        <ComposerComponents>
-                            <Window>
-                                <ChannelHeader />
-                                <ChatXpBadge />
-                                <AutoPromptTrigger />
-                                <MessageList Message={ChatMessage} />
-                                <PrefillGreeting targetId={greet ? openChannelId : undefined} />
-                                <PromptButton />
-                                <ModeratedMessageComposer />
-                            </Window>
-                            <Thread />
-                        </ComposerComponents>
-                    </ActivePromptProvider>
+                    <ComposerComponents>
+                        <Window>
+                            {/* No <ChannelHeader>: the channel's name, avatar and status
+                                now float over the message list as ChannelPill, which is
+                                injected through ComponentContext.MessageListMainPanel
+                                below rather than sitting in this column. */}
+                            <AutoPromptTrigger />
+                            <MessageList Message={ChatMessage} />
+                            <PrefillGreeting targetId={greet ? openChannelId : undefined} />
+                            <ModeratedMessageComposer />
+                        </Window>
+                        <Thread />
+                    </ComposerComponents>
                 </Channel>
             </div>
         </div>
@@ -143,6 +143,9 @@ function ComposerComponents({ children }: { children: React.ReactNode }) {
             ...existing,
             SendButton: KindredSendButton,
             AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
+            AttachmentSelector: AttachmentMenu,
+            QuotedMessage: KindredQuotedMessage,
+            MessageListMainPanel: ChannelPill,
         }),
         [existing],
     );
@@ -166,9 +169,12 @@ function KindredSendButton({ sendMessage, ...rest }: SendButtonProps) {
             disabled={!canSend}
             onClick={sendMessage}
             {...rest}
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+            // size-8, down from size-9: the composer bar is slimmer now, and a 36px circle
+            // stood taller than the 26px control row it sits in, so it read as bolted on
+            // rather than part of the bar.
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
         >
-            <SendHorizontal size={18} strokeWidth={1.5} aria-hidden />
+            <SendHorizontal size={16} strokeWidth={1.5} aria-hidden />
         </button>
     );
 }
@@ -247,39 +253,6 @@ function AutoPromptTrigger() {
     return null;
 }
 
-// The on-demand version of AutoPromptTrigger - drops a new random icebreaker into the
-// chat right now, regardless of how recently someone last spoke.
-function PromptButton() {
-    const { channel } = useChannelStateContext();
-    const [loading, setLoading] = useState(false);
-
-    const handleClick = async () => {
-        setLoading(true);
-        try {
-            await fetch("/api/chat-prompts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ channelCid: channel.cid }),
-            });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <button
-            type="button"
-            onClick={handleClick}
-            disabled={loading}
-            title="Get an icebreaker prompt"
-            className="flex items-center gap-1.5 border-t border-metro-blue/20 bg-mist px-4 py-1.5 text-xs font-medium text-metro-blue hover:bg-iceland/20 disabled:opacity-50"
-        >
-            <Lightbulb className="h-3.5 w-3.5" />
-            {loading ? "Sending..." : "Send an icebreaker"}
-        </button>
-    );
-}
-
 // Renders an icebreaker prompt as a distinct card with a "Respond" button, and a reply
 // to one with a small badge - everything else falls through to Stream's own MessageUI
 // unchanged. Message text/props come in as props here, per stream-chat-react's
@@ -289,96 +262,30 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     // if a caller explicitly overrides it, which MessageList's Message={ChatMessage}
     // wiring doesn't do. useMessageContext() is the actual source of truth here.
     const { message } = useMessageContext("ChatMessage");
-    const { setActivePrompt } = useActivePrompt();
+    const { messages } = useChannelStateContext();
 
-    if (message?.messageType === "icebreaker_prompt") {
-        return (
-            <div className="my-2 mx-auto max-w-sm rounded-2xl border border-metro-blue/20 bg-mist px-4 py-3 text-center">
-                <p className="mb-1 text-xs font-medium text-metro-blue">Icebreaker</p>
-                <p className="mb-2 text-sm text-star-sapphire">{message.text}</p>
-                <button
-                    type="button"
-                    onClick={() => setActivePrompt({ id: message.id, text: message.text ?? "" })}
-                    className="rounded-full bg-metro-blue px-3 py-1 text-xs font-medium text-white hover:bg-metro-blue/90"
-                >
-                    Respond
-                </button>
-            </div>
+    // A reply to a prompt is rendered inside that prompt's card, so it must not also
+    // appear as a bubble of its own. Conditional on the prompt actually being loaded:
+    // `messages` is one page of history, so an older prompt can be scrolled past, and a
+    // reply whose card isn't on screen has to fall through to a normal bubble rather
+    // than disappearing from the conversation entirely.
+    if (message?.messageType === "prompt_response" && message.promptId) {
+        const promptIsLoaded = messages?.some(
+            (m) => m.id === message.promptId && m.messageType === "icebreaker_prompt",
         );
+        if (promptIsLoaded) return null;
     }
 
-    if (message?.messageType === "prompt_response") {
-        return (
-            <div>
-                <p className="mb-0.5 text-center text-[10px] font-medium text-metro-blue">
-                    ✨ Prompt response — XP earned
-                </p>
-                <MessageUI {...props} />
-            </div>
-        );
+    if (message?.messageType === "icebreaker_prompt") {
+        return <IcebreakerCard message={message} />;
     }
 
     return <MessageUI {...props} />;
 }
 
-// A single XP total shared by everyone in this chat (not a per-person stat - that's
-// profiles.confidence_level, shown elsewhere). Refetches whenever the message count
-// changes, so it stays current whether the XP-worthy message was sent by this user or
-// the other person - lib/confidence.ts awards it to channel_xp regardless of sender.
-//
-// Channel-type agnostic - a group's channel_cid works exactly like a 1:1's for this
-// purpose, since channel_xp is keyed by cid, not by member count.
-function ChatXpBadge() {
-    const { channel, messages } = useChannelStateContext();
-    const [xp, setXp] = useState<number | null>(null);
-
-    const refetch = useCallback(() => {
-        fetch(`/api/chat-xp?channelCid=${encodeURIComponent(channel.cid)}`)
-            .then((res) => (res.ok ? res.json() : null))
-            .then((data) => {
-                if (data) setXp(data.xp);
-            })
-            .catch(() => {});
-    }, [channel]);
-
-    useEffect(refetch, [refetch, messages?.length]);
-
-    // A new message means the badge should re-check right away, but confidence.ts
-    // awards XP in a background call that lands slightly after the message itself, so
-    // that first refetch can still read the old value. This event fires once the award
-    // has actually landed (see ModeratedMessageComposer below), for a second, correctly
-    // timed refetch - for both participants, not just whoever sent the message.
-    useEffect(() => {
-        const handleXpUpdated = () => refetch();
-        channel.on("chat_xp_updated", handleXpUpdated);
-        return () => channel.off("chat_xp_updated", handleXpUpdated);
-    }, [channel, refetch]);
-
-    if (xp === null) return null;
-
-    const { level, xpIntoLevel, xpPerLevel } = getChatLevel(xp);
-
-    return (
-        <div className="border-b border-metro-blue/20 bg-mist px-4 py-1.5">
-            <div className="flex items-center justify-between text-sm text-star-sapphire">
-                <span>Chat Level {level}</span>
-                <span className="text-xs text-metro-blue">
-                    {xpIntoLevel}/{xpPerLevel} to next level
-                </span>
-            </div>
-            <div className="mt-1 h-1.5 w-full rounded-full bg-metro-blue/15">
-                <div
-                    className="h-1.5 rounded-full bg-metro-blue transition-all"
-                    style={{ width: `${(xpIntoLevel / xpPerLevel) * 100}%` }}
-                />
-            </div>
-        </div>
-    );
-}
-
-// Stream's own moderation turned out to need a paid plan we don't have (see the PR
-// notes), so this checks messages against OpenAI's free Moderation endpoint instead,
-// via our own /api/moderate-message route (keeps the OpenAI key server-side only).
+// The composer at the bottom of the window. The moderation check and the post-send
+// bookkeeping both live in useModeratedSend, shared with the icebreaker card's own input
+// so a message can't reach the channel through an unmoderated path.
 //
 // overrideSubmitHandler completely replaces MessageComposer's built-in send - it does
 // NOT run alongside it. That's why this has to call sendMessage itself for a message
@@ -387,45 +294,8 @@ function ChatXpBadge() {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
-    const { channel } = useChannelStateContext();
-    const { client } = useChatContext();
-    const { activePrompt, setActivePrompt } = useActivePrompt();
-    const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
-    const [secondsLeft, setSecondsLeft] = useState(0);
-    const [showWarning, setShowWarning] = useState(false);
-
-    // Clicking "Respond" on a prompt card sets activePrompt - drop its text into the
-    // composer the same way PrefillGreeting does for a wave, so sending is still a
-    // deliberate action rather than something that happens on click alone.
-    useEffect(() => {
-        if (!activePrompt) return;
-        const { textComposer } = channel.messageComposer;
-        if (!textComposer.textIsEmpty) return;
-        textComposer.setText(activePrompt.text);
-    }, [activePrompt, channel]);
-
-    // Ticks the countdown once a cooldown is active, and clears itself once it expires.
-    useEffect(() => {
-        if (!cooldownUntil) return;
-
-        const tick = () => {
-            const remaining = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
-            setSecondsLeft(remaining);
-            if (remaining === 0) setCooldownUntil(null);
-        };
-
-        tick();
-        const interval = setInterval(tick, 1000);
-        return () => clearInterval(interval);
-    }, [cooldownUntil]);
-
-    // The first couple of flagged messages are warning-only (no cooldownUntil from the
-    // route) - show the warning for a few seconds rather than leaving it up forever.
-    useEffect(() => {
-        if (!showWarning) return;
-        const timeout = setTimeout(() => setShowWarning(false), 6000);
-        return () => clearTimeout(timeout);
-    }, [showWarning]);
+    const { messages } = useChannelStateContext();
+    const { moderate, finalizeSend, notice } = useModeratedSend();
 
     const overrideSubmitHandler = useCallback(
         async ({
@@ -439,105 +309,49 @@ function ModeratedMessageComposer() {
             message: Message;
             sendOptions: SendMessageOptions;
         }) => {
-            let flagged = false;
-            let newCooldownUntil: number | null = null;
+            const { blocked } = await moderate(message.text ?? "");
 
-            if (message.text?.trim()) {
-                try {
-                    const res = await fetch("/api/moderate-message", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ text: message.text }),
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        flagged = data.flagged;
-                        newCooldownUntil = data.cooldownUntil ?? null;
-                    }
-                    // A non-ok response here is treated the same as flagged: false -
-                    // fail open, same policy as the route itself uses for the OpenAI call.
-                } catch {
-                    // Network error reaching our own route - fail open.
-                }
-            }
-
-            if (flagged) {
-                if (newCooldownUntil) {
-                    setCooldownUntil(newCooldownUntil);
-                } else {
-                    setShowWarning(true);
-                }
+            if (blocked) {
                 // Stream's MessageComposer shows its own generic "Send message request
                 // failed" toast whenever this throws - we can't customize that text, so
                 // the banner below carries the actual explanation instead.
                 throw new Error("Message blocked by moderation");
             }
 
-            // Tag this send as a reply to whatever prompt was active when Send was
-            // pressed - reading activePrompt here (not a stale closure) is why this
-            // callback lists it as a dependency below.
-            const respondingTo = activePrompt;
-            const messageToSend = respondingTo
-                ? { ...message, messageType: "prompt_response" as const, promptId: respondingTo.id }
+            // Quoting an icebreaker IS answering it. Tagging the send here is what lets a
+            // quote-reply reuse everything the card's own input already goes through: it
+            // gets grouped under the prompt, it earns the larger award, and prompt_awards
+            // still holds that award to once per person per prompt. Without this a quote
+            // would look like an answer and count as an ordinary message.
+            const quotedId = message.quoted_message_id;
+            const quotedPrompt = quotedId
+                ? messages?.find(
+                      (m) => m.id === quotedId && m.messageType === "icebreaker_prompt",
+                  )
+                : undefined;
+
+            const messageToSend = quotedPrompt
+                ? { ...message, messageType: "prompt_response" as const, promptId: quotedPrompt.id }
                 : message;
 
             await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
-            if (respondingTo) setActivePrompt(null);
 
-            // Replying IS accepting: clearing requested_of moves the conversation out of
-            // Pending for both people. Only the recipient can do it — for the sender,
-            // requested_of names the other person, so this is a no-op on their side and
-            // their own wave stays pending until it's answered.
-            //
-            // After the send, not before: a message blocked by moderation should leave the
-            // request exactly as it was. The action re-checks ownership server-side, so a
-            // stale channel here can't accept anything it shouldn't.
-            if (channel?.data?.requested_of === client.userID && channel.id) {
-                const formData = new FormData();
-                // channel.id, not cid — acceptChatRequest queries Stream by id.
-                formData.set("channel_id", channel.id);
-                await acceptRequest(formData);
-            }
-
-            // Best-effort, background signal for confidence_level growth - never
-            // awaited in a way that could delay or fail the send itself, since the
-            // message has already gone through by this point.
-            if (message.text?.trim()) {
-                fetch("/api/confidence", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        channelCid: cid,
-                        messageId: localMessage.id,
-                        text: message.text,
-                        isPromptResponse: !!respondingTo,
-                    }),
-                })
-                    // Tell ChatXpBadge (both participants') the award has landed and it's
-                    // safe to refetch, rather than making it guess how long to wait.
-                    .then(() => channel.sendEvent({ type: "chat_xp_updated" }))
-                    .catch(() => {});
-            }
+            await finalizeSend({
+                cid,
+                messageId: localMessage.id,
+                text: message.text ?? "",
+                promptId: quotedPrompt?.id,
+            });
         },
-        [sendMessage, channel, client.userID, activePrompt, setActivePrompt],
+        [sendMessage, moderate, finalizeSend, messages],
     );
 
     return (
         <>
-            {cooldownUntil && secondsLeft > 0 ? (
+            {notice && (
                 <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
-                    Please keep this chat respectful — offensive language isn&apos;t
-                    allowed here, and repeated violations may result in restrictions on
-                    your account. You can send messages again in {secondsLeft}s.
+                    {notice.text}
                 </div>
-            ) : (
-                showWarning && (
-                    <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
-                        That message wasn&apos;t sent — please keep this chat respectful.
-                        Continuing to send offensive messages will temporarily restrict
-                        you from chatting.
-                    </div>
-                )
             )}
             <MessageComposer overrideSubmitHandler={overrideSubmitHandler} />
         </>

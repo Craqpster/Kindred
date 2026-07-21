@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsx *)",
+      "Bash(grep -E \"^\\(send-horizontal|plus\\)\\\\.js$\")",
+      "Bash(node -e \"const m=require\\('lucide-react'\\); console.log\\('SendHorizontal:', typeof m.SendHorizontal, '| Plus:', typeof m.Plus, '| ArrowUp:', typeof m.ArrowUp\\)\")",
+      "Bash(grep -o \".\\\\{600\\\\}SendButton: SendButton\\\\$1\" node_modules/stream-chat-react/dist/es/index.mjs)",
+      "Bash(python3 -c ' *)",
+      "Bash(node -e \"const m=require\\('stream-chat-react'\\); console.log\\('ComponentProvider:', typeof m.ComponentProvider, '| useComponentContext:', typeof m.useComponentContext, '| useMessageComposerHasSendableData:', typeof m.useMessageComposerHasSendableData\\)\")",
+      "Bash(git merge *)",
+      "Bash(cp .claude/settings.json /private/tmp/claude-501/-Users-rafemsu-Documents-seo-Kindred/f514d14f-c512-49aa-9e9e-9dbe2a028cc6/scratchpad/settings.json.current)",
+      "Bash(git status *)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsx -e ' *)",
+      "Bash(python3 -c \"import sys,json;print\\(' ',json.loads\\(sys.stdin.readline\\(\\)\\)['timestamp']\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(ps -p 61860 -o lstart=,etime=)",
+      "Bash(kill 61860)",
+      "Bash(kill -9 61860)",
+      "Bash(lsof -ti:3000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" -X PATCH -m 20 \"http://localhost:3000/api/profile/badges\")",
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const m=require\\('stream-chat-react'\\); console.log\\('ChannelAvatar:', typeof m.ChannelAvatar\\)\")",
+      "Bash(awk -F: '$0 ~ /ChatXpBadge/ {found=$1} found && $1>found {print \"ChatXpBadge spans lines \"found\" to \"$1; exit}')",
+      "Bash(git reset *)",
+      "Bash(git diff *)",
+      "Bash(git checkout *)",
+      "Bash(git apply *)",
+      "Bash(git -C .. status --porcelain)"
+    ]
+  }
+}
