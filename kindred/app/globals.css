@@ -238,6 +238,13 @@ body {
 
 .str-chat .str-chat__message-composer-controls.str-chat__message-composer-controls {
     --str-chat__spacing-sm: var(--str-chat__spacing-xs);
+
+    /* Stream uses align-items: end so the send button stays level with the LAST line of a
+       grown textarea. On a slim single-line bar - which is the state it is in almost all
+       the time - that reads as the placeholder sitting low against the buttons beside it.
+       Centred is right for the common case; a tall composer just centres its controls
+       against the block instead, which is no worse. */
+    align-items: center;
 }
 
 /* The input's own type, which was still on Stream's font stack and scale while every
