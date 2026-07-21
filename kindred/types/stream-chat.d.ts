@@ -24,13 +24,26 @@ declare module "stream-chat" {
         // for every message.
         chat_level_up: true;
         chat_daily_bonus: true;
+
+        // Sent after a move in a game_sessions game (lib/games.ts), so the other
+        // player's open board updates live if they're online right now. Not durable -
+        // useGameSync.ts treats Postgres, loaded on mount, as the real source of truth
+        // and this event only as a low-latency nudge to refetch/update sooner.
+        game_state: true;
     }
 
     // Stream builds Event as `CustomEventData & {...}`, so anything declared here is
     // available (and typed) on the events above.
     interface CustomEventData {
+        // From channel XP/leveling
         chatLevel?: number;
         bonusXp?: number;
+        
+        // From turn-based games. sessionId identifies which game_sessions row this event
+        // is about; gameState is that game's own state shape (TicTacToeState, ConnectFourState, ...) 
+        // - each game's Board component narrows it itself.
+        sessionId?: string;
+        gameState?: unknown;
     }
 
     // Marks a message as an icebreaker prompt card (posted by the Kindred bot user,
@@ -39,8 +52,19 @@ declare module "stream-chat" {
     // under their prompt by promptId, ChatMessage suppresses the loose bubble for a reply
     // it has grouped, and lib/confidence.ts reads both fields back off Stream to verify a
     // reply before granting it guaranteed XP.
+    //
+    // Also marks group game invites (GameControllerBar.tsx, first-come-first-served
+    // like a GamePigeon invite - see GameInviteCard.tsx).
+    //
+    // gameSessionId is unset while a game_invite is still open (nobody has joined yet)
+    // and set once someone does - /api/games/join sets it (and gameJoinerId) via
+    // partialUpdateMessage, which is what turns the card from "Join" into "Open" for
+    // everyone watching the channel in real time.
     interface CustomMessageData {
-        messageType?: "icebreaker_prompt" | "prompt_response";
+        messageType?: "icebreaker_prompt" | "prompt_response" | "game_invite";
         promptId?: string;
+        gameType?: string;
+        gameSessionId?: string;
+        gameJoinerId?: string;
     }
 }

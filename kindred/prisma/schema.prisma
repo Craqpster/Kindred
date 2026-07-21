@@ -70,6 +70,9 @@ model profiles {
   connections_made     connections[] @relation("connection_actor")
   connections_received connections[] @relation("connection_target")
 
+  game_sessions_as_player_one game_sessions[] @relation("game_session_player_one")
+  game_sessions_as_player_two game_sessions[] @relation("game_session_player_two")
+
   @@index([gender_id])
   @@schema("public")
 }
@@ -239,6 +242,42 @@ model group_members {
   /// The primary key only indexes profile_id, so "who else is in my group" would
   /// sequential-scan without this. Same reasoning as profile_hobbies.hobby_id.
   @@index([group_id])
+  @@schema("public")
+}
+
+/// A two-player turn-based game (Tic-Tac-Toe, Connect Four, ...) attached to a Stream
+/// channel. state is opaque JSON - each game's own logic (components/chat/games/) is
+/// the only code that reads or writes its shape. game_type and status are both
+/// CHECK-constrained in the migration since Prisma can't model an enum-like string here
+/// without a real Postgres enum, and a real enum would need its own migration every
+/// time a game is added anyway.
+///
+/// A group chat can have several of these in_progress at once (different pairs playing
+/// different games) - what the migration's partial unique index actually blocks is the
+/// SAME pair running two games at a time, not the whole channel.
+model game_sessions {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_cid       String
+  game_type         String
+  player_one_id     String   @db.Uuid
+  player_two_id     String   @db.Uuid
+  /// The game_invite chat message (GameControllerBar.tsx/GameInviteCard.tsx) this
+  /// session was claimed from, if it started that way rather than an immediate 1:1
+  /// start. A plain @unique, not partial - Postgres already treats every NULL as
+  /// distinct, so any number of non-invite (NULL) sessions coexist fine, while this is
+  /// what actually makes "first join wins" atomic: two people joining the same invite
+  /// race to set the SAME non-null value here, and only one create() can win it.
+  invite_message_id String?  @unique
+  state             Json
+  status            String   @default("in_progress")
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  player_one profiles @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
+  player_two profiles @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
+
+  @@index([channel_cid])
+  @@index([player_two_id])
   @@schema("public")
 }
 

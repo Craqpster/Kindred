@@ -9,13 +9,9 @@ CREATE TABLE "game_sessions" (
     "status" TEXT NOT NULL DEFAULT 'in_progress',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
-    "invite_message_id" TEXT,
 
     CONSTRAINT "game_sessions_pkey" PRIMARY KEY ("id")
 );
-
--- CreateIndex
-CREATE UNIQUE INDEX "game_sessions_invite_message_id_key" ON "game_sessions"("invite_message_id");
 
 -- CreateIndex
 CREATE INDEX "game_sessions_channel_cid_idx" ON "game_sessions"("channel_cid");
@@ -30,18 +26,24 @@ ALTER TABLE "game_sessions" ADD CONSTRAINT "game_sessions_player_one_id_fkey" FO
 ALTER TABLE "game_sessions" ADD CONSTRAINT "game_sessions_player_two_id_fkey" FOREIGN KEY ("player_two_id") REFERENCES "profiles"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
--- Hand-added below (Prisma models none of these):
+-- Hand-added below (Prisma models neither):
 
--- Prisma cannot express CHECK constraints, so the allowed values live here and are
--- documented in schema.prisma alongside the model. Same arrangement as connections.status
--- and profiles.ease_in.
-ALTER TABLE "game_sessions" ADD CONSTRAINT "game_sessions_game_type_check"
+-- CheckConstraint: game_type is a closed set. A future third game needs its own
+-- migration to DROP + re-add this with the new value included.
+ALTER TABLE "game_sessions"
+    ADD CONSTRAINT "game_sessions_game_type_check"
     CHECK ("game_type" IN ('tic-tac-toe', 'connect-four'));
 
-ALTER TABLE "game_sessions" ADD CONSTRAINT "game_sessions_status_check"
+-- CheckConstraint: status is a closed set.
+ALTER TABLE "game_sessions"
+    ADD CONSTRAINT "game_sessions_status_check"
     CHECK ("status" IN ('in_progress', 'completed', 'abandoned'));
+
+-- Only one active game per channel at a time, enforced at the DB level.
+CREATE UNIQUE INDEX "game_sessions_one_active_per_channel"
+    ON "game_sessions" ("channel_cid") WHERE ("status" = 'in_progress');
 
 -- RowLevelSecurity: enabled with no policies = deny by default. Only Prisma touches this
 -- table, and it connects as the owner and bypasses RLS; anon/authenticated (PostgREST)
--- get nothing. Same posture as channel_xp/prompt_awards/connections.
+-- get nothing. Same posture as the connections table.
 ALTER TABLE "game_sessions" ENABLE ROW LEVEL SECURITY;

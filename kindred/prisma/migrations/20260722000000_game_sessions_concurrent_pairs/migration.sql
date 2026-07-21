@@ -1,18 +1,26 @@
--- One live game per pair of players per channel.
---
--- Hand-written: this is a PARTIAL unique index over EXPRESSIONS, and Prisma can model
--- neither. LEAST/GREATEST normalise the pair so that (a,b) and (b,a) collide - without
--- them the same two people could start two games by swapping who is player one. The
--- WHERE clause is what makes it "one ACTIVE game": completed and abandoned rows fall out
--- of the index, so a finished game never blocks a rematch.
---
--- Enforced in the database rather than in application code because the race it closes is
--- two players tapping "new game" at the same instant, which no amount of checking-then-
--- inserting can prevent from the app side.
+-- AlterTable
+ALTER TABLE "game_sessions" ADD COLUMN "invite_message_id" TEXT;
+
+-- CreateIndex
+-- Plain unique, not partial: Postgres treats every NULL as distinct, so immediate 1:1
+-- starts (which have no invite message, i.e. NULL here) never collide with each other.
+-- This is what makes "first join wins" on a game_invite message atomic - two people
+-- joining the same invite both try to set THIS SAME value, and only one create() wins.
+CREATE UNIQUE INDEX "game_sessions_invite_message_id_key" ON "game_sessions"("invite_message_id");
+
+
+-- Hand-added below (Prisma models neither):
+
+-- A group chat can now run several games at once - what stays blocked is the SAME pair
+-- (regardless of who's player_one vs player_two) running two games in the same channel
+-- at the same time. LEAST/GREATEST normalize the pair so it doesn't matter which side
+-- is which.
+DROP INDEX "game_sessions_one_active_per_channel";
+
 CREATE UNIQUE INDEX "game_sessions_one_active_per_pair"
     ON "game_sessions" (
         "channel_cid",
         LEAST("player_one_id", "player_two_id"),
         GREATEST("player_one_id", "player_two_id")
     )
-    WHERE "status" = 'in_progress';
+    WHERE ("status" = 'in_progress');
