@@ -21,6 +21,21 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
 
     const unread = useUnreadCount(channel);
 
+    // setActiveChannel drives the pane immediately; the URL is updated alongside it so a
+    // refresh reopens the same conversation and back/forward behave.
+    //
+    // Native history rather than router.replace: router.replace re-runs the page's server
+    // component (and its Stream query) and remounts the list on every click. Next's App
+    // Router supports the native methods for exactly this shallow case.
+    //
+    // replaceState, not pushState — otherwise every row you glance at becomes its own
+    // back-button stop.
+    const open = (target: Channel) => {
+        setActiveChannel(target);
+        const params = new URLSearchParams({ c: target.id ?? "", type: target.type });
+        window.history.replaceState(null, "", `/chats?${params}`);
+    };
+
     const isGroup = channel.type === "team";
     const selected = activeChannel?.cid === channel.cid;
 
@@ -38,7 +53,7 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
     return (
         <button
             type="button"
-            onClick={() => setActiveChannel(channel)}
+            onClick={() => open(channel)}
             aria-current={selected ? "true" : undefined}
             className={`flex w-full cursor-pointer items-center gap-3 rounded-card p-3 text-left transition-colors ${
                 selected ? "bg-surface" : "hover:bg-surface/60"
