@@ -47,6 +47,8 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
     const [answering, setAnswering] = useState(false);
     const [draft, setDraft] = useState("");
     const [sending, setSending] = useState(false);
+    // Whether the answer box has finished opening; see the region's onAnimationComplete.
+    const [boxSettled, setBoxSettled] = useState(false);
 
     const reduceMotion = useReducedMotion();
     const regionId = useId();
@@ -104,7 +106,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
             });
 
             setDraft("");
-            setAnswering(false);
+            closeAnswerBox();
 
             if (response?.message?.id) {
                 await finalizeSend({
@@ -119,8 +121,20 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
         }
     };
 
-    const cancel = () => {
+    // Every open and every close goes through these two, so the clip is always back in
+    // place before a height animation runs and only lifted once one has finished.
+    const openAnswerBox = () => {
+        setBoxSettled(false);
+        setAnswering(true);
+    };
+
+    const closeAnswerBox = () => {
+        setBoxSettled(false);
         setAnswering(false);
+    };
+
+    const cancel = () => {
+        closeAnswerBox();
         setDraft("");
     };
 
@@ -167,7 +181,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                         {!youAnswered && !answering && (
                             <button
                                 type="button"
-                                onClick={() => setAnswering(true)}
+                                onClick={openAnswerBox}
                                 aria-expanded={answering}
                                 // Only while open: the region is unmounted when collapsed,
                                 // and pointing aria-controls at an id that is not in the
@@ -280,7 +294,14 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                 animate={{ opacity: 1, height: "auto" }}
                                 exit={{ opacity: 0, height: 0 }}
                                 transition={transition}
-                                className="overflow-hidden"
+                                // The clip is only needed WHILE the height animates - kept
+                                // afterwards it shaves the textarea's focus ring, which
+                                // draws outside the element's box. Dropped once the open
+                                // animation settles and restored the moment a collapse
+                                // begins, so the ring is whole for the entire time the box
+                                // is actually usable.
+                                onAnimationComplete={() => setBoxSettled(true)}
+                                className={boxSettled ? undefined : "overflow-hidden"}
                             >
                                 <div className="pt-3">
                                     <textarea
