@@ -224,6 +224,31 @@ body {
     --str-chat__chat-text-incoming: var(--color-surface);
 }
 
+/* The SAME illegibility, on a second element the rule above cannot reach.
+   The quote shown above the composer while you are replying is not inside a message at
+   all — its chain is composer-container > composer > compose-area > previews >
+   quoted-message-preview--own — so `.str-chat__message--me` is not an ancestor and the
+   in-bubble fix never applies. There, --own wins on source order and paints
+   --str-chat__chat-bg-outgoing (accent-600).
+
+   Two separate causes to fix, not one:
+   - the body text reads the same direction-blind --str-chat__chat-text-incoming, so the
+     token is redefined here too;
+   - the AUTHOR line has no colour rule anywhere and simply inherits --str-chat__text-primary
+     from .str-chat, so it needs a real `color` to inherit from instead. */
+.str-chat .str-chat__quoted-message-preview--own {
+    --str-chat__chat-text-incoming: var(--color-surface);
+    color: var(--color-surface);
+}
+
+/* The 2px rule down the left of a quote. Its own-message variant resolves to Stream's
+   --brand-400 (#4586ff), a blue from a palette this app does not use, sitting on our
+   navy. The class is shared by the composer preview and the in-bubble copy, so hiding it
+   covers both. */
+.str-chat .str-chat__quoted-message-indicator {
+    display: none;
+}
+
 /* The line above the composer is on the CONTAINER, not on the compose area — the rounded
    outline around the input itself is a separate, wanted border and stays.
    border-top has no variable of its own, and its colour token is shared with that outline
