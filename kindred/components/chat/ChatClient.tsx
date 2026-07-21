@@ -294,7 +294,7 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
     if (message?.messageType === "icebreaker_prompt") {
         return (
             <div className="my-2 mx-auto max-w-sm rounded-2xl border border-metro-blue/20 bg-mist px-4 py-3 text-center">
-                <p className="mb-1 text-xs font-medium text-metro-blue">✨ Icebreaker</p>
+                <p className="mb-1 text-xs font-medium text-metro-blue">Icebreaker</p>
                 <p className="mb-2 text-sm text-star-sapphire">{message.text}</p>
                 <button
                     type="button"
