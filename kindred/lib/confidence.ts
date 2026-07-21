@@ -131,11 +131,14 @@ export async function awardConfidenceForMessage(
             senderTally: activity.qualifying_messages,
         });
 
-        const amount = messageXp + (bonus?.perMember ?? 0);
+        // The sender's personal total takes both halves; the CHANNEL's total takes only
+        // the message half, because claimDailyBonus has already added the bonus to it.
+        // The chat is one shared number - the bonus lands on it once, not once per member.
+        const senderXp = messageXp + (bonus?.perMember ?? 0);
 
         const profile = await tx.profiles.update({
             where: { id: userId },
-            data: { confidence_points: { increment: amount } },
+            data: { confidence_points: { increment: senderXp } },
             select: { confidence_points: true, confidence_level: true },
         });
 
@@ -163,13 +166,13 @@ export async function awardConfidenceForMessage(
 
         const channel = await tx.channel_xp.upsert({
             where: { channel_cid: channelCid },
-            create: { channel_cid: channelCid, xp: amount },
-            update: { xp: { increment: amount } },
+            create: { channel_cid: channelCid, xp: messageXp },
+            update: { xp: { increment: messageXp } },
             select: { xp: true },
         });
 
         return {
-            xpAwarded: amount,
+            xpAwarded: senderXp,
             messageXp,
             bonusXp: bonus?.perMember ?? 0,
             dailyBonusEarned: !!bonus,

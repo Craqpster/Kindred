@@ -104,10 +104,23 @@ export function useModeratedSend() {
                 title: `+${total} XP`,
                 count: total,
                 mergeKey: "xp",
-                merge: (previous) => xpToast((previous.count ?? 0) + award.xpAwarded),
+                merge: (previous) => xpToast((previous.count ?? 0) + award.messageXp),
             });
 
-            showToast(xpToast(award.xpAwarded));
+            // A message past the daily cap still counts toward the mutual bonus, so it
+            // returns an award - just one worth nothing. Announcing "+0 XP" would be
+            // worse than silence, so the amount is what gates the toast, not the award.
+            if (award.messageXp > 0) showToast(xpToast(award.messageXp));
+
+            // Its own toast, not folded into the running XP total: it is the day's payoff
+            // and it took both people, so burying it in a "+11 XP" tally undersells it.
+            if (award.dailyBonusEarned) {
+                showToast({
+                    kind: "milestone",
+                    title: `+${award.bonusXp} XP · Daily bonus`,
+                    body: "You both showed up today.",
+                });
+            }
 
             // The award tells us the new channel total and what it just added, so the
             // level before this message is simply the difference - no extra round trip.
