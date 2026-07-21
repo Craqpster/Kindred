@@ -2,17 +2,15 @@
 // decides the letters and the colour, so the same person always looks the same.
 //
 // This is the placeholder while real avatars are deferred. When avatar_id gains an
-// image, this stays as the fallback for anyone who hasn't picked one.
+// image, this stays as the fallback for anyone who hasn't picked one
 
-// Palette tints from the brand colours (globals.css @theme). Text is white on all of
-// them, so every combination stays legible.
 const COLORS = [
-    "#153D74", // star sapphire
-    "#3F79AF", // metro blue
-    "#689CD5", // iceland
-    "#2B5A8C",
-    "#4C6E9C",
-    "#1F4E82",
+    "#153d74", // star sapphire  — 10.23:1
+    "#24506e", // deep teal-blue —  8.16:1
+    "#1f4e82", // deep           —  8.08:1
+    "#2b5a8c", // mid            —  6.78:1
+    "#35648f", // slate blue     —  5.92:1
+    "#4c6e9c", // light          —  4.97:1
 ];
 
 function initialsOf(name: string): string {
@@ -46,12 +44,15 @@ export default function Avatar({
             style={{
                 width: size,
                 height: size,
-                backgroundColor: colorOf(name),
-                fontSize: size * 0.4,
+                fontSize: Math.round(size * 0.4),
             }}
-            className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white select-none ${className}`}
+            className={`relative inline-flex shrink-0 items-center justify-center font-sans leading-none font-semibold text-surface select-none ${className}`}
         >
-            {initialsOf(name)}
+            <span
+                className="absolute inset-0 rounded-full"
+                style={{ backgroundColor: colorOf(name) }}
+            />
+            <span className="relative">{initialsOf(name)}</span>
         </span>
     );
 }

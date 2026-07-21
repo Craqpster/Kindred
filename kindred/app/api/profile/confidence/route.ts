@@ -23,7 +23,7 @@ export async function PATCH(req: Request) {
   } catch (error) {
     console.error("Confidence update error:", error);
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: (error as z.ZodError<any>).issues }, { status: 400 });
+      return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

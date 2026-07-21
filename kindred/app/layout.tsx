@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
-import { Lora, Poppins } from "next/font/google";
+import { Karla, Montserrat, Poppins } from "next/font/google";
 import "./globals.css";
 import "./fonts.css";
 
-const lora = Lora({
+const montserrat = Montserrat({
   subsets: ["latin"],
-  variable: "--font-lora",
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-montserrat",
+});
+
+const karla = Karla({
+  subsets: ["latin"],
+  variable: "--font-karla",
 });
 
 const poppins = Poppins({
@@ -22,7 +26,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${lora.variable} ${poppins.variable} h-full antialiased`}>
+    <html
+      lang="en"
+      className={`${montserrat.variable} ${karla.variable} ${poppins.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col font-[var(--font-poppins)] bg-chantilly text-ink">
         {children}
       </body>

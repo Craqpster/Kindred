@@ -1,10 +1,14 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState, useRef } from "react";
-import confetti from "canvas-confetti";
+import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import type { ProfileWithRelations } from "@/lib/dal";
 
-export function BadgesSection({ badges }: { badges?: any[] }) {
+export function BadgesSection({
+  profileBadges,
+}: {
+  profileBadges: ProfileWithRelations["profile_badges"];
+}) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Unlock hints with emojis to show how to get each badge
@@ -40,6 +44,10 @@ export function BadgesSection({ badges }: { badges?: any[] }) {
     "Friend Maker",
   ];
 
+  const unlockedNames = new Set(
+    (profileBadges || []).map((pb) => pb?.badge?.name).filter(Boolean) as string[]
+  );
+
   return (
     <div>
       <div className="mb-4">
@@ -68,14 +76,10 @@ export function BadgesSection({ badges }: { badges?: any[] }) {
         <div className="pl-7 animate-in slide-in-from-top-2 fade-in duration-200">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {order.map((name) => {
-              const b =
-                (badges || []).find((x: any) => x.name === name) || {
-                  name,
-                  description: "",
-                  icon: "",
-                };
+              const found = (profileBadges || []).find((pb) => pb?.badge?.name === name);
+              const b = found?.badge || { name, description: "", icon: "" };
 
-              const unlocked = !!b.unlocked;
+              const unlocked = unlockedNames.has(name);
 
               const classes = `flex flex-col items-center justify-center text-center p-4 rounded-2xl border transition-all duration-300 ${
                 unlocked ? "opacity-100" : "opacity-50 grayscale cursor-default"
@@ -88,9 +92,7 @@ export function BadgesSection({ badges }: { badges?: any[] }) {
                 <div key={name} className={classes} title={title}>
                   {b.icon && <div className="text-3xl mb-2">{b.icon}</div>}
                   <h3 className="font-semibold text-sm text-star-sapphire">{b.name}</h3>
-                  <p className="text-xs text-gray-600 mt-2">
-                    {unlocked ? b.description || unlockInfo : unlockInfo}
-                  </p>
+                  <p className="text-xs text-gray-600 mt-2">{unlocked ? b.description || unlockInfo : unlockInfo}</p>
                 </div>
               );
             })}
