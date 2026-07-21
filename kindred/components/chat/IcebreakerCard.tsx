@@ -7,6 +7,7 @@ import type { LocalMessage } from "stream-chat";
 import { useChannelStateContext, useChatContext } from "stream-chat-react";
 
 import Avatar from "@/components/ui/Avatar";
+import AvatarGroup from "@/components/chat/AvatarGroup";
 import { useModeratedSend } from "@/components/chat/useModeratedSend";
 
 /// An icebreaker prompt and everything that belongs to it: the question, whoever has
@@ -48,6 +49,7 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
         (m) => m.messageType === "prompt_response" && m.promptId === message.id,
     );
     const youAnswered = answers.some((a) => a.user?.id === client.userID);
+    const answeredNames = answers.map((a) => a.user?.name ?? a.user?.id ?? "?");
 
     // The bot posts prompts but is never added as a member, so this is exactly the
     // humans - no filtering needed beyond it.
@@ -106,9 +108,22 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
 
                 <p className="mt-1.5 text-body font-medium text-ink-900">{message.text}</p>
 
-                {isGroup && (
-                    <p className="mt-2 text-meta text-ink-600">
-                        {answers.length} of {memberCount} answered
+                {(isGroup || answers.length > 0) && (
+                    <p className="mt-2 flex items-center gap-2 text-meta text-ink-600">
+                        {isGroup && (
+                            <>
+                                <AvatarGroup names={answeredNames} size={20} />
+                                <span>
+                                    {answers.length} of {memberCount} answered
+                                </span>
+                            </>
+                        )}
+                        {!isGroup && !youAnswered && answers.length > 0 && (
+                            <span>{answers[0].user?.name ?? "They"} answered</span>
+                        )}
+                        {!youAnswered && answers.length > 0 && (
+                            <span className="text-ink-600">· answer to reveal</span>
+                        )}
                     </p>
                 )}
 
@@ -128,15 +143,39 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                                         name={answer.user?.name ?? answer.user?.id ?? "?"}
                                         size={24}
                                     />
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <p className="text-label text-ink-600">
                                             {answer.user?.id === client.userID
                                                 ? "You"
                                                 : (answer.user?.name ?? answer.user?.id)}
                                         </p>
-                                        <p className="text-meta wrap-break-word text-ink-900">
-                                            {answer.text}
-                                        </p>
+
+                                        {youAnswered ? (
+                                            <p className="text-meta wrap-break-word text-ink-900">
+                                                {answer.text}
+                                            </p>
+                                        ) : (
+                                            // The text is withheld from the markup, not
+                                            // covered with a blur: a CSS filter is undone
+                                            // by opening devtools, so it would be a
+                                            // decoration pretending to be a mechanism.
+                                            // Leaving it out is also the honest thing for
+                                            // a screen reader, which a blur does nothing
+                                            // about either way.
+                                            <span className="mt-1 flex flex-col gap-1">
+                                                <span className="sr-only">
+                                                    Hidden until you answer
+                                                </span>
+                                                <span
+                                                    aria-hidden
+                                                    className="h-2 w-full rounded-full bg-bone-200"
+                                                />
+                                                <span
+                                                    aria-hidden
+                                                    className="h-2 w-2/3 rounded-full bg-bone-200"
+                                                />
+                                            </span>
+                                        )}
                                     </div>
                                 </motion.li>
                             ))}
