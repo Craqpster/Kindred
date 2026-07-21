@@ -8,12 +8,16 @@ import {
     ChannelList,
     MessageComposer,
     MessageList,
+    MessageUI,
     Thread,
     Window,
     useChannelActionContext,
     useChannelStateContext,
+    useMessageContext,
 } from "stream-chat-react";
+import { Lightbulb } from "lucide-react";
 import { getChatLevel } from "@/lib/chat-level";
+import { ActivePromptProvider, useActivePrompt } from "@/components/chat/ActivePromptContext";
 
 // The Stream connection itself now lives in ChatConnectionProvider, wrapping the whole
 // (app) shell - by the time this renders, <Chat> is already an ancestor from the
@@ -50,14 +54,18 @@ export default function ChatClient({
             />
             <div className="flex flex-1 min-w-0">
                 <Channel>
-                    <Window>
-                        <ChannelHeader />
-                        <ChatXpBadge />
-                        <MessageList />
-                        <PrefillGreeting targetId={greetChannelId} />
-                        <ModeratedMessageComposer />
-                    </Window>
-                    <Thread />
+                    <ActivePromptProvider>
+                        <Window>
+                            <ChannelHeader />
+                            <ChatXpBadge />
+                            <AutoPromptTrigger />
+                            <MessageList Message={ChatMessage} />
+                            <PrefillGreeting targetId={greetChannelId} />
+                            <PromptButton />
+                            <ModeratedMessageComposer />
+                        </Window>
+                        <Thread />
+                    </ActivePromptProvider>
                 </Channel>
             </div>
         </div>
@@ -86,6 +94,118 @@ function PrefillGreeting({ targetId }: { targetId?: string }) {
     }, [targetId, channel]);
 
     return null;
+}
+
+// How long a chat can sit with no new messages before the next person to open it gets
+// offered a fresh icebreaker. Arbitrary but generous - this is a nudge, not a nag.
+const QUIET_THRESHOLD_MS = 48 * 60 * 60 * 1000;
+
+// Watches this channel's most recent message and asks the server for a fresh icebreaker
+// prompt if the chat looks abandoned. Guards against re-triggering on every render (via
+// firedRef) and against stacking prompts if the last message is already one (a second
+// participant's tab could otherwise fire this around the same time).
+function AutoPromptTrigger() {
+    const { channel, messages } = useChannelStateContext();
+    const firedRef = useRef(false);
+
+    useEffect(() => {
+        firedRef.current = false;
+    }, [channel.cid]);
+
+    useEffect(() => {
+        if (firedRef.current || !messages) return;
+
+        const lastMessage = messages.at(-1);
+        const isQuiet =
+            !lastMessage?.created_at ||
+            Date.now() - new Date(lastMessage.created_at).getTime() > QUIET_THRESHOLD_MS;
+        const alreadyPrompted = lastMessage?.messageType === "icebreaker_prompt";
+
+        if (isQuiet && !alreadyPrompted) {
+            firedRef.current = true;
+            fetch("/api/chat-prompts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ channelCid: channel.cid }),
+            }).catch(() => {});
+        }
+    }, [channel, messages]);
+
+    return null;
+}
+
+// The on-demand version of AutoPromptTrigger - drops a new random icebreaker into the
+// chat right now, regardless of how recently someone last spoke.
+function PromptButton() {
+    const { channel } = useChannelStateContext();
+    const [loading, setLoading] = useState(false);
+
+    const handleClick = async () => {
+        setLoading(true);
+        try {
+            await fetch("/api/chat-prompts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ channelCid: channel.cid }),
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={handleClick}
+            disabled={loading}
+            title="Get an icebreaker prompt"
+            className="flex items-center gap-1.5 border-t border-metro-blue/20 bg-mist px-4 py-1.5 text-xs font-medium text-metro-blue hover:bg-iceland/20 disabled:opacity-50"
+        >
+            <Lightbulb className="h-3.5 w-3.5" />
+            {loading ? "Sending..." : "Send an icebreaker"}
+        </button>
+    );
+}
+
+// Renders an icebreaker prompt as a distinct card with a "Respond" button, and a reply
+// to one with a small badge - everything else falls through to Stream's own MessageUI
+// unchanged. Message text/props come in as props here, per stream-chat-react's
+// Message={...} convention (see MessageList below), not from a hook.
+function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
+    // MessageUI itself reads from context, not props - message only shows up on props
+    // if a caller explicitly overrides it, which MessageList's Message={ChatMessage}
+    // wiring doesn't do. useMessageContext() is the actual source of truth here.
+    const { message } = useMessageContext("ChatMessage");
+    const { setActivePrompt } = useActivePrompt();
+
+    if (message?.messageType === "icebreaker_prompt") {
+        return (
+            <div className="my-2 mx-auto max-w-sm rounded-2xl border border-metro-blue/20 bg-mist px-4 py-3 text-center">
+                <p className="mb-1 text-xs font-medium text-metro-blue">✨ Icebreaker</p>
+                <p className="mb-2 text-sm text-star-sapphire">{message.text}</p>
+                <button
+                    type="button"
+                    onClick={() => setActivePrompt({ id: message.id, text: message.text ?? "" })}
+                    className="rounded-full bg-metro-blue px-3 py-1 text-xs font-medium text-white hover:bg-metro-blue/90"
+                >
+                    Respond
+                </button>
+            </div>
+        );
+    }
+
+    if (message?.messageType === "prompt_response") {
+        return (
+            <div>
+                <p className="mb-0.5 text-center text-[10px] font-medium text-metro-blue">
+                    ✨ Prompt response — XP earned
+                </p>
+                <MessageUI {...props} />
+            </div>
+        );
+    }
+
+    return <MessageUI {...props} />;
 }
 
 // A single XP total shared by everyone in this chat (not a per-person stat - that's
@@ -152,9 +272,20 @@ function ChatXpBadge() {
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
     const { channel } = useChannelStateContext();
+    const { activePrompt, setActivePrompt } = useActivePrompt();
     const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [showWarning, setShowWarning] = useState(false);
+
+    // Clicking "Respond" on a prompt card sets activePrompt - drop its text into the
+    // composer the same way PrefillGreeting does for a wave, so sending is still a
+    // deliberate action rather than something that happens on click alone.
+    useEffect(() => {
+        if (!activePrompt) return;
+        const { textComposer } = channel.messageComposer;
+        if (!textComposer.textIsEmpty) return;
+        textComposer.setText(activePrompt.text);
+    }, [activePrompt, channel]);
 
     // Ticks the countdown once a cooldown is active, and clears itself once it expires.
     useEffect(() => {
@@ -225,7 +356,16 @@ function ModeratedMessageComposer() {
                 throw new Error("Message blocked by moderation");
             }
 
-            await sendMessage({ localMessage, message, options: sendOptions });
+            // Tag this send as a reply to whatever prompt was active when Send was
+            // pressed - reading activePrompt here (not a stale closure) is why this
+            // callback lists it as a dependency below.
+            const respondingTo = activePrompt;
+            const messageToSend = respondingTo
+                ? { ...message, messageType: "prompt_response" as const, promptId: respondingTo.id }
+                : message;
+
+            await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
+            if (respondingTo) setActivePrompt(null);
 
             // Best-effort, background signal for confidence_level growth - never
             // awaited in a way that could delay or fail the send itself, since the
@@ -234,7 +374,12 @@ function ModeratedMessageComposer() {
                 fetch("/api/confidence", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ channelCid: cid, messageId: localMessage.id, text: message.text }),
+                    body: JSON.stringify({
+                        channelCid: cid,
+                        messageId: localMessage.id,
+                        text: message.text,
+                        isPromptResponse: !!respondingTo,
+                    }),
                 })
                     // Tell ChatXpBadge (both participants') the award has landed and it's
                     // safe to refetch, rather than making it guess how long to wait.
@@ -242,7 +387,7 @@ function ModeratedMessageComposer() {
                     .catch(() => {});
             }
         },
-        [sendMessage, channel],
+        [sendMessage, channel, activePrompt, setActivePrompt],
     );
 
     return (

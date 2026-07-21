@@ -24,13 +24,18 @@ const MIN_MESSAGE_LENGTH = 15;
 /// Silently does nothing if either condition isn't met. This is a background signal,
 /// never something that should surface an error to the sender - callers should not
 /// await this in a way that blocks or fails the actual message send.
+///
+/// `guaranteed` skips both checks above - used for replies to an icebreaker prompt
+/// (ChatClient.tsx), which should always count even if short, since responding to one
+/// at all is the "real effort" signal rather than length or turn-taking.
 export async function awardConfidenceForMessage(
     userId: string,
     channelCid: string,
     messageId: string,
     text: string,
+    guaranteed = false,
 ): Promise<void> {
-    if (!(await isGenuineBackAndForth(channelCid, messageId, userId, text))) return;
+    if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) return;
 
     await prisma.$transaction(async (tx) => {
         const profile = await tx.profiles.update({

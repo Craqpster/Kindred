@@ -12,14 +12,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const { channelCid, messageId, text } = await request.json();
+  const { channelCid, messageId, text, isPromptResponse } = await request.json();
 
   if (!channelCid || !messageId || typeof text !== "string") {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
   try {
-    await awardConfidenceForMessage(user.id, channelCid, messageId, text);
+    await awardConfidenceForMessage(user.id, channelCid, messageId, text, !!isPromptResponse);
   } catch {
     // Best-effort - never surface this to the sender.
   }

@@ -7,8 +7,9 @@ import { z } from "zod";
 
 import { verifySession } from "@/lib/dal";
 import { MEET_VIEW_COOKIE, meetViewSchema } from "@/lib/meet-view";
+import { postIcebreakerPrompt } from "@/lib/prompts";
 import { prisma } from "@/lib/prisma";
-import { startChatRequest } from "@/lib/stream";
+import { startChatRequest, streamServerClient } from "@/lib/stream";
 
 const targetId = z.uuid();
 
@@ -49,7 +50,16 @@ export async function sayHi(formData: FormData) {
     // written, so the card stays on Meet and the wave can be retried. The other order
     // would hide the person with no conversation to show for it. The opposite failure
     // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
-    const cid = await startChatRequest(userId, otherId);
+    const id = await startChatRequest(userId, otherId);
+
+    // Only drop an icebreaker into a genuinely fresh conversation - startChatRequest
+    // reuses the same "distinct" channel if this pair already has one (a retried wave,
+    // say), and re-posting a prompt into an already-started chat would just be noise.
+    const channel = streamServerClient.channel("messaging", id);
+    const { messages } = await channel.query({ messages: { limit: 1 } });
+    if (messages.length === 0) {
+        await postIcebreakerPrompt(channel.cid);
+    }
 
     await prisma.connections.upsert({
         where: { user_id_other_id: { user_id: userId, other_id: otherId } },
@@ -59,5 +69,5 @@ export async function sayHi(formData: FormData) {
 
     revalidatePath("/meet");
 
-    redirect(`/chats?c=${encodeURIComponent(cid)}`);
+    redirect(`/chats?c=${encodeURIComponent(id)}`);
 }

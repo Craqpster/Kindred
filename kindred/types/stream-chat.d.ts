@@ -13,4 +13,14 @@ declare module "stream-chat" {
     interface CustomEventTypes {
         chat_xp_updated: true;
     }
+
+    // Marks a message as an icebreaker prompt card (posted by the Kindred bot user,
+    // see lib/prompts.ts) or as someone's reply to one (tagged client-side in
+    // ChatClient.tsx when sent). ChatClient.tsx's custom Message renderer reads this to
+    // render each kind differently; lib/confidence.ts's /api/confidence caller reads
+    // promptId's presence to guarantee XP even for a short reply.
+    interface CustomMessageData {
+        messageType?: "icebreaker_prompt" | "prompt_response";
+        promptId?: string;
+    }
 }
