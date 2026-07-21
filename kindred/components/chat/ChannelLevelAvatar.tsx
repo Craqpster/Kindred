@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckCircle2 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 // Stream's Event, not the DOM's - the global one shadows it otherwise.
@@ -10,7 +11,7 @@ import GroupNameEditor from "@/components/chat/GroupNameEditor";
 import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
 import Avatar from "@/components/ui/Avatar";
 import { useToast } from "@/components/ui/ToastStack";
-import { getChatLevel, XP_PER_LEVEL_STEP } from "@/lib/chat-level";
+import { getChatLevel } from "@/lib/chat-level";
 import {
     dailyBonusThreshold,
     dailyBonusXp,
@@ -42,15 +43,6 @@ function ringGeometry(size: RingSize) {
 }
 
 /// The channel's chat level, drawn as a progress ring around the header avatar.
-///
-/// Replaces the full-width bar that used to sit under the header. The bar competed with
-/// the header for the same strip of attention and spent a whole row saying something that
-/// is glanceable; a ring reads at a glance and gives the detail up only when asked.
-/// Takes only what it uses. It used to accept ChannelAvatarProps and forward the lot to
-/// Stream's ChannelAvatar, but that rendered a cramped stack of tiny faces in a group;
-/// one deterministic initials avatar sized to the ring reads far better at this size, and
-/// the popover lists everyone by name anyway. displayMembers/imageUrl went with it rather
-/// than lingering as props nothing reads.
 export default function ChannelLevelAvatar({
     ringSize = "default",
     userName,
@@ -148,12 +140,48 @@ export default function ChannelLevelAvatar({
     const progress = xpForNextLevel === 0 ? 0 : xpIntoLevel / xpForNextLevel;
     const remaining = xpForNextLevel - xpIntoLevel;
 
-    const transition = reduceMotion
+    const panelTransition = reduceMotion
         ? { duration: 0 }
         : ({ duration: 0.2, ease: [0.22, 1, 0.36, 1] } as const);
 
-    // Fallback order for the name: explicitly passed userName -> channel name -> "Group"
+    const springTransition = reduceMotion
+        ? { duration: 0 }
+        : { type: "spring", stiffness: 260, damping: 20 };
+
+    const containerVariants = {
+        hidden: {},
+        visible: {
+            transition: {
+                staggerChildren: 0.05,
+            },
+        },
+        exit: {
+            transition: {
+                staggerChildren: 0.04,
+                staggerDirection: -1,
+            },
+        },
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 10, scale: 0.98 },
+        visible: {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            transition: springTransition,
+        },
+        exit: {
+            opacity: 0,
+            y: 10,
+            scale: 0.98,
+            // Uses the same spring as entrance so it doesn't just abruptly vanish
+            transition: springTransition,
+        },
+    };
+
     const displayTitle = userName || channel.data?.name || "Group";
+    const frostedCardClasses = "rounded-card border border-ink-900/8 bg-surface/90 backdrop-blur-xl shadow-card p-4";
 
     return (
         <div ref={containerRef} className="relative">
@@ -191,13 +219,11 @@ export default function ChannelLevelAvatar({
                         strokeDasharray={circumference}
                         initial={false}
                         animate={{ strokeDashoffset: circumference * (1 - progress) }}
-                        transition={transition}
+                        transition={panelTransition}
                         className="stroke-accent-600"
                     />
                 </svg>
 
-                {/* Swapped Stream's ChannelAvatar with your custom Avatar.
-                    It uses the explicit width/height derived from the ring geometry. */}
                 <span className="relative flex items-center justify-center">
                     <Avatar name={displayTitle} size={avatar} />
                 </span>
@@ -206,96 +232,149 @@ export default function ChannelLevelAvatar({
             <AnimatePresence initial={false}>
                 {open && (
                     <motion.div
+                        key="chat-level-popover"
                         id={panelId}
-                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                        transition={transition}
-                        className="absolute top-full left-1/2 z-30 mt-2 w-64 -translate-x-1/2 rounded-card border border-bone-300 bg-surface p-4 text-left shadow-hero"
+                        variants={containerVariants}
+                        initial="hidden"
+                        animate="visible"
+                        exit="exit"
+                        className="absolute top-full left-1/2 z-30 mt-2 flex w-64 -translate-x-1/2 flex-col gap-2 text-left"
                     >
                         {/* Groups only */}
                         {channel.type === "team" && channel.id && (
-                            <div className="mb-3 border-b border-bone-200 pb-3">
+                            <motion.div variants={itemVariants} className={`${frostedCardClasses} !p-3`}>
                                 <GroupNameEditor
                                     channelId={channel.id}
                                     name={channel.data?.name ?? "Group"}
                                 />
-                            </div>
+                            </motion.div>
                         )}
 
-                        <p className="text-label text-ink-600 uppercase">
-                            In this chat · {members.length}
-                        </p>
-                        <ul className="mt-2 flex flex-col gap-2">
-                            {members.map((member) => (
-                                <li key={member.id} className="flex items-center gap-2">
-                                    <Avatar name={member.name} size={22} />
-                                    <span className="truncate text-meta text-ink-900">
-                                        {member.isYou ? "You" : member.name}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
+                        {/* Members Box */}
+                        <motion.div variants={itemVariants} className={frostedCardClasses}>
+                            <p className="text-label text-ink-600 uppercase">
+                                In this chat · {members.length}
+                            </p>
+                            <ul className="mt-2 flex flex-col gap-2">
+                                {members.map((member) => (
+                                    <li key={member.id} className="flex items-center gap-2">
+                                        <Avatar name={member.name} size={22} />
+                                        <span className="truncate text-meta text-ink-900">
+                                            {member.isYou ? "You" : member.name}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </motion.div>
 
-                        <p className="mt-3 border-t border-bone-200 pt-3 text-label text-ink-600 uppercase">
-                            Chat level
-                        </p>
-                        <p className="mt-0.5 text-title text-ink-900">Level {level}</p>
+                        {/* Chat Level Box */}
+                        <motion.div variants={itemVariants} className={frostedCardClasses}>
+                            <p className="text-label text-ink-600 uppercase">
+                                Chat level
+                            </p>
+                            <p className="mt-0.5 text-title text-ink-900">Level {level}</p>
 
-                        <div className="mt-3 h-1.5 w-full rounded-full bg-bone-200">
-                            <div
-                                className="h-1.5 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
-                                style={{ width: `${progress * 100}%` }}
-                            />
-                        </div>
+                            <div className="mt-3 h-1.5 w-full rounded-full bg-bone-200">
+                                <div
+                                    className="h-1.5 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
+                                    style={{ width: `${progress * 100}%` }}
+                                />
+                            </div>
 
-                        <p className="mt-2 text-meta text-ink-600">
-                            {xpIntoLevel}/{xpForNextLevel} XP · {remaining} to go
-                        </p>
+                            <p className="mt-2 text-meta text-ink-600">
+                                {xpIntoLevel}/{xpForNextLevel} XP · {remaining} to go
+                            </p>
+                        </motion.div>
 
-                        <p className="mt-3 border-t border-bone-200 pt-3 text-label text-ink-600 uppercase">
-                            How to earn
-                        </p>
-                        <ul className="mt-1.5 flex flex-col gap-1 text-meta text-ink-600">
-                            <li>
-                                +{XP_PER_MESSAGE} a real reply, up to {DAILY_MESSAGE_XP_CAP} a
-                                day
-                            </li>
-                            <li>+{XP_PER_PROMPT_ANSWER} answering an icebreaker</li>
-                            <li>
-                                +{dailyBonusXp(level)} when you all send {bonusThreshold} today
-                            </li>
-                        </ul>
-
-                        <div className="mt-3 rounded-xl bg-bone-100 px-3 py-2">
-                            {bonusEarnedToday ? (
-                                <p className="text-meta text-ink-900">
-                                    Daily bonus earned · see you tomorrow
-                                </p>
-                            ) : (
-                                <>
-                                    <p className="text-meta text-ink-900">
-                                        {Math.min(messagesToday, bonusThreshold)}/
-                                        {bonusThreshold} messages today
-                                    </p>
-                                    <div className="mt-1.5 h-1 w-full rounded-full bg-bone-200">
-                                        <div
-                                            className="h-1 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
-                                            style={{
-                                                width: `${Math.min(1, messagesToday / bonusThreshold) * 100}%`,
-                                            }}
-                                        />
+                        {/* Daily Tasks Box */}
+                        <motion.div variants={itemVariants} className={frostedCardClasses}>
+                            <p className="mb-3 text-label text-ink-600 uppercase">
+                                Daily Tasks
+                            </p>
+                            
+                            <div className="flex flex-col gap-4">
+                                {/* Task: Max out daily messages */}
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2
+                                        size={18}
+                                        className={`mt-0.5 shrink-0 ${
+                                            messagesToday >= DAILY_MESSAGE_XP_CAP
+                                                ? "fill-accent-600 text-surface"
+                                                : "text-bone-300"
+                                        }`}
+                                    />
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="text-meta text-ink-900">
+                                            Max out daily messages
+                                        </span>
+                                        <div className="mt-0.5 text-label">
+                                            <span className="font-semibold text-ink-900">
+                                                +{XP_PER_MESSAGE} XP
+                                            </span>
+                                            <span className="ml-1 text-ink-600">
+                                                (up to {DAILY_MESSAGE_XP_CAP} a day)
+                                            </span>
+                                        </div>
                                     </div>
-                                    <p className="mt-1 text-label text-ink-600">
-                                        Everyone here has to reach it
-                                    </p>
-                                </>
-                            )}
-                        </div>
+                                </div>
 
-                        <p className="mt-3 text-label text-ink-600">
-                            Each level costs {XP_PER_LEVEL_STEP} XP more than the last.
-                        </p>
+                                {/* Task: Answer an icebreaker (assuming ongoing/untracked for now) */}
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2
+                                        size={18}
+                                        className="mt-0.5 shrink-0 text-bone-300"
+                                    />
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="text-meta text-ink-900">
+                                            Answer an icebreaker
+                                        </span>
+                                        <div className="mt-0.5 text-label">
+                                            <span className="font-semibold text-ink-900">
+                                                +{XP_PER_PROMPT_ANSWER} XP
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Task: Group Bonus */}
+                                <div className="flex items-start gap-2.5">
+                                    <CheckCircle2
+                                        size={18}
+                                        className={`mt-0.5 shrink-0 ${
+                                            bonusEarnedToday
+                                                ? "fill-accent-600 text-surface"
+                                                : "text-bone-300"
+                                        }`}
+                                    />
+                                    <div className="flex min-w-0 w-full flex-col">
+                                        <span className="text-meta text-ink-900">
+                                            Everyone sends {bonusThreshold} messages
+                                        </span>
+                                        <div className="mt-0.5 text-label">
+                                            <span className="font-semibold text-ink-900">
+                                                +{dailyBonusXp(level)} XP
+                                            </span>
+                                        </div>
+                                        
+                                        {!bonusEarnedToday && (
+                                            <div className="mt-2 flex items-center gap-2">
+                                                <div className="h-1.5 flex-1 rounded-full bg-bone-200/50">
+                                                    <div
+                                                        className="h-1.5 rounded-full bg-accent-600 transition-[width] duration-250 ease-smooth"
+                                                        style={{
+                                                            width: `${Math.min(1, messagesToday / bonusThreshold) * 100}%`,
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="tabular-nums text-label text-ink-600">
+                                                    {Math.min(messagesToday, bonusThreshold)}/{bonusThreshold}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
