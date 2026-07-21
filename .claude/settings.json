@@ -24,7 +24,8 @@
       "Bash(awk -F: '$0 ~ /ChatXpBadge/ {found=$1} found && $1>found {print \"ChatXpBadge spans lines \"found\" to \"$1; exit}')",
       "Bash(git reset *)",
       "Bash(git diff *)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "Bash(git apply *)"
     ]
   }
 }

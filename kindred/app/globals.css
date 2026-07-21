@@ -170,6 +170,16 @@ body {
        --str-chat__background-core-surface-card, so moving it would drag card backgrounds
        along with the dividers. */
     --str-chat__background-core-surface-subtle: var(--color-bone-200);
+
+    /* What a jumped-to message flashes. Stream's default is yellow-50 (#fef9da), which
+       belongs to no part of this palette and reads as a browser find-in-page hit rather
+       than "here is the message you asked for".
+
+       One token, three surfaces: .str-chat__message--highlighted (which is also what the
+       "also sent in channel" link produces - that button has no highlight styling of its
+       own, it just triggers a jump), the pinned-message backdrop, and highlighted
+       thread-list items. */
+    --str-chat__background-core-highlight: var(--color-accent-50);
 }
 
 /* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
