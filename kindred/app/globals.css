@@ -227,9 +227,38 @@ body {
    it off every other input and button in the app. Together: ~83px down to ~58px. */
 .str-chat .str-chat__message-composer-container.str-chat__message-composer-container {
     border-top: none;
-    --str-chat__message-composer-padding: var(--str-chat__spacing-xs);
+
+    /* Asymmetric on purpose. The single --str-chat__message-composer-padding token pads
+       all four sides equally, and once it was small enough to give a slim bar the composer
+       sat almost flush against the bottom of the window. More room below than above lets
+       the bar sit ON the surface rather than fall off it. */
+    padding: var(--str-chat__spacing-xs) var(--str-chat__spacing-md)
+        var(--str-chat__spacing-md);
 }
 
 .str-chat .str-chat__message-composer-controls.str-chat__message-composer-controls {
     --str-chat__spacing-sm: var(--str-chat__spacing-xs);
+}
+
+/* The input's own type, which was still on Stream's font stack and scale while every
+   other surface in the app is on ours. --text-body is the same token the message bubbles
+   and card copy use, so the thing you type now matches the thing it becomes.
+
+   Doubled class for specificity: Stream's rule is (0,3,0). */
+.str-chat .str-chat__textarea.str-chat__textarea textarea {
+    font-family: var(--font-poppins), sans-serif;
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+}
+
+/* Stream fixes both action rows at 26px, which is shorter than the buttons they hold, so
+   the send circle and the "+" overflowed their own row and sat off-centre against the
+   text. 32px matches KindredSendButton's size-8 and lets align-items do its job. */
+.str-chat
+    .str-chat__message-composer-controls
+    .str-chat__message-composer__actions.str-chat__message-composer__actions,
+.str-chat
+    .str-chat__message-composer-controls
+    .str-chat__message-composer__additional-actions.str-chat__message-composer__additional-actions {
+    height: 32px;
 }

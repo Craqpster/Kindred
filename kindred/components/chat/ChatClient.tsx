@@ -168,9 +168,12 @@ function KindredSendButton({ sendMessage, ...rest }: SendButtonProps) {
             disabled={!canSend}
             onClick={sendMessage}
             {...rest}
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+            // size-8, down from size-9: the composer bar is slimmer now, and a 36px circle
+            // stood taller than the 26px control row it sits in, so it read as bolted on
+            // rather than part of the bar.
+            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
         >
-            <SendHorizontal size={18} strokeWidth={1.5} aria-hidden />
+            <SendHorizontal size={16} strokeWidth={1.5} aria-hidden />
         </button>
     );
 }
