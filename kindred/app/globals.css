@@ -97,9 +97,24 @@ body {
    On .str-chat itself, not a wrapper — Stream sets these tokens on that element, and a
    value declared on an element beats one inherited from an ancestor. Same reason as the
    .str-chat__channel rule below. */
-.str-chat {
+/* The doubled class is load-bearing, not a typo.
+
+   Stream declares these same tokens on a bare `.str-chat`, and its stylesheet is imported
+   inside ChatConnectionProvider — a client component deep in the tree — while globals.css
+   comes from the root layout and gets hoisted to the top of the module graph. Stream's chunk
+   is therefore emitted LAST, so at equal specificity (0,1,0) it wins on source order and a
+   plain `.str-chat` block here does nothing. `.str-chat.str-chat` is (0,2,0) and wins
+   regardless of how Next orders the chunks.
+
+   The giveaway when this was wrong: --composer-bg applied and the others didn't. That is the
+   one token Stream reads but never declares, so it had nothing to lose to.
+
+   --str-chat__chrome-0 feeds --str-chat__background-core-app (the channel pane, message list
+   and empty state) plus all four elevation levels, so it warms the panel and header at once.
+   --composer-bg has to be DEFINED rather than overridden: Stream reads it twice and declares
+   it nowhere, so it otherwise resolves to nothing and the composer renders transparent. */
+.str-chat.str-chat {
     --str-chat__chrome-0: var(--color-bone-100);
-    --str-chat__chat-bg-incoming: var(--color-bone-200);
     --composer-bg: var(--color-bone-100);
 }
 
