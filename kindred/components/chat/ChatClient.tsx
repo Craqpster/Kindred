@@ -294,7 +294,6 @@ function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
 // not the component that renders <Channel> itself.
 function ModeratedMessageComposer() {
     const { sendMessage } = useChannelActionContext();
-    const { messages } = useChannelStateContext();
     const { moderate, finalizeSend, notice } = useModeratedSend();
 
     const overrideSubmitHandler = useCallback(
@@ -312,38 +311,19 @@ function ModeratedMessageComposer() {
             const { blocked } = await moderate(message.text ?? "");
 
             if (blocked) {
-                // Stream's MessageComposer shows its own generic "Send message request
-                // failed" toast whenever this throws - we can't customize that text, so
-                // the banner below carries the actual explanation instead.
                 throw new Error("Message blocked by moderation");
             }
 
-            // Quoting an icebreaker IS answering it. Tagging the send here is what lets a
-            // quote-reply reuse everything the card's own input already goes through: it
-            // gets grouped under the prompt, it earns the larger award, and prompt_awards
-            // still holds that award to once per person per prompt. Without this a quote
-            // would look like an answer and count as an ordinary message.
-            const quotedId = message.quoted_message_id;
-            const quotedPrompt = quotedId
-                ? messages?.find(
-                      (m) => m.id === quotedId && m.messageType === "icebreaker_prompt",
-                  )
-                : undefined;
-
-            const messageToSend = quotedPrompt
-                ? { ...message, messageType: "prompt_response" as const, promptId: quotedPrompt.id }
-                : message;
-
-            await sendMessage({ localMessage, message: messageToSend, options: sendOptions });
+            // Send as a standard chat message with a quote attached (pointing to the icebreaker card)
+            await sendMessage({ localMessage, message, options: sendOptions });
 
             await finalizeSend({
                 cid,
                 messageId: localMessage.id,
                 text: message.text ?? "",
-                promptId: quotedPrompt?.id,
             });
         },
-        [sendMessage, moderate, finalizeSend, messages],
+        [sendMessage, moderate, finalizeSend],
     );
 
     return (
