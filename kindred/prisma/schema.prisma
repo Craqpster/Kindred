@@ -63,10 +63,8 @@ model profiles {
   daily_activity    daily_chat_activity[]
 
   // Two relations to the same model, so they need names to tell them apart.
-  games_as_player_one         game_sessions[] @relation("game_session_player_one")
-  games_as_player_two         game_sessions[] @relation("game_session_player_two")
-  game_sessions_as_player_one game_sessions[] @relation("game_session_player_one")
-  game_sessions_as_player_two game_sessions[] @relation("game_session_player_two")
+  games_as_player_one game_sessions[] @relation("game_session_player_one")
+  games_as_player_two game_sessions[] @relation("game_session_player_two")
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
