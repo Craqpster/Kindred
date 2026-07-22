@@ -18,9 +18,7 @@ const MAIN_PANEL_CLASS = "str-chat__main-panel-inner str-chat__message-list-main
 export default function ChannelPill({ children }: PropsWithChildren) {
     const { channel } = useChannelStateContext();
     const { client } = useChatContext();
-    const { displayImage, displayTitle, groupChannelDisplayInfo } = useChannelPreviewInfo({
-        channel,
-    });
+    const { displayTitle } = useChannelPreviewInfo({ channel });
     const { othersWatching, isDm } = useChatPresence();
 
     const { typing = {} } = useTypingContext();
@@ -41,12 +39,7 @@ export default function ChannelPill({ children }: PropsWithChildren) {
         <div className={`${MAIN_PANEL_CLASS} [&_.str-chat__list]:pt-28`}>
             <div className="pointer-events-none absolute inset-x-0 top-3 z-3 flex justify-center px-4">
                 <div className="pointer-events-auto flex max-w-full items-center gap-3 rounded-full border border-ink-900/8 bg-surface/70 py-2 pr-6 pl-2 shadow-card backdrop-blur-xl">
-                    <ChannelLevelAvatar
-                        size="lg"
-                        displayMembers={groupChannelDisplayInfo?.members}
-                        imageUrl={displayImage}
-                        userName={displayTitle}
-                    />
+                    <ChannelLevelAvatar userName={displayTitle} />
 
                     <div className="flex min-w-0 flex-col">
                         <span className="truncate text-meta font-medium text-ink-900">

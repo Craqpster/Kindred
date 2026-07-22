@@ -3,7 +3,12 @@
 import { BadgesSection } from "@/components/profile/BadgesSection";
 import { useBadges } from "@/components/profile/BadgesProvider";
 
-export default function BadgesClient({ initialProfileBadges }: { initialProfileBadges?: any[] }) {
+export default function BadgesClient() {
   const { badges } = useBadges();
-  return <BadgesSection badges={badges || []} />;
+
+  const profileBadges = (badges ?? [])
+    .filter((b) => b.unlocked)
+    .map((b) => ({ profile_id: "", badge_id: b.id, badge: b }));
+
+  return <BadgesSection profileBadges={profileBadges} />;
 }

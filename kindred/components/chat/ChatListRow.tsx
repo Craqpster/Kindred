@@ -44,9 +44,9 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
     // name set to the username — so a row needs no Postgres round-trip.
     const others = Object.values(channel.state.members)
         .filter((member) => (member.user_id ?? member.user?.id) !== client.userID)
-        .map((member) => member.user?.name ?? member.user?.id ?? "?");
+        .map((member) => ({ name: member.user?.name ?? member.user?.id ?? "?" }));
 
-    const title = isGroup ? (channel.data?.name ?? "Group") : (others[0] ?? "Unknown");
+    const title = isGroup ? (channel.data?.name ?? "Group") : (others[0]?.name ?? "Unknown");
     const preview = getLatestMessagePreviewText(channel, t, userLanguage);
     // Already a Date here, unlike the ISO string on channel.data.
     const lastAt = channel.state.last_message_at;
@@ -61,7 +61,7 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
             }`}
         >
             {isGroup ? (
-                <AvatarGroup names={others} size={40} />
+                <AvatarGroup users={others} size={40} />
             ) : (
                 <Avatar name={title} size={40} />
             )}
