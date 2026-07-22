@@ -68,10 +68,22 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json({ session });
     } catch (err: unknown) {
-        // Postgres unique_violation - the per-pair partial unique index caught you two
-        // already having a game in progress together.
-        if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-            return NextResponse.json({ error: "You already have a game in progress" }, { status: 409 });
+        if (err && typeof err === "object" && "code" in err) {
+            // Unique violation - the per-pair partial unique index caught you two already
+            // having a game in progress together.
+            if (err.code === "P2002") {
+                return NextResponse.json({ error: "You already have a game in progress" }, { status: 409 });
+            }
+            // Foreign key violation - the other member is a Stream user with no profiles
+            // row (e.g. an account that never finished onboarding), so they can't be a
+            // player. Can't happen for a real DM (both members are onboarded), but return
+            // a clean message instead of a 500 rather than assume it never will.
+            if (err.code === "P2003") {
+                return NextResponse.json(
+                    { error: "That person hasn't finished setting up their profile yet" },
+                    { status: 400 },
+                );
+            }
         }
         throw err;
     }

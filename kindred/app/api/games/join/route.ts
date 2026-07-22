@@ -53,8 +53,18 @@ export async function POST(request: NextRequest) {
             messageId,
         );
     } catch (err: unknown) {
-        if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-            return NextResponse.json({ error: "Someone already joined this game" }, { status: 409 });
+        if (err && typeof err === "object" && "code" in err) {
+            if (err.code === "P2002") {
+                return NextResponse.json({ error: "Someone already joined this game" }, { status: 409 });
+            }
+            // The joiner or poster has no profiles row (Stream user without an onboarded
+            // profile) - clean message instead of a 500.
+            if (err.code === "P2003") {
+                return NextResponse.json(
+                    { error: "That person hasn't finished setting up their profile yet" },
+                    { status: 400 },
+                );
+            }
         }
         throw err;
     }
