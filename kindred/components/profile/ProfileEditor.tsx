@@ -71,7 +71,7 @@ export function ProfileEditor({
                     </div>
 
                     <div className="rounded-hero border border-star-sapphire/8 bg-surface p-8 shadow-card sm:p-8">
-                        <BadgesSection profileBadges={profile.profile_badges} />
+                        <BadgesSection badges={profile.profile_badges} />
                     </div>
 
                     <div className="rounded-hero border border-star-sapphire/8 bg-surface p-8 shadow-card sm:p-8">

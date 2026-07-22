@@ -3,12 +3,11 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
-import type { ProfileWithRelations } from "@/lib/dal";
 
 export function BadgesSection({
-    profileBadges,
+    badges: profileBadges,
 }: {
-    profileBadges: ProfileWithRelations["profile_badges"];
+    badges?: any[]; // Or use ProfileWithRelations["profile_badges"] if imported
 }) {
     const cardRef = useRef<HTMLDivElement>(null);
     const [isExpanded, setIsExpanded] = useState(false);

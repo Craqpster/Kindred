@@ -40,13 +40,25 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
     const isGroup = channel.type === "team";
     const selected = activeChannel?.cid === channel.cid;
 
-    // Names come from Stream — startChatRequest and createGroupChannel both upsert users with
-    // name set to the username — so a row needs no Postgres round-trip.
+    // Retrieve other members and map their custom avatar metadata from Stream user extra data.
     const others = Object.values(channel.state.members)
         .filter((member) => (member.user_id ?? member.user?.id) !== client.userID)
-        .map((member) => ({ name: member.user?.name ?? member.user?.id ?? "?" }));
+        .map((member) => {
+            const u = member.user as any;
+            return {
+                name: u?.name ?? member.user_id ?? member.user?.id ?? "?",
+                avatarId: u?.avatar_id ?? u?.avatarId ?? null,
+                avatarSeed: u?.avatar_seed ?? u?.avatarSeed ?? null,
+            };
+        });
 
-    const title = isGroup ? (channel.data?.name ?? "Group") : (others[0]?.name ?? "Unknown");
+    // For 1:1 chats, find the other user's full object to grab their avatar data
+    const otherUserEntry = Object.values(channel.state.members).find(
+        (member) => (member.user_id ?? member.user?.id) !== client.userID
+    );
+    const otherUserData = otherUserEntry?.user as any;
+    const title = isGroup ? (channel.data?.name ?? "Group") : (otherUserData?.name ?? otherUserData?.id ?? "Unknown");
+    
     const preview = getLatestMessagePreviewText(channel, t, userLanguage);
     // Already a Date here, unlike the ISO string on channel.data.
     const lastAt = channel.state.last_message_at;
@@ -63,7 +75,12 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
             {isGroup ? (
                 <AvatarGroup users={others} size={40} />
             ) : (
-                <Avatar name={title} size={40} />
+                <Avatar 
+                    name={title} 
+                    avatarId={otherUserData?.avatar_id ?? otherUserData?.avatarId} 
+                    avatarSeed={otherUserData?.avatar_seed ?? otherUserData?.avatarSeed} 
+                    size={40} 
+                />
             )}
 
             <span className="min-w-0 flex-1">
