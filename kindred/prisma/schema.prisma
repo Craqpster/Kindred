@@ -63,8 +63,10 @@ model profiles {
   daily_activity    daily_chat_activity[]
 
   // Two relations to the same model, so they need names to tell them apart.
-  games_as_player_one game_sessions[] @relation("game_session_player_one")
-  games_as_player_two game_sessions[] @relation("game_session_player_two")
+  games_as_player_one         game_sessions[] @relation("game_session_player_one")
+  games_as_player_two         game_sessions[] @relation("game_session_player_two")
+  game_sessions_as_player_one game_sessions[] @relation("game_session_player_one")
+  game_sessions_as_player_two game_sessions[] @relation("game_session_player_two")
 
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
@@ -486,7 +488,6 @@ model refresh_tokens {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model saml_providers {
   id                String        @id @db.Uuid
@@ -505,7 +506,6 @@ model saml_providers {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model saml_relay_states {
   id              String        @id @db.Uuid
