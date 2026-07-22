@@ -73,12 +73,7 @@ export default function ChatListRow({ channel }: { channel: Channel }) {
             }`}
         >
             {isGroup ? (
-                <AvatarGroup 
-                    users={others.map((member) => ({ 
-                        name: member.name,
-                    }))} 
-                    size={40} 
-                />
+                <AvatarGroup users={others} size={40} />
             ) : (
                 <Avatar 
                     name={title} 

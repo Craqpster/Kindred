@@ -60,6 +60,22 @@ export function useChatChannels(userId: string): ChatChannels {
         };
     }, [manager, filters]);
 
+    // Listen for new messages globally on the client so that when a message is sent or received,
+    // channel updates or state changes trigger re-partitioning without requiring a manual page refresh.
+    useEffect(() => {
+        if (!client) return;
+
+        const handleNewMessage = () => {
+            // Re-query or trigger state re-evaluation on the manager when messages arrive
+            void manager.queryChannels(filters, SORT, OPTIONS);
+        };
+
+        client.on("message.new", handleNewMessage);
+        return () => {
+            client.off("message.new", handleNewMessage);
+        };
+    }, [client, manager, filters]);
+
     const { channels, initialized, hasNext } = useStateStore(manager.state, (state) => ({
         channels: state.channels,
         initialized: state.initialized,
