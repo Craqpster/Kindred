@@ -9,26 +9,23 @@ const MAX_MATCHES = 10;
 export type Match = {
     id: string;
     username: string;
+    avatarId?: string | null;
+    avatarSeed?: string | null;
     /// Hobby and interest names the two profiles have in common.
     sharedTags: string[];
-    /// Their remaining hobby and interest names — everything not in sharedTags. Not part
-    /// of why they matched, so a card must keep these visually subordinate.
+    /// Their remaining hobby and interest names — everything not in sharedTags.
     otherTags: string[];
-    /// The onboarding ease_in answer both picked, or null if they differ. Carries the
-    /// value rather than a boolean so a card can name the style, not just note there
-    /// was one.
+    /// The onboarding ease_in answer both picked, or null if they differ.
     sharedEaseIn: EaseIn | null;
+    /// Custom avatar styling.
+    avatar_id: string | null;
+    avatar_seed: string | null;
 };
 
-// Candidate pool: everyone who shares at least one hobby or interest, minus the current
-// user and anyone they've already acted on (said hi to or dismissed). Scored in JS by
-// overlap count + a point for a shared ease_in style. Fine at this scale; if the user
-// base grows, replace with a SQL aggregate over the junction tables.
 export async function getMatchesFor(profile: ProfileWithRelations): Promise<Match[]> {
     const myHobbyIds = profile.profile_hobbies.map((row) => row.hobby_id);
     const myInterestIds = profile.profile_interests.map((row) => row.interest_id);
 
-    // Nothing in common is possible if they picked no tags at all.
     if (myHobbyIds.length === 0 && myInterestIds.length === 0) return [];
 
     const connections = await prisma.connections.findMany({
@@ -63,14 +60,11 @@ export async function getMatchesFor(profile: ProfileWithRelations): Promise<Matc
             ...theirInterests.filter((name) => myInterestNames.has(name)),
         ];
 
-        // The complement, from the same already-loaded relations — no extra query.
         const otherTags = [
             ...theirHobbies.filter((name) => !myHobbyNames.has(name)),
             ...theirInterests.filter((name) => !myInterestNames.has(name)),
         ];
 
-        // Null covers both "we differ" and "one of us skipped the question", which are
-        // the same thing as far as a card is concerned: there is no shared style to name.
         const sharedEaseIn =
             isEaseIn(profile.ease_in) && candidate.ease_in === profile.ease_in
                 ? profile.ease_in
@@ -83,6 +77,8 @@ export async function getMatchesFor(profile: ProfileWithRelations): Promise<Matc
                 sharedTags,
                 otherTags,
                 sharedEaseIn,
+                avatar_id: candidate.avatar_id,
+                avatar_seed: candidate.avatar_seed,
             },
             score: sharedTags.length + (sharedEaseIn ? 1 : 0),
         };

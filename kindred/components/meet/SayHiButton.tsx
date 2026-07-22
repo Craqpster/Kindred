@@ -3,33 +3,36 @@ import { Hand } from "lucide-react";
 import { sayHi } from "@/app/(app)/meet/actions";
 import Button from "@/components/ui/Button";
 
-// The only action on a match. Every surface that offers it goes through here, so the
-// sayHi import — and the hidden other_id the action validates — live in one place.
-//
-// There is deliberately no counterpart for skipping someone. Meet has no reject.
 export default function SayHiButton({
     id,
     labelled = false,
+    fullWidth = false,
 }: {
     id: string;
     labelled?: boolean;
+    fullWidth?: boolean;
 }) {
     return (
-        <form action={sayHi} className="shrink-0">
+        <form action={sayHi} className={`shrink-0 ${fullWidth ? "w-full" : ""}`}>
             <input type="hidden" name="other_id" value={id} />
 
             {labelled ? (
-                <Button type="submit" variant="accent" size="md">
+                <Button 
+                    type="submit" 
+                    variant="primary" 
+                    size="md" 
+                    className={fullWidth ? "w-full justify-center" : ""}
+                >
                     Say hi
                 </Button>
             ) : (
-                // Icon-only, so it needs an explicit accessible name.
                 <Button
                     type="submit"
-                    variant="accent"
+                    variant="primary"
                     size="icon"
                     aria-label="Say hi"
                     title="Say hi"
+                    className={fullWidth ? "w-full justify-center" : ""}
                 >
                     <Hand size={18} aria-hidden />
                 </Button>
