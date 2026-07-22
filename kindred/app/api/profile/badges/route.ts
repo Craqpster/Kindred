@@ -86,18 +86,6 @@ export async function GET(req: Request) {
     // Helper to find badge id by name
     const findBadge = (name: string) => badges.find((b) => b.name === name)?.id;
 
-    // Time-based badges
-    try {
-      const now = new Date();
-      const hour = now.getHours();
-      const earlyId = findBadge("Early Bird");
-      const nightId = findBadge("Night Owl");
-      if (earlyId && hour < 9 && !unlockedSet.has(earlyId)) toUnlock.push(earlyId);
-      if (nightId && hour < 3 && !unlockedSet.has(nightId)) toUnlock.push(nightId);
-    } catch (e) {
-      console.warn("Time-based badge check failed", e);
-    }
-
     // Daily Streak: 3 consecutive login days (using sessions table)
     try {
       const sessions = await prisma.sessions.findMany({
@@ -185,7 +173,6 @@ export async function GET(req: Request) {
             if (memberCount && memberCount > 2) {
               const msgs = (ch.state && (ch.state.messages as any[])) || [];
               if (msgs.some((m) => m.user && m.user.id === userId)) { sentInGroup = true; break; }
-              if (ch.state?.last_message && ch.state.last_message.user_id === userId) { sentInGroup = true; break; }
             }
           }
           if (sentInGroup) toUnlock.push(helperId);
@@ -200,7 +187,7 @@ export async function GET(req: Request) {
         if (starterId && !unlockedSet.has(starterId)) {
           let started = 0;
           for (const ch of channels) {
-            const createdBy = ch.data?.created_by_id || ch.state?.created_by?.id || ch.data?.created_by;
+            const createdBy = ch.data?.created_by_id;
             if (createdBy === userId) started += 1;
           }
           if (started >= 10) toUnlock.push(starterId);
