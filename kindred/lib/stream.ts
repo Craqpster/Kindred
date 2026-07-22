@@ -77,6 +77,14 @@ export async function startChatRequest(
         }
     }
 
+    // Typed as optional because a channel has no id until it exists; create() assigns
+    // one. Checked rather than asserted so a silent undefined can't become the string
+    // "undefined" in a redirect URL (see meet/actions.ts's sayHi, which does exactly that
+    // with this return value).
+    if (!channel.id) {
+        throw new Error("Stream channel was created without an id");
+    }
+
     return channel.id;
 }
 

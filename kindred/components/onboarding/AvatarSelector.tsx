@@ -143,7 +143,9 @@ function AvatarStyleDropdown({ value, onChange }: { value: string, onChange: (va
     const activeLabel = AVATAR_STYLES.find(s => s.val === value)?.label;
     const easeOut = [0.16, 1, 0.3, 1] as const;
     
-    const gapT = open ? { type: "spring", duration: 0.6, bounce: 0.5, delay: 0.12 } : { type: "spring", duration: 0.3, bounce: 0.1 };
+    const gapT = open
+        ? ({ type: "spring", duration: 0.6, bounce: 0.5, delay: 0.12 } as const)
+        : ({ type: "spring", duration: 0.3, bounce: 0.1 } as const);
     const radiusT = open ? { duration: 0.3, ease: easeOut, delay: 0.14 } : { duration: 0.16, ease: easeOut };
     const triggerRadiusT = open ? { duration: 0.6, times: [0, 0.4, 1], ease: easeOut } : { duration: 0.42, times: [0, 0.5, 1], ease: easeOut };
 

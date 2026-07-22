@@ -153,7 +153,7 @@ export default function ChannelLevelAvatar({
 
     const springTransition = reduceMotion
         ? { duration: 0 }
-        : { type: "spring", stiffness: 260, damping: 20 };
+        : ({ type: "spring", stiffness: 260, damping: 20 } as const);
 
     const containerVariants = {
         hidden: {},

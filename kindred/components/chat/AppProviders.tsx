@@ -7,8 +7,8 @@ import { ToastProvider } from "@/components/ui/ToastStack";
 type Profile = {
     id: string;           // used as userId for Stream
     username: string;
-    avatar_id?: string;
-    avatar_seed?: string;
+    avatar_id?: string | null;
+    avatar_seed?: string | null;
 };
 
 export default function AppProviders({
