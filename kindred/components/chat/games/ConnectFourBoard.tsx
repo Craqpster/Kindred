@@ -7,8 +7,8 @@ import { playMove, type ConnectFourState } from "@/components/chat/games/connect
 import { useGameSync } from "@/components/chat/games/useGameSync";
 
 const PLAYER_COLOR: Record<1 | 2, string> = {
-    1: "bg-accent-600",
-    2: "bg-star-sapphire",
+    1: "bg-blue-500",
+    2: "bg-red-500",
 };
 
 export default function ConnectFourBoard({
