@@ -93,6 +93,41 @@ export default function ChatConnectionProvider({
         };
     }, [client, userId, showToast]);
 
+    useEffect(() => {
+        if (!client) return;
+
+        // Stream fires this the moment startChatRequest (lib/stream.ts) adds the
+        // recipient as a member - before any message exists, since a wave deliberately
+        // doesn't send one. requested_of is the same field useChatChannels.ts already
+        // reads to sort a channel into the Pending tab, so this toast and that badge
+        // agree about what counts as "someone waved at you" by construction.
+        //
+        // requested_of === userId, not just its presence: a group's formation also adds
+        // this user as a member and fires the same event, but never sets requested_of/
+        // requested_by at all (those are a 1:1-only concept), so groups fall through
+        // this check on their own without a separate type guard.
+        const handleAddedToChannel = (event: Event) => {
+            const channel = event.channel;
+            if (!channel || channel.requested_of !== userId || !channel.requested_by) return;
+
+            const sender = channel.members?.find(
+                (member) => (member.user_id ?? member.user?.id) === channel.requested_by,
+            );
+            const name = sender?.user?.name ?? sender?.user_id ?? "Someone";
+
+            showToast({
+                kind: "message",
+                title: `${name} wants to say hi`,
+                mergeKey: `wave:${channel.requested_by}`,
+            });
+        };
+
+        client.on("notification.added_to_channel", handleAddedToChannel);
+        return () => {
+            client.off("notification.added_to_channel", handleAddedToChannel);
+        };
+    }, [client, userId, showToast]);
+
     if (!client) {
         return (
             <div className="flex flex-1 items-center justify-center p-8 text-meta text-ink-600">

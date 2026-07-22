@@ -106,3 +106,34 @@ export async function endGameSession(sessionId: string, status: "completed" | "a
         data: { status },
     });
 }
+
+/// Whether this user has ever been player_one_id on a game - the "Game Starter" badge.
+/// player_one is always whoever initiated (the immediate 1:1 starter, or a group
+/// invite's poster - see /api/games and /api/games/join), so this is a plain existence
+/// check: an abandoned or still-in-progress game counts the same as a completed one,
+/// since starting is the thing being recognized, not finishing.
+export async function hasStartedAGame(userId: string): Promise<boolean> {
+    const count = await prisma.game_sessions.count({ where: { player_one_id: userId } });
+    return count > 0;
+}
+
+/// Whether this user has ever won a completed game - the "Game Winner" badge.
+/// state.winner is each game's own symbol for "player one" ("X" in tic-tac-toe, 1 in
+/// connect four) or "player two" ("O" / 2), not a profile id, so this fetches completed
+/// games the user played in and checks state.winner against whichever side they were
+/// on, rather than trying to express that mapping as a single JSON-path DB filter.
+export async function hasWonAGame(userId: string): Promise<boolean> {
+    const completedGames = await prisma.game_sessions.findMany({
+        where: {
+            status: "completed",
+            OR: [{ player_one_id: userId }, { player_two_id: userId }],
+        },
+        select: { player_one_id: true, state: true },
+    });
+
+    return completedGames.some((game) => {
+        const winner = (game.state as { winner?: unknown })?.winner;
+        const wasPlayerOne = game.player_one_id === userId;
+        return wasPlayerOne ? winner === "X" || winner === 1 : winner === "O" || winner === 2;
+    });
+}
