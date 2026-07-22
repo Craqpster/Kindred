@@ -7,8 +7,8 @@ import { ToastProvider } from "@/components/ui/ToastStack";
 type Profile = {
     id: string;           
     username: string;
-    avatar_id?: string | null;
-    avatar_seed?: string | null;
+    avatar_id?: string | null;   // Allow string, undefined, or null
+    avatar_seed?: string | null; // Allow string, undefined, or null
 };
 
 export default function AppProviders({
