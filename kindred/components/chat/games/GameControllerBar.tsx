@@ -91,7 +91,11 @@ export default function GameControllerBar() {
                 className="flex items-center gap-1.5 text-xs font-medium text-ink-600 hover:text-ink-900"
             >
                 <Gamepad2 size={14} aria-hidden />
-                {activeSession ? "Resume game" : "Play a game"}
+                {activeSession
+                    ? `Resume ${
+                        GAMES[activeSession.game_type as keyof typeof GAMES]?.label ?? "game"
+                    }`
+                    : "Play a game"}
             </button>
 
             {choosing && (

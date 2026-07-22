@@ -1,7 +1,14 @@
 "use client";
 
-import { Lightbulb } from "lucide-react";
-import { useState } from "react";
+import {
+    CircleDashed,
+    Gamepad2,
+    Hash,
+    Lightbulb,
+    ChevronRight,
+    ChevronLeft,
+} from "lucide-react";
+import { createContext, useContext, useState } from "react";
 import {
     AttachmentSelector,
     ContextMenuButton,
@@ -12,40 +19,40 @@ import {
     type AttachmentSelectorActionProps,
 } from "stream-chat-react";
 
-/// The "+" button's menu, with our own actions alongside Stream's.
-///
-/// This is where chat actions live from now on. The icebreaker used to be a strip of its
-/// own above the composer, which does not survive a second feature - the "+" menu already
-/// exists for exactly this and was holding nothing but a file picker.
-///
-/// Stream types AttachmentSelectorAction["type"] as `... | (string & {})` and its internal
-/// filter ends in `return true`, so a custom type is passed through untouched and gets no
-/// default modal attached. This is a supported extension point, not a workaround.
+// --- State Management ---
+type MenuViewState = "root" | "games";
+const MenuStateContext = createContext<{
+    view: MenuViewState;
+    setView: (v: MenuViewState) => void;
+} | null>(null);
 
-// Stream sizes its own menu icons through a rule keyed on `.str-chat__icon`, which a
-// lucide icon never carries - so without an explicit size ours fell back to lucide's
-// default 24 and sat noticeably larger than the file and poll icons beside it. 16px is
-// what Stream's menu items actually render at (20px is the composer's "+" trigger, a
-// different rule).
-//
-// Module scope, not inline in the render: ContextMenuButton takes Icon as a component
-// type, and a new function identity each pass would remount the icon every render.
+// --- Icons ---
 function IcebreakerIcon(props: React.ComponentProps<"svg">) {
     return <Lightbulb {...props} width={16} height={16} strokeWidth={1.5} />;
 }
+function GamepadIcon(props: React.ComponentProps<"svg">) {
+    return <Gamepad2 {...props} width={16} height={16} strokeWidth={1.5} />;
+}
+function TicTacToeIcon(props: React.ComponentProps<"svg">) {
+    return <Hash {...props} width={16} height={16} strokeWidth={1.5} />;
+}
+function ConnectFourIcon(props: React.ComponentProps<"svg">) {
+    return <CircleDashed {...props} width={16} height={16} strokeWidth={1.5} />;
+}
+function BackIcon(props: React.ComponentProps<"svg">) {
+    return <ChevronLeft {...props} width={16} height={16} strokeWidth={1.5} />;
+}
+
+// --- Menu Actions ---
 
 function SendIcebreakerButton({}: AttachmentSelectorActionProps) {
     const { channel } = useChannelStateContext();
-    // closeMenu comes from the ContextMenu this button is rendered inside - the same way
-    // every built-in action (Poll, Location) dismisses the menu after acting.
     const { closeMenu } = useContextMenuContext();
     const [sending, setSending] = useState(false);
 
     const send = async () => {
         if (sending) return;
         setSending(true);
-        // Close immediately rather than after the request: the menu hanging open while a
-        // network call runs reads as the click not having registered.
         closeMenu();
         try {
             await fetch("/api/chat-prompts", {
@@ -65,20 +72,113 @@ function SendIcebreakerButton({}: AttachmentSelectorActionProps) {
     );
 }
 
-const icebreakerAction: AttachmentSelectorAction = {
-    ActionButton: SendIcebreakerButton,
-    type: "icebreaker",
-};
+function GamesMenuButton({}: AttachmentSelectorActionProps) {
+    const menuState = useContext(MenuStateContext);
+    return (
+        <ContextMenuButton
+            Icon={GamepadIcon}
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                menuState?.setView("games");
+            }}
+        >
+            <div className="flex w-full items-center justify-between gap-4">
+                <span>Play a game</span>
+                <ChevronRight size={16} className="text-ink-600" />
+            </div>
+        </ContextMenuButton>
+    );
+}
 
-// Spread rather than hand-write: the built-in `selectCommand` action holds a reference to
-// CommandsMenu, which the package does not export, so the default set cannot be rebuilt
-// from its parts - only extended.
-const actionSet = [...defaultAttachmentSelectorActionSet, icebreakerAction];
+function BackButton({}: AttachmentSelectorActionProps) {
+    const menuState = useContext(MenuStateContext);
+    return (
+        <ContextMenuButton
+            Icon={BackIcon}
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                menuState?.setView("root");
+            }}
+        >
+            Back
+        </ContextMenuButton>
+    );
+}
 
-/// ComponentContext.AttachmentSelector is typed `React.ComponentType` - no props - and
-/// MessageComposerUI renders it with none, so binding the action set needs a wrapper like
-/// this. Everything else (filtering, dialogs, modal portals, focus restoration) is still
-/// Stream's own component doing the work.
+// 3. The actual game trigger logic
+function GameTriggerButton({
+    gameType,
+    label,
+    Icon,
+}: {
+    gameType: string;
+    label: string;
+    Icon: React.ComponentType<any>;
+}) {
+    const { channel } = useChannelStateContext();
+    const { closeMenu } = useContextMenuContext();
+    const menuState = useContext(MenuStateContext);
+    const [sending, setSending] = useState(false);
+
+    const send = async () => {
+        if (sending) return;
+        setSending(true);
+        
+        // Close the menu immediately for a snappy UI feel
+        closeMenu();
+        setTimeout(() => menuState?.setView("root"), 200);
+
+        try {
+            // ALWAYS post the open "invite" card directly to the chat!
+            // This guarantees the card appears instantly, and you can send as many as you want.
+            await channel.sendMessage({
+                text: `🎮 Let's play ${label}!`,
+                messageType: "game_invite",
+                gameType,
+            });
+        } finally {
+            setSending(false);
+        }
+    };
+
+    return (
+        <ContextMenuButton Icon={Icon} onClick={send} disabled={sending}>
+            {label}
+        </ContextMenuButton>
+    );
+}
+
+function TicTacToeButton(props: AttachmentSelectorActionProps) {
+    return <GameTriggerButton gameType="tic-tac-toe" label="Tic-Tac-Toe" Icon={TicTacToeIcon} />;
+}
+
+function ConnectFourButton(props: AttachmentSelectorActionProps) {
+    return <GameTriggerButton gameType="connect-four" label="Connect Four" Icon={ConnectFourIcon} />;
+}
+
+// --- Action Registries ---
+const rootActionSet: AttachmentSelectorAction[] = [
+    ...defaultAttachmentSelectorActionSet,
+    { ActionButton: SendIcebreakerButton, type: "icebreaker" },
+    { ActionButton: GamesMenuButton, type: "games_root" },
+];
+
+const gamesActionSet: AttachmentSelectorAction[] = [
+    { ActionButton: BackButton, type: "back" },
+    { ActionButton: TicTacToeButton, type: "play_tic_tac_toe" },
+    { ActionButton: ConnectFourButton, type: "play_connect_four" },
+];
+
+// --- Main Wrapper ---
 export default function AttachmentMenu() {
-    return <AttachmentSelector attachmentSelectorActionSet={actionSet} />;
+    const [view, setView] = useState<MenuViewState>("root");
+    const actionSet = view === "games" ? gamesActionSet : rootActionSet;
+
+    return (
+        <MenuStateContext.Provider value={{ view, setView }}>
+            <AttachmentSelector attachmentSelectorActionSet={actionSet} />
+        </MenuStateContext.Provider>
+    );
 }
