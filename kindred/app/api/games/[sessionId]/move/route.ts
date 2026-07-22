@@ -41,10 +41,10 @@ export async function POST(
         );
     }
 
-    const session = await saveGameState(sessionId, state);
+    let session = await saveGameState(sessionId, state);
 
     if ("winner" in state && state.winner) {
-        await endGameSession(sessionId, "completed");
+        session = await endGameSession(sessionId, "completed");
     }
 
     return NextResponse.json({ session });

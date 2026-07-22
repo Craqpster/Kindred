@@ -6,7 +6,7 @@ ALTER TABLE "game_sessions" ADD COLUMN "invite_message_id" TEXT;
 -- starts (which have no invite message, i.e. NULL here) never collide with each other.
 -- This is what makes "first join wins" on a game_invite message atomic - two people
 -- joining the same invite both try to set THIS SAME value, and only one create() wins.
-CREATE UNIQUE INDEX "game_sessions_invite_message_id_key" ON "game_sessions"("invite_message_id");
+ "game_sessions_invite_message_id_key" ON "game_sessions"("invite_message_id");
 
 
 -- Hand-added below (Prisma models neither):

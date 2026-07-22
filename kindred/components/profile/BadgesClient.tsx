@@ -10,5 +10,5 @@ export default function BadgesClient() {
     .filter((b) => b.unlocked)
     .map((b) => ({ profile_id: "", badge_id: b.id, badge: b }));
 
-  return <BadgesSection profileBadges={profileBadges} />;
+  return <BadgesSection badges={profileBadges} />;
 }

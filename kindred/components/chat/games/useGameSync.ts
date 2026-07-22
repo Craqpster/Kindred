@@ -48,6 +48,7 @@ export function useGameSync<TState>(sessionId: string, channel: Channel) {
 
     const sendMove = useCallback(
         async (newState: TState) => {
+ 
             setState(newState);
             const res = await fetch(`/api/games/${sessionId}/move`, {
                 method: "POST",
@@ -56,7 +57,10 @@ export function useGameSync<TState>(sessionId: string, channel: Channel) {
             });
 
             const data = await res.json().catch(() => null);
-            if (data?.session) setStatus(data.session.status);
+            if (data?.session) {
+                setState(data.session.state as TState);
+                setStatus(data.session.status);
+            }
 
             if (!res.ok) {
                 // Rejected - most likely the game already ended (a win, or the

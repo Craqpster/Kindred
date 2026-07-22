@@ -36,6 +36,7 @@ export default function TicTacToeBoard({
 
     const handleClick = (squareIndex: number) => {
         if (!myTurn || state.board[squareIndex] !== null) return;
+
         sendMove(playMove(state, squareIndex));
     };
 

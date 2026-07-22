@@ -11,12 +11,12 @@ datasource db {
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model profiles {
-  id         String    @id @db.Uuid
-  username   String    @unique
+  id          String    @id @db.Uuid
+  username    String    @unique
   /// Age is derived from this on read: storing an age integer goes stale silently.
-  birth_date DateTime? @db.Date
-  gender_id  Int?      @db.SmallInt
-  avatar_id  String?
+  birth_date  DateTime? @db.Date
+  gender_id   Int?      @db.SmallInt
+  avatar_id   String?
   /// Dicebear seed. Falls back to username when unset (ProfileHeader.tsx) - this only
   /// exists so "shuffle" can give a different-looking avatar within the same avatar_id
   /// style, since Dicebear renders the same picture every time for a given seed+style.
@@ -53,8 +53,8 @@ model profiles {
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  users             users               @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  gender            genders?            @relation(fields: [gender_id], references: [id], onDelete: SetNull)
+  users             users                 @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  gender            genders?              @relation(fields: [gender_id], references: [id], onDelete: SetNull)
   profile_hobbies   profile_hobbies[]
   profile_interests profile_interests[]
   profile_badges    profile_badges[]
@@ -62,13 +62,13 @@ model profiles {
   prompt_awards     prompt_awards[]
   daily_activity    daily_chat_activity[]
 
+  // Two relations to the same model, so they need names to tell them apart.
+  games_as_player_one game_sessions[] @relation("game_session_player_one")
+  games_as_player_two game_sessions[] @relation("game_session_player_two")
+
   // Meet actions this profile has taken on others, and those others have taken on it.
   connections_made     connections[] @relation("connection_actor")
   connections_received connections[] @relation("connection_target")
-
-  // Two relations to the same model, so they need names to tell them apart.
-  game_sessions_as_player_one game_sessions[] @relation("game_session_player_one")
-  game_sessions_as_player_two game_sessions[] @relation("game_session_player_two")
 
   @@index([gender_id])
   @@schema("public")
@@ -212,27 +212,24 @@ model group_members {
 /// CHECK-constrained in the migration since Prisma can't model an enum-like string here
 /// without a real Postgres enum, and a real enum would need its own migration every
 /// time a game is added anyway.
-///
-/// A group chat can have several of these in_progress at once (different pairs playing
-/// different games) - what the migration's partial unique index actually blocks is the
-/// SAME pair running two games at a time, not the whole channel.
 model game_sessions {
-  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  channel_cid       String
-  game_type         String
-  player_one_id     String   @db.Uuid
-  player_two_id     String   @db.Uuid
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_cid   String @db.Text
+  game_type     String @db.Text
+  player_one_id String @db.Uuid
+  player_two_id String @db.Uuid
+
   /// The game_invite chat message (GameControllerBar.tsx/GameInviteCard.tsx) this
   /// session was claimed from, if it started that way rather than an immediate 1:1
   /// start. A plain @unique, not partial - Postgres already treats every NULL as
   /// distinct, so any number of non-invite (NULL) sessions coexist fine, while this is
   /// what actually makes "first join wins" atomic: two people joining the same invite
   /// race to set the SAME non-null value here, and only one create() can win it.
-  invite_message_id String?  @unique
-  state             Json
-  status            String   @default("in_progress")
+  invite_message_id String?  @unique @db.Text
+  state             Json     @db.JsonB
+  status            String   @default("in_progress") @db.Text
   created_at        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
 
   player_one profiles @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
   player_two profiles @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
@@ -331,12 +328,6 @@ model audit_log_entries {
   @@index([instance_id], map: "audit_logs_instance_id_idx")
   @@schema("auth")
 }
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model custom_oauth_providers {
-// @@schema("auth")
-// }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
@@ -455,30 +446,6 @@ model mfa_factors {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model oauth_authorizations {
-// @@schema("auth")
-// }
-
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-// model oauth_client_states {
-// @@schema("auth")
-// }
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model oauth_clients {
-// @@schema("auth")
-// }
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model oauth_consents {
-// @@schema("auth")
-// }
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model one_time_tokens {
   id         String              @id @db.Uuid
@@ -519,7 +486,6 @@ model refresh_tokens {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model saml_providers {
   id                String        @id @db.Uuid
@@ -538,7 +504,6 @@ model saml_providers {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model saml_relay_states {
   id              String        @id @db.Uuid
@@ -567,7 +532,6 @@ model schema_migrations {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 model sessions {
   id                     String           @id @db.Uuid
@@ -597,7 +561,6 @@ model sessions {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model sso_domains {
@@ -613,7 +576,6 @@ model sso_domains {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model sso_providers {
@@ -631,7 +593,6 @@ model sso_providers {
 }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model users {
@@ -683,17 +644,6 @@ model users {
   @@index([is_anonymous])
   @@schema("auth")
 }
-
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model webauthn_challenges {
-// @@schema("auth")
-// }
-
-/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
-// model webauthn_credentials {
-// @@schema("auth")
-// }
 
 enum aal_level {
   aal1

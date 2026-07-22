@@ -78,7 +78,6 @@ export default function ChatClient({
                 <Channel>
                     <ComposerComponents>
                         <Window>
-                            <GameControllerBar />
                             <AutoPromptTrigger />
                             <MessageList Message={ChatMessage} />
                             <PrefillGreeting targetId={greet ? openChannelId : undefined} />

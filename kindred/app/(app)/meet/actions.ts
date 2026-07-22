@@ -82,6 +82,11 @@ export async function sayHi(formData: FormData) {
 
     revalidatePath("/meet");
 
+    // Ensure id is defined before redirecting
+    if (!id) {
+        throw new Error("Failed to create chat channel");
+    }
+
     // greet=1 is what prefills the 👋 — opening a channel no longer implies greeting it,
     // since forming a group redirects here too and should arrive with an empty composer.
     redirect(`/chats?c=${encodeURIComponent(id)}&type=messaging&greet=1`);

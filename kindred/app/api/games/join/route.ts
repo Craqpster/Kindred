@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getAuthUser } from "@/lib/dal";
 import { createGameSession, GAME_TYPES, initialStateFor } from "@/lib/games";
+import { prisma } from "@/lib/prisma";
 import { streamServerClient } from "@/lib/stream";
 
 // Claims an open game_invite message (GameControllerBar.tsx posts it, GameInviteCard.tsx
@@ -47,24 +48,36 @@ export async function POST(request: NextRequest) {
             initialStateFor(gameType),
             messageId,
         );
-    } catch (err: unknown) {
-        if (err && typeof err === "object" && "code" in err && err.code === "P2002") {
-            return NextResponse.json({ error: "Someone already joined this game" }, { status: 409 });
-        }
-        throw err;
+    } catch (err) {
+        console.error("[games/join] createGameSession failed", err);
+        return NextResponse.json({ error: "Couldn't create game session" }, { status: 409 });
     }
 
-    // Resolves the invite card for everyone watching the channel - message.updated
-    // propagates over the same live connection the board itself uses.
-    //
-    // user.id, not starterId - server-side auth requires SOME acting user for a message
-    // update (same requirement channel.sendEvent has), and this update is a consequence
-    // of the joiner's own action, not the original poster's.
-    await streamServerClient.partialUpdateMessage(
-        messageId,
-        { set: { gameSessionId: session.id, gameJoinerId: user.id } },
-        user.id,
-    );
+    try {
+        const result = await streamServerClient.partialUpdateMessage(
+            messageId,
+            {
+                set: {
+                    gameSessionId: session.id,
+                    gameJoinerId: user.id,
+                },
+            },
+            starterId,
+        );
 
-    return NextResponse.json({ session });
+    } catch (err) {
+        // Roll back the DB row so this invite isn't permanently poisoned by the
+        // invite_message_id unique constraint — otherwise every retry 409s forever.
+        console.error("[games/join] partialUpdateMessage FAILED, rolling back session", err);
+        await prisma.game_sessions.delete({ where: { id: session.id } }).catch((cleanupErr) => {
+            console.error("[games/join] rollback delete also failed", cleanupErr);
+        });
+        return NextResponse.json({ error: "Failed to update invite message" }, { status: 500 });
+    }
+
+    return NextResponse.json({
+        session,
+        gameSessionId: session.id,
+        gameJoinerId: user.id,
+    });
 }

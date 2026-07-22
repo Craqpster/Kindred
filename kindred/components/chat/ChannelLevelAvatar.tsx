@@ -22,12 +22,13 @@ import {
 const RING_SIZES = {
     default: { avatar: 40, stroke: 3, gap: 3 },
     compact: { avatar: 28, stroke: 2, gap: 2 },
+    lg: { avatar: 48, stroke: 3, gap: 3 }, // Added support for lg size used in ChannelPill
 };
 
 export type RingSize = keyof typeof RING_SIZES;
 
 function ringGeometry(size: RingSize) {
-    const { avatar, stroke, gap } = RING_SIZES[size];
+    const { avatar, stroke, gap } = RING_SIZES[size] || RING_SIZES.default;
     const box = avatar + (stroke + gap) * 2;
     const radius = (box - stroke) / 2;
     return { box, radius, stroke, avatar, circumference: 2 * Math.PI * radius };
@@ -36,9 +37,11 @@ function ringGeometry(size: RingSize) {
 export default function ChannelLevelAvatar({
     ringSize = "default",
     userName,
+    imageUrl,
 }: {
     ringSize?: RingSize;
     userName?: string;
+    imageUrl?: string;
 }) {
     const { box, radius, stroke, avatar, circumference } = ringGeometry(ringSize);
     const { channel, messages } = useChannelStateContext();
@@ -67,13 +70,11 @@ export default function ChannelLevelAvatar({
 
     useEffect(refetch, [refetch, messages?.length]);
 
-    // UPDATED: Now listens for new messages from you to instantly refresh the stats
     useEffect(() => {
         const handleServerUpdate = () => refetch();
         
         const handleNewMessage = (event: Event) => {
             if (event.user?.id === client.userID) {
-                // Wait 500ms for backend Prisma transaction to finish, then update UI
                 setTimeout(refetch, 500);
             }
         };
@@ -212,7 +213,7 @@ export default function ChannelLevelAvatar({
                 </svg>
 
                 <span className="relative flex items-center justify-center">
-                    <Avatar name={displayTitle} size={avatar} />
+                    <Avatar name={displayTitle} avatarId={imageUrl} size={avatar} />
                 </span>
             </button>
 
