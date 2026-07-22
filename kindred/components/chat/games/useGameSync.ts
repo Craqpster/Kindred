@@ -48,7 +48,6 @@ export function useGameSync<TState>(sessionId: string, channel: Channel) {
 
     const sendMove = useCallback(
         async (newState: TState) => {
-            console.log("sendMove called", newState);
  
             setState(newState);
             const res = await fetch(`/api/games/${sessionId}/move`, {

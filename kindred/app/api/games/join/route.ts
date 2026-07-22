@@ -38,14 +38,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
     }
 
-    console.log("[games/join] creating session", {
-        channelCid,
-        gameType,
-        starterId,
-        joinerId: user.id,
-        messageId,
-    });
-
     let session;
     try {
         session = await createGameSession(
@@ -61,8 +53,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Couldn't create game session" }, { status: 409 });
     }
 
-    console.log("[games/join] session created", { sessionId: session.id });
-
     try {
         const result = await streamServerClient.partialUpdateMessage(
             messageId,
@@ -75,12 +65,6 @@ export async function POST(request: NextRequest) {
             starterId,
         );
 
-        // THE key diagnostic line. If these are undefined, the write itself did not
-        // apply even though the HTTP call "succeeded" — check field name / payload shape.
-        console.log("[games/join] partialUpdateMessage result", {
-            returnedGameSessionId: result.message?.gameSessionId,
-            returnedGameJoinerId: result.message?.gameJoinerId,
-        });
     } catch (err) {
         // Roll back the DB row so this invite isn't permanently poisoned by the
         // invite_message_id unique constraint — otherwise every retry 409s forever.

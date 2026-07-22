@@ -36,37 +36,6 @@ export default function GameInviteCard({
     const resolvedJoinerId = message.gameJoinerId ?? optimistic?.gameJoinerId;
     const resolved = !!resolvedSessionId;
 
-    console.log("[GameInviteCard] debug", {
-        myUserId: client.userID,
-        messageId: message.id,
-        starterId,
-        isStarter,
-        rawGameSessionId: message.gameSessionId,
-        rawGameJoinerId: message.gameJoinerId,
-        optimistic,
-        resolvedSessionId,
-        resolvedJoinerId,
-        resolved,
-    });
-
-    // --- TEMPORARY DEBUG PROBE — remove once confirmed fixed ---
-    // Tells us whether the WS message.updated event is even reaching this client.
-    useEffect(() => {
-        const handler = (e: any) => {
-            if (e.message?.id === message.id) {
-                console.log("[GameInviteCard] WS message.updated received", {
-                    myUserId: client.userID,
-                    messageId: e.message.id,
-                    gameSessionId: e.message.gameSessionId,
-                    gameJoinerId: e.message.gameJoinerId,
-                });
-            }
-        };
-        channel.on("message.updated", handler);
-        return () => channel.off("message.updated", handler);
-    }, [channel, message.id, client.userID]);
-    // --- END TEMPORARY DEBUG PROBE ---
-
     const handleJoin = async () => {
         if (!starterId) return;
         setJoining(true);
@@ -83,12 +52,6 @@ export default function GameInviteCard({
                 }),
             });
             const data = await res.json().catch(() => null);
-
-            console.log("[GameInviteCard] /api/games/join response", {
-                status: res.status,
-                ok: res.ok,
-                data,
-            });
 
             if (res.ok) {
                 setOptimistic({ gameSessionId: data.gameSessionId, gameJoinerId: data.gameJoinerId });

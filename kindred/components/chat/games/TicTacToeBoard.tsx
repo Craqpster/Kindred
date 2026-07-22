@@ -34,28 +34,11 @@ export default function TicTacToeBoard({
     const gameOver = !!state.winner || status === "abandoned";
     const myTurn = (isPlayerOne || isPlayerTwo) && !gameOver && state.currentPlayer === mySymbol;
 
-    console.log({
-    me: client.userID,
-    playerOneId,
-    playerTwoId,
-    mySymbol,
-    currentPlayer: state.currentPlayer,
-    myTurn,
-    board: state.board,
-});
-
     const handleClick = (squareIndex: number) => {
-    console.log("CLICK", {
-        user: client.userID,
-        squareIndex,
-        mySymbol,
-        currentPlayer: state.currentPlayer,
-    });
+        if (!myTurn || state.board[squareIndex] !== null) return;
 
-    if (!myTurn || state.board[squareIndex] !== null) return;
-
-    sendMove(playMove(state, squareIndex));
-};
+        sendMove(playMove(state, squareIndex));
+    };
 
     return (
         <div className="flex flex-col items-center gap-4 p-4">
