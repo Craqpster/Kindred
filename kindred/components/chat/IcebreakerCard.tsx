@@ -235,7 +235,10 @@ export default function IcebreakerCard({ message }: { message: LocalMessage }) {
                     like it was missing something. */}
                 <div className="mt-3 flex items-center justify-between gap-3">
                     <p className="flex min-w-0 items-center gap-2 text-meta text-ink-600">
-                        <AvatarGroup users={answeredNames} size={20} />
+                        <AvatarGroup 
+                            users={answeredNames.map((item) => ({ name: item.name }))} 
+                            size={20} 
+                        />
                         <span className="truncate">
                             {answeredNames.length} of {memberCount} answered
                             {!youAnswered && answers.length > 0 && " · answer to reveal"}
