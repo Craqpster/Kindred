@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getAuthUser } from "@/lib/dal";
-import { getGameSession } from "@/lib/games";
+import { getGameSession, saveGameState, endGameSession } from "@/lib/games";
 
 // Loads one session by id - what useGameSync.ts calls on mount/refresh to catch up from
 // Postgres, the source of truth a rejoining tab trusts over whatever Stream last pushed.
