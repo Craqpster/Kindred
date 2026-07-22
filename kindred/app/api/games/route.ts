@@ -39,10 +39,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Missing or invalid channelCid/gameType" }, { status: 400 });
     }
 
-    const [channelType, channelId] = channelCid.split(":");
-    const channel = streamServerClient.channel(channelType, channelId);
-    const { members } = await channel.query();
-    const memberIds = members.map((member) => member.user_id).filter((id): id is string => !!id);
+    // queryChannels by cid, NOT channel(type, id).query(): a DM's id is Stream's distinct
+    // "!members-..." form, and channel(type, id).query() get-or-creates, which Stream
+    // rejects because "!" is reserved in an id you create. Looking the existing channel up
+    // by its full cid avoids the create path entirely.
+    const [channel] = await streamServerClient.queryChannels({ cid: channelCid });
+    if (!channel) {
+        return NextResponse.json({ error: "No such channel" }, { status: 404 });
+    }
+    const memberIds = Object.keys(channel.state.members);
 
     if (memberIds.length !== 2) {
         return NextResponse.json({ error: "Games need exactly two channel members" }, { status: 400 });

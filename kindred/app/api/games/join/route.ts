@@ -28,10 +28,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "You can't join your own game" }, { status: 400 });
     }
 
-    const [channelType, channelId] = channelCid.split(":");
-    const channel = streamServerClient.channel(channelType, channelId);
-    const { members } = await channel.query();
-    const memberIds = members.map((member) => member.user_id).filter((id): id is string => !!id);
+    // queryChannels by cid rather than channel(type, id).query() - same reason as
+    // /api/games: get-or-create rejects Stream's reserved "!" in a distinct channel id.
+    // Group channels use a plain uuid id so this path wasn't broken, but the lookup form
+    // is correct for both.
+    const [channel] = await streamServerClient.queryChannels({ cid: channelCid });
+    if (!channel) {
+        return NextResponse.json({ error: "No such channel" }, { status: 404 });
+    }
+    const memberIds = Object.keys(channel.state.members);
 
     if (!memberIds.includes(user.id) || !memberIds.includes(starterId)) {
         return NextResponse.json({ error: "Not a member of this channel" }, { status: 403 });
