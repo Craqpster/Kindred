@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
-import { useBadges } from "@/app/profile/components/BadgesProvider";
+import { useBadges } from "@/components/profile/BadgesProvider";
 
 export default function BadgesConfetti({ initialProfileBadges }: { initialProfileBadges?: any[] }) {
   const { badges } = useBadges();

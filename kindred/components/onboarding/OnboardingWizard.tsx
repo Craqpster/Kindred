@@ -1,40 +1,17 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { motion } from "motion/react";
 
 import { createProfile, type OnboardingState } from "@/app/onboarding/actions";
-import Button from "@/components/ui/Button";
-import Field from "@/components/ui/Field";
 import TextInput from "@/components/ui/TextInput";
 import { ageFrom } from "@/lib/age";
-import { randomHandle } from "@/lib/handles";
 import type { ResolvedTag } from "@/lib/onboarding-tags";
 
-// One question per card
-const TOTAL_STEPS = 7;
-const MIN_AGE = 18;
-
-const EASE_IN_OPTIONS = [
-    {
-        value: "openers",
-        title: "I freeze up starting conversations",
-        detail: "Don't worry, we'll hand you openers.",
-    },
-    {
-        value: "gradual",
-        title: "One-on-one's fine, groups are hard",
-        detail: "We'll ease you into your group slowly.",
-    },
-    {
-        value: "volume",
-        title: "I just want more people to talk to",
-        detail: "We'll keep the matches coming.",
-    },
-];
-
-const CHIP = "cursor-pointer rounded-full border border-iceland bg-iceland/10 px-4 py-2 text-sm text-star-sapphire transition select-none has-checked:border-star-sapphire has-checked:bg-star-sapphire has-checked:text-white hover:bg-iceland/20";
-
-const OPTION_CARD = "cursor-pointer rounded-2xl border border-metro-blue p-4 text-center transition select-none has-checked:border-star-sapphire has-checked:bg-iceland/10 hover:bg-flour/50";
+import { AVATAR_STYLES, AVATAR_SEED_OPTIONS, TOTAL_STEPS, MIN_AGE } from "./constants";
+import { Progress, Step, Heading, Sub, NavigationFooter } from "./WizardLayout";
+import { AvatarLookSelector } from "./AvatarSelector";
+import { HandleSelector, TagSelector, EaseInSelector, GenderSelector } from "./FormSelectors";
 
 const EMPTY: OnboardingState = {};
 
@@ -51,15 +28,13 @@ export default function OnboardingWizard({
     const [step, setStep] = useState(1);
 
     const [handle, setHandle] = useState(initialHandle);
+    const [avatarStyle, setAvatarStyle] = useState(AVATAR_STYLES[0].val);
+    const [avatarSeed, setAvatarSeed] = useState(AVATAR_SEED_OPTIONS[0]);
     const [picked, setPicked] = useState<readonly string[]>([]);
     const [gender, setGender] = useState("");
     const [easeIn, setEaseIn] = useState("");
     const [birthDate, setBirthDate] = useState("");
 
-    // The server validates independently; if it rejects something, jump to the step that
-    // owns the message rather than leaving it on a screen the user cannot see.
-    //
-    // Adjusted during render rather than in an effect
     const [seenState, setSeenState] = useState(state);
     if (seenState !== state) {
         setSeenState(state);
@@ -75,237 +50,101 @@ export default function OnboardingWizard({
         3: handle.trim().length >= 3,
         4: picked.length > 0,
         5: easeIn !== "",
-        // Gender is optional, so this step never blocks
         6: true,
-        // The last card is the submit, so the age gate lives here alone.
         7: oldEnough,
     };
 
-    const toggleTag = (key: string) =>
-        setPicked((current) =>
-            current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
-        );
-
     return (
-        <main className="flex min-h-screen items-center justify-center bg-mist px-6 py-12 font-sans">
-            <div className="w-full max-w-lg rounded-3xl bg-white p-8 text-center shadow-md sm:p-10">
-                <Progress step={step} />
+        <main className="flex min-h-screen items-center justify-center bg-bone-100 px-6 py-12 font-body text-ink-900">
+            <motion.div
+                initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                className="w-full max-w-lg"
+            >
+                <div className="flex flex-col rounded-hero border border-ink-900/8 bg-surface p-8 text-center shadow-hero sm:p-10">
+                    <Progress step={step} />
 
-                <form action={formAction} className="mt-8 flex flex-col">
-                    {state.formError && (
-                        <p
-                            role="alert"
-                            className="mb-5 rounded-2xl border border-red-700 bg-red-50 px-4 py-3 text-sm text-red-700"
-                        >
-                            {state.formError}
-                        </p>
-                    )}
-
-                    {/* Every step stays mounted and inactive ones are `hidden`, so the
-                        browser still submits their inputs and FormData arrives complete.
-                        No cross-step state plumbing, no duplicated hidden fields. */}
-
-                    <Step active={step === 1}>
-                        <Heading>Get good at talking to people.</Heading>
-                        <Sub>A low-stakes place to talk with real people. No photos, no performance.</Sub>
-                    </Step>
-
-                    <Step active={step === 2}>
-                        <Heading>Everyone here is a little nervous too.</Heading>
-                        <Sub>That&apos;s the point. Nobody&apos;s watching, nobody&apos;s judging.</Sub>
-                    </Step>
-
-                    <Step active={step === 3}>
-                        <Heading>You, here</Heading>
-                        <div className="mt-6">
-                            <Field id="username" label="Your handle" error={state.errors?.username}>
-                                {(aria) => (
-                                    <div className="flex gap-2">
-                                        <TextInput
-                                            {...aria}
-                                            name="username"
-                                            value={handle}
-                                            onChange={(e) => setHandle(e.target.value)}
-                                            maxLength={20}
-                                            autoComplete="off"
-                                            className="text-left"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setHandle(randomHandle())}
-                                            className="shrink-0 rounded-full border border-metro-blue px-4 text-sm font-medium text-star-sapphire transition hover:bg-flour"
-                                        >
-                                            Shuffle
-                                        </button>
-                                    </div>
-                                )}
-                            </Field>
-                        </div>
-                    </Step>
-
-                    <Step active={step === 4}>
-                        <Heading>What are you into?</Heading>
-                        <Sub>These become your openers.</Sub>
-
-                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                            {tags.map((tag) => {
-                                const key = `${tag.source}-${tag.id}`;
-                                return (
-                                    <label key={key} className={CHIP}>
-                                        <input
-                                            type="checkbox"
-                                            /* One grid, two tables: the name decides which
-                                               junction the id lands in. */
-                                            name={tag.source === "hobby" ? "hobby_ids" : "interest_ids"}
-                                            value={tag.id}
-                                            checked={picked.includes(key)}
-                                            onChange={() => toggleTag(key)}
-                                            className="sr-only"
-                                        />
-                                        {tag.name}
-                                    </label>
-                                );
-                            })}
-                        </div>
-
-                        {state.errors?.tags && (
-                            <p role="alert" className="mt-3 text-sm text-red-700">
-                                {state.errors.tags[0]}
-                            </p>
-                        )}
-                    </Step>
-
-                    <Step active={step === 5}>
-                        <Heading>How do you want to ease in?</Heading>
-
-                        <div className="mt-6 flex flex-col gap-3">
-                            {EASE_IN_OPTIONS.map((option) => (
-                                <label key={option.value} className={OPTION_CARD}>
-                                    <input
-                                        type="radio"
-                                        name="ease_in"
-                                        value={option.value}
-                                        checked={easeIn === option.value}
-                                        onChange={() => setEaseIn(option.value)}
-                                        className="sr-only"
-                                    />
-                                    <span className="block font-medium text-star-sapphire">{option.title}</span>
-                                    <span className="mt-1 block text-sm text-gray-600">{option.detail}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </Step>
-
-                    <Step active={step === 6}>
-                        <Heading>How do you identify?</Heading>
-                        <Sub>Entirely optional — skip it if you&apos;d rather not say.</Sub>
-
-                        <div className="mt-6 flex flex-wrap justify-center gap-2">
-                            {genders.map((option) => (
-                                <label key={option.id} className={CHIP}>
-                                    <input
-                                        type="radio"
-                                        name="gender_id"
-                                        value={option.id}
-                                        checked={gender === String(option.id)}
-                                        onChange={() => setGender(String(option.id))}
-                                        className="sr-only"
-                                    />
-                                    {option.label}
-                                </label>
-                            ))}
-                        </div>
-                    </Step>
-
-                    <Step active={step === 7}>
-                        <Heading>When were you born?</Heading>
-                        <Sub>Kindred is for people {MIN_AGE} and over.</Sub>
-
-                        <div className="mt-6">
-                            <Field id="birth_date" label="Your date of birth" error={state.errors?.birth_date}>
-                                {(aria) => (
-                                    <TextInput
-                                        {...aria}
-                                        name="birth_date"
-                                        type="date"
-                                        value={birthDate}
-                                        onChange={(e) => setBirthDate(e.target.value)}
-                                        className="text-left"
-                                    />
-                                )}
-                            </Field>
-                        </div>
-                    </Step>
-
-                    <div className="mt-8">
-                        {step < TOTAL_STEPS ? (
-                            <Button
-                                type="button"
-                                onClick={() => setStep(step + 1)}
-                                disabled={!canContinue[step]}
-                                className="w-full"
-                            >
-                                {step === 1 ? "Start" : step === 2 ? "Okay, I'm in" : "Continue"}
-                            </Button>
-                        ) : (
-                            <Button
-                                type="submit"
-                                disabled={!canContinue[TOTAL_STEPS] || pending}
-                                className="w-full"
-                            >
-                                {pending ? "Setting you up…" : "Continue"}
-                            </Button>
+                    <form action={formAction} className="mt-8 flex flex-col">
+                        {state.formError && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mb-5 overflow-hidden">
+                                <p role="alert" className="rounded-xl border border-red-500/20 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                    {state.formError}
+                                </p>
+                            </motion.div>
                         )}
 
-                        {step > 1 && (
-                            <div className="text-left">
-                                <button
-                                    type="button"
-                                    onClick={() => setStep(step - 1)}
-                                    className="mt-4 text-sm text-gray-600 transition hover:text-star-sapphire"
-                                >
-                                    ‹ Back
-                                </button>
+                        {/* Server Inputs */}
+                        <input type="hidden" name="avatar_id" value={avatarStyle} />
+                        <input type="hidden" name="avatar_seed" value={avatarSeed} />
+
+                        {/* --- Steps --- */}
+                        <Step active={step === 1}>
+                            <Heading>Get good at talking to people.</Heading>
+                            <Sub>A low-stakes place to talk with real people. No photos, no performance.</Sub>
+                        </Step>
+
+                        <Step active={step === 2}>
+                            <Heading>Everyone here is a little nervous too.</Heading>
+                            <Sub>That&apos;s the point. Nobody&apos;s watching, nobody&apos;s judging.</Sub>
+                        </Step>
+
+                        <Step active={step === 3}>
+                            <Heading>You, here</Heading>
+                            <Sub>Pick a look and a handle.</Sub>
+                            <div className="mt-8 flex flex-col gap-10 text-left">
+                                <AvatarLookSelector 
+                                    avatarStyle={avatarStyle} 
+                                    setAvatarStyle={setAvatarStyle} 
+                                    avatarSeed={avatarSeed} 
+                                    setAvatarSeed={setAvatarSeed} 
+                                />
+                                <HandleSelector 
+                                    handle={handle} 
+                                    setHandle={setHandle} 
+                                    error={state.errors?.username} 
+                                />
                             </div>
-                        )}
-                    </div>
-                </form>
-            </div>
+                        </Step>
+
+                        <Step active={step === 4}>
+                            <Heading>What are you into?</Heading>
+                            <Sub>These become your openers.</Sub>
+                            <TagSelector tags={tags} picked={picked} setPicked={setPicked} error={state.errors?.tags} />
+                        </Step>
+
+                        <Step active={step === 5}>
+                            <Heading>How do you want to ease in?</Heading>
+                            <EaseInSelector easeIn={easeIn} setEaseIn={setEaseIn} />
+                        </Step>
+
+                        <Step active={step === 6}>
+                            <Heading>How do you identify?</Heading>
+                            <Sub>Entirely optional — skip it if you&apos;d rather not say.</Sub>
+                            <GenderSelector genders={genders} gender={gender} setGender={setGender} />
+                        </Step>
+
+                        <Step active={step === 7}>
+                            <Heading>When were you born?</Heading>
+                            <Sub>Kindred is for people {MIN_AGE} and over.</Sub>
+                            <div className="mt-8 text-left">
+                                <label htmlFor="birth_date" className="mb-2 block text-sm font-medium text-ink-900">Your date of birth</label>
+                                <TextInput
+                                    id="birth_date"
+                                    name="birth_date"
+                                    type="date"
+                                    value={birthDate}
+                                    onChange={(e) => setBirthDate(e.target.value)}
+                                    className="w-full rounded-xl border border-ink-900/8 bg-surface px-4 py-2.5 text-sm text-ink-900 transition-colors focus:border-ink-900 focus:outline-none focus:ring-1 focus:ring-ink-900"
+                                />
+                                {state.errors?.birth_date && <p className="mt-1.5 text-sm font-medium text-red-600">{state.errors.birth_date}</p>}
+                            </div>
+                        </Step>
+
+                        <NavigationFooter step={step} setStep={setStep} canContinue={canContinue} pending={pending} />
+                    </form>
+                </div>
+            </motion.div>
         </main>
     );
-}
-
-function Progress({ step }: { step: number }) {
-    return (
-        <ol
-            className="flex items-center justify-center gap-2"
-            aria-label={`Step ${step} of ${TOTAL_STEPS}`}
-        >
-            {Array.from({ length: TOTAL_STEPS }, (_, i) => {
-                const reached = i < step;
-                return (
-                    <li
-                        key={i}
-                        aria-current={i === step - 1 ? "step" : undefined}
-                        className={`h-1.5 rounded-full transition-all duration-200 ${
-                            reached ? "w-6 bg-star-sapphire" : "w-1.5 bg-gray-300"
-                        }`}
-                    />
-                );
-            })}
-        </ol>
-    );
-}
-
-/// `hidden` rather than unmounting: the inputs must stay in the form to be submitted.
-function Step({ active, children }: { active: boolean; children: React.ReactNode }) {
-    return <div hidden={!active}>{children}</div>;
-}
-
-function Heading({ children }: { children: React.ReactNode }) {
-    return <h1 className="text-3xl font-bold text-star-sapphire">{children}</h1>;
-}
-
-function Sub({ children }: { children: React.ReactNode }) {
-    return <p className="mt-3 text-gray-600">{children}</p>;
 }

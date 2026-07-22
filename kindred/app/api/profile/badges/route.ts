@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
 import { streamServerClient } from "@/lib/stream";
 import { tierForPoints } from "@/lib/confidence-tiers";
+import { hasStartedAGame, hasWonAGame } from "@/lib/games";
 
 /// Reconciles the caller's badges with the tier their points have actually earned.
 ///
@@ -85,18 +86,6 @@ export async function GET(req: Request) {
     // Helper to find badge id by name
     const findBadge = (name: string) => badges.find((b) => b.name === name)?.id;
 
-    // Time-based badges
-    try {
-      const now = new Date();
-      const hour = now.getHours();
-      const earlyId = findBadge("Early Bird");
-      const nightId = findBadge("Night Owl");
-      if (earlyId && hour < 9 && !unlockedSet.has(earlyId)) toUnlock.push(earlyId);
-      if (nightId && hour < 3 && !unlockedSet.has(nightId)) toUnlock.push(nightId);
-    } catch (e) {
-      console.warn("Time-based badge check failed", e);
-    }
-
     // Daily Streak: 3 consecutive login days (using sessions table)
     try {
       const sessions = await prisma.sessions.findMany({
@@ -145,6 +134,22 @@ export async function GET(req: Request) {
       console.warn("Friend maker check failed", e);
     }
 
+    // Game Starter / Game Winner: real game_sessions rows, not a guess from chat text.
+    // DB-only, unlike the Stream-based checks below - it doesn't need Stream at all.
+    try {
+      const starterId = findBadge("Game Starter");
+      const winnerId = findBadge("Game Winner");
+
+      if (starterId && !unlockedSet.has(starterId) && (await hasStartedAGame(userId))) {
+        toUnlock.push(starterId);
+      }
+      if (winnerId && !unlockedSet.has(winnerId) && (await hasWonAGame(userId))) {
+        toUnlock.push(winnerId);
+      }
+    } catch (e) {
+      console.warn("Game checks failed", e);
+    }
+
     // Stream-based checks (group messages, channels visited, emoji messages, chats started)
     try {
       const channels = await streamServerClient.queryChannels({ members: { $in: [userId] } }, { last_message_at: -1 }, { state: true, limit: 1000 });
@@ -168,7 +173,6 @@ export async function GET(req: Request) {
             if (memberCount && memberCount > 2) {
               const msgs = (ch.state && (ch.state.messages as any[])) || [];
               if (msgs.some((m) => m.user && m.user.id === userId)) { sentInGroup = true; break; }
-              if (ch.state?.last_message && ch.state.last_message.user_id === userId) { sentInGroup = true; break; }
             }
           }
           if (sentInGroup) toUnlock.push(helperId);
@@ -183,7 +187,7 @@ export async function GET(req: Request) {
         if (starterId && !unlockedSet.has(starterId)) {
           let started = 0;
           for (const ch of channels) {
-            const createdBy = ch.data?.created_by_id || ch.state?.created_by?.id || ch.data?.created_by;
+            const createdBy = ch.data?.created_by_id;
             if (createdBy === userId) started += 1;
           }
           if (started >= 10) toUnlock.push(starterId);
@@ -212,28 +216,6 @@ export async function GET(req: Request) {
         }
       } catch (e) {
         console.warn("Emoji master check failed", e);
-      }
-
-      // Game Starter / Game Winner: look for channel metadata 'game' or messages with game events
-      try {
-        const starterId = findBadge("Game Starter");
-        const winnerId = findBadge("Game Winner");
-        let startedGame = false;
-        let wonGame = false;
-        for (const ch of channels) {
-          if (ch.data?.type === 'game' || ch.data?.game) startedGame = true;
-          const msgs = (ch.state && (ch.state.messages as any[])) || [];
-          for (const m of msgs) {
-            if (m.user && m.user.id === userId && typeof m.text === 'string') {
-              if (/started a game/i.test(m.text)) startedGame = true;
-              if (/won the game|you won|congratulations/i.test(m.text)) { if (m.user.id === userId) wonGame = true; }
-            }
-          }
-        }
-        if (starterId && startedGame && !unlockedSet.has(starterId)) toUnlock.push(starterId);
-        if (winnerId && wonGame && !unlockedSet.has(winnerId)) toUnlock.push(winnerId);
-      } catch (e) {
-        console.warn("Game checks failed", e);
       }
 
     } catch (e) {

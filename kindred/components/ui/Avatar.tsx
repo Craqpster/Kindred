@@ -1,16 +1,10 @@
-// Deterministic initials avatar. No image, no upload, no avatar_id — the handle alone
-// decides the letters and the colour, so the same person always looks the same.
-//
-// This is the placeholder while real avatars are deferred. When avatar_id gains an
-// image, this stays as the fallback for anyone who hasn't picked one
+import Image from "next/image";
 
-const COLORS = [
-    "#153d74", // star sapphire  — 10.23:1
-    "#24506e", // deep teal-blue —  8.16:1
-    "#1f4e82", // deep           —  8.08:1
-    "#2b5a8c", // mid            —  6.78:1
-    "#35648f", // slate blue     —  5.92:1
-    "#4c6e9c", // light          —  4.97:1
+const NAVY_COLORS = [
+    "#153d74", // star sapphire
+    "#24506e", // deep teal-blue
+    "#1f4e82", // deep blue
+    "#2b5a8c", // mid blue
 ];
 
 function initialsOf(name: string): string {
@@ -21,23 +15,28 @@ function initialsOf(name: string): string {
 }
 
 function colorOf(name: string): string {
-    // Small stable string hash -> palette index.
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
         hash = (hash * 31 + name.charCodeAt(i)) | 0;
     }
-    return COLORS[Math.abs(hash) % COLORS.length];
+    return NAVY_COLORS[Math.abs(hash) % NAVY_COLORS.length];
 }
 
 export default function Avatar({
     name,
+    avatarId,
+    avatarSeed,
     size = 40,
     className = "",
 }: {
     name: string;
+    avatarId?: string | null;
+    avatarSeed?: string | null;
     size?: number;
     className?: string;
 }) {
+    const hasCustomAvatar = avatarId && avatarSeed;
+
     return (
         <span
             aria-hidden="true"
@@ -46,13 +45,29 @@ export default function Avatar({
                 height: size,
                 fontSize: Math.round(size * 0.4),
             }}
-            className={`relative inline-flex shrink-0 items-center justify-center font-sans leading-none font-semibold text-surface select-none ${className}`}
+            className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-sans leading-none font-semibold text-surface select-none ${className}`}
         >
-            <span
-                className="absolute inset-0 rounded-full"
-                style={{ backgroundColor: colorOf(name) }}
-            />
-            <span className="relative">{initialsOf(name)}</span>
+            {hasCustomAvatar ? (
+                <>
+                    <span className="absolute inset-0 bg-bone-200" />
+                    <Image
+                        src={`https://api.dicebear.com/9.x/${avatarId}/svg?seed=${avatarSeed}`}
+                        alt={`${name}'s avatar`}
+                        width={size}
+                        height={size}
+                        unoptimized
+                        className="relative h-full w-full object-cover"
+                    />
+                </>
+            ) : (
+                <>
+                    <span
+                        className="absolute inset-0 rounded-full"
+                        style={{ backgroundColor: colorOf(name) }}
+                    />
+                    <span className="relative">{initialsOf(name)}</span>
+                </>
+            )}
         </span>
     );
 }

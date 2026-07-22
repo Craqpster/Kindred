@@ -1,6 +1,5 @@
 import ExtraTagsPill from "@/components/meet/ExtraTagsPill";
 
-
 export default function MatchTags({
     tags,
     max,
@@ -17,13 +16,13 @@ export default function MatchTags({
 
     return (
         <div className="flex flex-col gap-2">
-            {label ? <p className="text-label text-ink-600 uppercase">{label}</p> : null}
+            {label ? <p className="text-xs font-semibold uppercase tracking-widest text-star-sapphire/60">{label}</p> : null}
 
             <div className="flex flex-wrap items-center gap-1.5">
                 {shown.map((tag) => (
                     <span
                         key={tag}
-                        className="rounded-full bg-accent-50 px-3 py-1.5 text-meta font-medium text-accent-700"
+                        className="rounded-full border border-star-sapphire/10 bg-star-sapphire/5 px-3 py-1.5 text-meta font-medium text-star-sapphire"
                     >
                         {tag}
                     </span>
