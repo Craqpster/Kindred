@@ -1,56 +1,47 @@
-// /components/chat/ChatClient.tsx
 "use client";
 
-import { Plus, SendHorizontal } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { LocalMessage, Message, SendMessageOptions } from "stream-chat";
-import {
-    Channel,
-    ComponentProvider,
-    MessageComposer,
-    MessageList,
-    MessageUI,
-    Thread,
-    Window,
-    useChannelActionContext,
-    useChannelStateContext,
-    useChatContext,
-    useComponentContext,
-    useMessageComposerHasSendableData,
-    useMessageContext,
-    type SendButtonProps,
-} from "stream-chat-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import AttachmentMenu from "@/components/chat/AttachmentMenu";
-import ChannelPill from "@/components/chat/ChannelPill";
-import ChatListRow from "@/components/chat/ChatListRow";
+import { markConversationRead } from "@/app/(app)/chats/actions";
 import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
-import IcebreakerCard from "@/components/chat/IcebreakerCard";
-import KindredQuotedMessage from "@/components/chat/KindredQuotedMessage";
-import GameControllerBar from "@/components/chat/games/GameControllerBar";
-import GameInviteCard from "@/components/chat/games/GameInviteCard";
-import { useChatChannels } from "@/components/chat/useChatChannels";
-import { useModeratedSend } from "@/components/chat/useModeratedSend";
+import Composer from "@/components/chat/Composer";
+import ConversationRow from "@/components/chat/ConversationRow";
+import MessageBubble from "@/components/chat/MessageBubble";
+import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
+import { mergeMessage, messageFromRow } from "@/lib/chat/realtime";
+import type { ChatConversation, ChatMessage } from "@/lib/chat/types";
+
+const GREETING = "👋";
 
 export default function ChatClient({
     userId,
-    openChannelId,
-    openChannelType = "messaging",
+    openConversationId,
+    initialMessages,
     greet = false,
     initialTab = "active",
 }: {
     userId: string;
-    openChannelId?: string;
-    openChannelType?: "messaging" | "team";
+    openConversationId?: string;
+    initialMessages: ChatMessage[];
     greet?: boolean;
     initialTab?: ChatTab;
 }) {
+    const router = useRouter();
+    const { conversations } = useChatRealtime();
     const [tab, setTab] = useState<ChatTab>(initialTab);
-    const { active, pending, initialized } = useChatChannels(userId);
 
-    const channels = tab === "active" ? active : pending;
+    const { active, pending } = useMemo(() => {
+        const active: ChatConversation[] = [];
+        const pending: ChatConversation[] = [];
+        for (const conversation of conversations) {
+            (conversation.pending ? pending : active).push(conversation);
+        }
+        return { active, pending };
+    }, [conversations]);
 
-    useOpenChannel(openChannelId, openChannelType);
+    const shown = tab === "active" ? active : pending;
+    const open = conversations.find((conversation) => conversation.id === openConversationId);
 
     return (
         <div className="flex flex-1 min-h-0 bg-bone-100">
@@ -58,209 +49,116 @@ export default function ChatClient({
                 <ChatTabs tab={tab} onChange={setTab} pendingCount={pending.length} />
 
                 <div className="flex-1 overflow-y-auto px-2 pb-3">
-                    {!initialized ? (
-                        <p className="p-3 text-sm text-ink-600">Loading…</p>
-                    ) : channels.length === 0 ? (
+                    {shown.length === 0 ? (
                         <p className="p-3 text-sm text-ink-600">
                             {tab === "active"
                                 ? "No chats yet. Say hi to someone on Meet."
                                 : "Nothing waiting on a reply."}
                         </p>
                     ) : (
-                        channels.map((channel) => (
-                            <ChatListRow key={channel.cid} channel={channel} />
+                        shown.map((conversation) => (
+                            <ConversationRow
+                                key={conversation.id}
+                                conversation={conversation}
+                                selected={conversation.id === openConversationId}
+                                onOpen={(id) => router.push(`/chats?c=${encodeURIComponent(id)}`)}
+                            />
                         ))
                     )}
                 </div>
             </div>
 
-            <div className="flex flex-1 min-w-0">
-                <Channel>
-                    <ComposerComponents>
-                        <Window>
-                            <AutoPromptTrigger />
-                            <MessageList Message={ChatMessage} />
-                            <PrefillGreeting targetId={greet ? openChannelId : undefined} />
-                            <ModeratedMessageComposer />
-                        </Window>
-                        <Thread />
-                    </ComposerComponents>
-                </Channel>
+            <div className="flex min-w-0 flex-1 flex-col">
+                {open ? (
+                    <Thread
+                        key={open.id}
+                        userId={userId}
+                        conversation={open}
+                        initialMessages={initialMessages}
+                        greet={greet}
+                    />
+                ) : (
+                    <div className="flex flex-1 items-center justify-center p-8 text-meta text-ink-600">
+                        Pick a conversation to get started.
+                    </div>
+                )}
             </div>
         </div>
     );
 }
 
-function useOpenChannel(channelId: string | undefined, type: "messaging" | "team") {
-    const { client, setActiveChannel } = useChatContext();
-    const opened = useRef(false);
+/// One open conversation. Keyed by conversation id in the parent, so switching chats
+/// remounts it rather than trying to reconcile one thread's state into another's.
+function Thread({
+    userId,
+    conversation,
+    initialMessages,
+    greet,
+}: {
+    userId: string;
+    conversation: ChatConversation;
+    initialMessages: ChatMessage[];
+    greet: boolean;
+}) {
+    const { onMessage } = useChatRealtime();
+    const [messages, setMessages] = useState(initialMessages);
+    const bottomRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        if (opened.current || !channelId) return;
-
-        opened.current = true;
-        setActiveChannel(client.channel(type, channelId));
-    }, [channelId, type, client, setActiveChannel]);
-}
-
-function ComposerComponents({ children }: { children: React.ReactNode }) {
-    const existing = useComponentContext();
-
-    const value = useMemo(
-        () => ({
-            ...existing,
-            SendButton: KindredSendButton,
-            AttachmentSelectorInitiationButtonContents: KindredAttachmentIcon,
-            AttachmentSelector: AttachmentMenu,
-            QuotedMessage: KindredQuotedMessage,
-            MessageListMainPanel: ChannelPill,
-        }),
-        [existing],
+    // Everyone who could have written in here, so an arriving row can be given a name and a
+    // face without a round trip. See messageFromRow.
+    const membersById = useMemo(
+        () => new Map(conversation.others.map((member) => [member.id, member])),
+        [conversation.others],
     );
 
-    return <ComponentProvider value={value}>{children}</ComponentProvider>;
-}
+    useEffect(() => {
+        return onMessage((row) => {
+            if (row.conversation_id !== conversation.id) return;
+            // Thread replies do not belong in the main timeline.
+            if (row.parent_id) return;
 
-function KindredSendButton({ sendMessage, ...rest }: SendButtonProps) {
-    const canSend = useMessageComposerHasSendableData();
+            setMessages((current) => mergeMessage(current, messageFromRow(row, membersById)));
+        });
+    }, [onMessage, conversation.id, membersById]);
 
-    return (
-        <button
-            type="button"
-            aria-label="Send"
-            disabled={!canSend}
-            onClick={sendMessage}
-            {...rest}
-            className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
-        >
-            <SendHorizontal size={16} strokeWidth={1.5} aria-hidden />
-        </button>
-    );
-}
-
-function KindredAttachmentIcon() {
-    return <Plus size={20} strokeWidth={1.5} aria-hidden />;
-}
-
-const GREETING = "👋";
-
-function PrefillGreeting({ targetId }: { targetId?: string }) {
-    const { channel } = useChannelStateContext();
-    const filled = useRef(false);
+    // Opening a conversation reads it, and so does a message arriving while it is open.
+    useEffect(() => {
+        void markConversationRead(conversation.id);
+    }, [conversation.id, messages.length]);
 
     useEffect(() => {
-        if (filled.current) return;
-        if (!targetId || !channel || channel.id !== targetId) return;
-
-        const { textComposer } = channel.messageComposer;
-        if (!textComposer.textIsEmpty) return;
-
-        textComposer.setText(GREETING);
-        filled.current = true;
-    }, [targetId, channel]);
-
-    return null;
-}
-
-const QUIET_THRESHOLD_MS = 48 * 60 * 60 * 1000;
-
-function AutoPromptTrigger() {
-    const { channel, messages } = useChannelStateContext();
-    const firedRef = useRef(false);
-
-    useEffect(() => {
-        firedRef.current = false;
-    }, [channel.cid]);
-
-    useEffect(() => {
-        if (firedRef.current || !messages) return;
-
-        const lastMessage = messages.at(-1);
-        const isQuiet =
-            !lastMessage?.created_at ||
-            Date.now() - new Date(lastMessage.created_at).getTime() > QUIET_THRESHOLD_MS;
-        const alreadyPrompted = lastMessage?.messageType === "icebreaker_prompt";
-
-        if (isQuiet && !alreadyPrompted) {
-            firedRef.current = true;
-            fetch("/api/chat-prompts", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ channelCid: channel.cid }),
-            }).catch(() => {});
-        }
-    }, [channel, messages]);
-
-    return null;
-}
-
-function ChatMessage(props: Parameters<typeof MessageUI>[0]) {
-    const { message } = useMessageContext("ChatMessage");
-    const { channel, messages } = useChannelStateContext();
-
-    if (message?.type === "deleted") {
-        return <MessageUI {...props} />;
-    }
-
-    if (message?.messageType === "game_invite") {
-        return <GameInviteCard message={message} channel={channel} />;
-    }
-
-    if (message?.messageType === "prompt_response" && message.promptId) {
-        const promptIsLoaded = messages?.some(
-            (m) => m.id === message.promptId && m.messageType === "icebreaker_prompt",
-        );
-        if (promptIsLoaded) return null;
-    }
-
-    if (message?.messageType === "icebreaker_prompt") {
-        return <IcebreakerCard message={message} />;
-    }
-
-    return <MessageUI {...props} />;
-}
-
-function ModeratedMessageComposer() {
-    const { sendMessage } = useChannelActionContext();
-    const { moderate, finalizeSend, notice } = useModeratedSend();
-
-    const overrideSubmitHandler = useCallback(
-        async ({
-            cid,
-            localMessage,
-            message,
-            sendOptions,
-        }: {
-            cid: string;
-            localMessage: LocalMessage;
-            message: Message;
-            sendOptions: SendMessageOptions;
-        }) => {
-            const { blocked } = await moderate(message.text ?? "");
-
-            if (blocked) {
-                throw new Error("Message blocked by moderation");
-            }
-
-            await sendMessage({ localMessage, message, options: sendOptions });
-
-            await finalizeSend({
-                cid,
-                messageId: localMessage.id,
-                text: message.text ?? "",
-            });
-        },
-        [sendMessage, moderate, finalizeSend],
-    );
+        bottomRef.current?.scrollIntoView({ block: "end" });
+    }, [messages.length]);
 
     return (
         <>
-            {notice && (
-                <div className="border-t border-red-700 bg-red-50 px-4 py-2 text-sm text-red-700">
-                    {notice.text}
-                </div>
-            )}
-            <MessageComposer overrideSubmitHandler={overrideSubmitHandler} />
+            <header className="flex items-center gap-3 border-b border-ink-900/8 px-4 py-3">
+                <h1 className="truncate text-body font-medium text-ink-900">{conversation.title}</h1>
+            </header>
+
+            <ul className="flex-1 overflow-y-auto py-3">
+                {messages.length === 0 ? (
+                    <li className="p-4 text-center text-meta text-ink-600">
+                        Nothing here yet — say something.
+                    </li>
+                ) : (
+                    messages.map((message, index) => (
+                        <MessageBubble
+                            key={message.id}
+                            message={message}
+                            isOwn={message.sender?.id === userId}
+                            showSender={messages[index - 1]?.sender?.id !== message.sender?.id}
+                        />
+                    ))
+                )}
+                <div ref={bottomRef} />
+            </ul>
+
+            <Composer
+                conversationId={conversation.id}
+                greeting={greet ? GREETING : undefined}
+                onSent={(message) => setMessages((current) => mergeMessage(current, message))}
+            />
         </>
     );
 }

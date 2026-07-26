@@ -1,7 +1,6 @@
 import "server-only";
 
-import { KINDRED_BOT_ID, KINDRED_BOT_NAME } from "@/lib/kindred-bot";
-import { streamServerClient } from "@/lib/stream";
+import { sendMessage } from "@/lib/chat/mutations";
 
 const ICEBREAKER_PROMPTS = [
     "What's a hobby you picked up recently that surprised you?",
@@ -21,21 +20,19 @@ const ICEBREAKER_PROMPTS = [
     "What's something you learned recently that stuck with you?",
 ];
 
-/// Posts one random icebreaker prompt into the channel identified by `channelCid`, as a
-/// message from the Kindred bot user. Server-only since it uses the Stream server client
-/// directly - callers are startChatRequest (right when a chat is created) and
-/// /api/chat-prompts (on-demand button + the client-side "chat gone quiet" check).
-export async function postIcebreakerPrompt(channelCid: string): Promise<void> {
-    await streamServerClient.upsertUser({ id: KINDRED_BOT_ID, name: KINDRED_BOT_NAME });
-
-    const [channelType, channelId] = channelCid.split(":");
-    const channel = streamServerClient.channel(channelType, channelId);
-
+/// Posts one random icebreaker into a conversation, as the Kindred bot.
+///
+/// The bot is the absence of a sender, not a user: a profiles row needs an auth.users row
+/// behind it, and the bot has no account. sendMessage takes senderId: null for exactly this,
+/// which also means the post skips the membership check and moderation — both correct, since
+/// the text comes from the list above rather than from anyone.
+export async function postIcebreakerPrompt(conversationId: string): Promise<void> {
     const text = ICEBREAKER_PROMPTS[Math.floor(Math.random() * ICEBREAKER_PROMPTS.length)];
 
-    await channel.sendMessage({
-        text,
-        user_id: KINDRED_BOT_ID,
-        messageType: "icebreaker_prompt",
+    await sendMessage({
+        conversationId,
+        senderId: null,
+        kind: "icebreaker_prompt",
+        body: text,
     });
 }

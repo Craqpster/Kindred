@@ -5,12 +5,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
+import { createGroupConversation, startDm } from "@/lib/chat/mutations";
 import { requireProfile, verifySession } from "@/lib/dal";
 import { formGroupFor, getGroupFor, type FormGroupFailure } from "@/lib/groups";
 import { MEET_VIEW_COOKIE, meetViewSchema } from "@/lib/meet-view";
 import { postIcebreakerPrompt } from "@/lib/prompts";
 import { prisma } from "@/lib/prisma";
-import { createGroupChannel, startChatRequest, streamServerClient } from "@/lib/stream";
 
 const targetId = z.uuid();
 
@@ -59,19 +59,24 @@ export async function sayHi(formData: FormData) {
         select: { user_id: true },
     });
 
-    // Stream first, Postgres second. If channel creation fails, no connections row is
-    // written, so the card stays on Meet and the wave can be retried. The other order
-    // would hide the person with no conversation to show for it. The opposite failure
-    // self-heals: the channel is "distinct" per member pair, so a retry reuses it.
-    const id = await startChatRequest(userId, otherId, { mutual: !!theyWavedFirst });
+    // The conversation first, the connections row second. If the conversation fails, no
+    // connections row is written, so the card stays on Meet and the wave can be retried.
+    // The other order would hide the person with no conversation to show for it. The
+    // opposite failure self-heals: dm_key is unique per pair, so a retry reuses it.
+    const { conversationId, created } = await startDm({
+        senderId: userId,
+        recipientId: otherId,
+        mutual: !!theyWavedFirst,
+    });
 
-    // Only drop an icebreaker into a genuinely fresh conversation - startChatRequest
-    // reuses the same "distinct" channel if this pair already has one (a retried wave,
-    // say), and re-posting a prompt into an already-started chat would just be noise.
-    const channel = streamServerClient.channel("messaging", id);
-    const { messages } = await channel.query({ messages: { limit: 1 } });
-    if (messages.length === 0) {
-        await postIcebreakerPrompt(channel.cid);
+    // Only into a genuinely fresh conversation. A retried wave reuses the existing one, and
+    // re-posting a prompt into a chat that already has messages would just be noise.
+    //
+    // `created` replaces what used to be a round trip to Stream asking whether the channel
+    // had any messages yet — startDm already knows, since it either inserted the row or
+    // found one.
+    if (created) {
+        await postIcebreakerPrompt(conversationId);
     }
 
     await prisma.connections.upsert({
@@ -82,56 +87,60 @@ export async function sayHi(formData: FormData) {
 
     revalidatePath("/meet");
 
-    // Ensure id is defined before redirecting
-    if (!id) {
-        throw new Error("Failed to create chat channel");
-    }
-
-    // greet=1 is what prefills the 👋 — opening a channel no longer implies greeting it,
-    // since forming a group redirects here too and should arrive with an empty composer.
-    redirect(`/chats?c=${encodeURIComponent(id)}&type=messaging&greet=1`);
+    // greet=1 is what prefills the 👋 — opening a conversation no longer implies greeting
+    // it, since forming a group redirects here too and should arrive with an empty composer.
+    //
+    // No `type` any more: a conversation id identifies a conversation on its own, where a
+    // Stream channel id was only unique within its type.
+    redirect(`/chats?c=${encodeURIComponent(conversationId)}&greet=1`);
 }
 
 // void covers the success path: it redirects instead of returning, so the caller only ever
 // receives a value when something went wrong.
 export type FindMyGroupResult = { ok: false; reason: FormGroupFailure } | void;
 
-/// Assigns the caller a group and opens its Stream channel.
+/// Assigns the caller a group and opens its conversation.
 ///
-/// Postgres first, Stream second — deliberately the opposite of sayHi above. There the
-/// Postgres row hides someone from Meet, so writing it before the channel exists is the
-/// harmful order. Here the row is a *claim* on people who can each only be claimed once,
-/// so it has to be taken atomically before anything observable happens: creating the
-/// channel first and then losing the race would leave three or four people holding a group
-/// channel that no row points at and nothing can ever reclaim, once per retry.
+/// The group row first, the conversation second — deliberately the opposite of sayHi above.
+/// There the Postgres row hides someone from Meet, so writing it before the conversation
+/// exists is the harmful order. Here the row is a *claim* on people who can each only be
+/// claimed once, so it has to be taken atomically before anything observable happens:
+/// creating the conversation first and then losing the race would leave three or four people
+/// holding a conversation that no group points at and nothing can ever reclaim.
 ///
-/// The window this opens — row committed, channel missing — is closed by
-/// stream_channel_id staying NULL and by the branch below that finishes the job.
+/// The window this opens — group committed, conversation missing — is closed by the repair
+/// branch below, which is why the group card can offer to retry.
 export async function findMyGroup(): Promise<FindMyGroupResult> {
     const profile = await requireProfile();
 
-    // Already grouped: the only work left is finishing a channel that failed to create.
+    // Already grouped: the only work left is finishing a conversation that failed to create.
     // Re-running formation here would be wrong — they'd be selecting a second group.
     const existing = await getGroupFor(profile.id);
     if (existing) {
-        if (!existing.streamChannelId) {
-            await finishChannel(existing.id, existing.title, existing.members, profile.id);
-            revalidatePath("/meet");
-        }
-        openGroup(existing.id);
+        const conversationId = await finishGroupConversation(
+            existing.id,
+            existing.title,
+            existing.members,
+        );
+        revalidatePath("/meet");
+        openGroup(conversationId);
     }
 
     const result = await formGroupFor(profile);
     if (!result.ok) return result;
 
-    await finishChannel(result.group.id, result.group.title, result.group.members, profile.id);
+    const conversationId = await finishGroupConversation(
+        result.group.id,
+        result.group.title,
+        result.group.members,
+    );
 
     // The card lives here, but the group itself surfaces on /chats — revalidate both so
     // the Active tab has it the moment the user lands.
     revalidatePath("/meet");
     revalidatePath("/chats");
 
-    openGroup(result.group.id);
+    openGroup(conversationId);
 }
 
 /// Sends the user into their group conversation.
@@ -140,30 +149,29 @@ export async function findMyGroup(): Promise<FindMyGroupResult> {
 ///
 /// Must not be called from inside a try — redirect() signals by throwing NEXT_REDIRECT, and
 /// a catch would swallow the navigation and look like a silent no-op.
-function openGroup(groupId: string): never {
-    // The Stream channel id is the group's own uuid — see createGroupChannel.
-    redirect(`/chats?c=${encodeURIComponent(groupId)}&type=team`);
+function openGroup(conversationId: string): never {
+    redirect(`/chats?c=${encodeURIComponent(conversationId)}`);
 }
 
-async function finishChannel(
+/// Creates the group's conversation if it does not have one yet, and returns its id.
+///
+/// Safe to call on a group that already has one: createGroupConversation is keyed by
+/// group_id, so it finds the existing row rather than making a second. That is what makes
+/// the repair branch above a plain call instead of a conditional.
+async function finishGroupConversation(
     groupId: string,
     title: string,
     members: { id: string; username: string }[],
-    createdById: string,
-) {
-    await createGroupChannel(groupId, title, members, createdById);
+): Promise<string> {
+    const { conversationId, created } = await createGroupConversation({
+        groupId,
+        title,
+        memberIds: members.map((member) => member.id),
+    });
 
-    // A freshly created group channel has no messages yet - same "genuinely fresh
-    // conversation" check as sayHi above, just with type: "team" instead of "messaging".
-    const channel = streamServerClient.channel("team", groupId);
-    const { messages } = await channel.query({ messages: { limit: 1 } });
-    if (messages.length === 0) {
-        await postIcebreakerPrompt(channel.cid);
+    if (created) {
+        await postIcebreakerPrompt(conversationId);
     }
 
-    // Only now is the group usable, so only now does the card stop offering to retry.
-    await prisma.groups.update({
-        where: { id: groupId },
-        data: { stream_channel_id: groupId },
-    });
+    return conversationId;
 }
