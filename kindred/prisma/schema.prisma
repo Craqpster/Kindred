@@ -70,6 +70,13 @@ model profiles {
   connections_made     connections[] @relation("connection_actor")
   connections_received connections[] @relation("connection_target")
 
+  // Chat. Two relations to conversations, so they need names like the pair above.
+  conversation_memberships conversation_members[]
+  messages_sent            messages[]
+  reactions                message_reactions[]
+  waves_sent               conversations[]        @relation("conversation_requester")
+  waves_received           conversations[]        @relation("conversation_requestee")
+
   @@index([gender_id])
   @@schema("public")
 }
@@ -91,17 +98,174 @@ model connections {
   @@schema("public")
 }
 
+/// A DM or a group chat. Replaces the Stream channel - see docs/chat-rework-plan.md.
+///
+/// `kind`, the DM/group shape rules, and the "a wave is both markers or neither" rule are
+/// CHECK constraints Prisma cannot model; they live in the migration.
+model conversations {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// 'dm' | 'group'.
+  kind String
+
+  /// Groups only. A DM titles itself from whoever the other member is, so storing a title
+  /// would mean storing it twice - once per reader.
+  title    String?
+  group_id String? @unique @db.Uuid
+
+  /// The wave. requested_of being non-null IS "pending", which is the rule the Stream
+  /// custom field of the same name encoded - now a column the Pending tab filters in SQL
+  /// instead of a field the client partitions on after fetching everything.
+  requested_by String? @db.Uuid
+  requested_of String? @db.Uuid
+
+  /// least(a,b):greatest(a,b) of the two member ids, NULL for groups. The unique index on
+  /// it is what makes waving at the same person twice reuse the conversation, replacing
+  /// Stream's "omit the channel id and it becomes distinct per member pair" behaviour with
+  /// something a reader can see.
+  dm_key String? @unique
+
+  /// Denormalized so the chat list sorts and previews without a correlated subquery per
+  /// row. Written ONLY by the messages_touch_conversation trigger - never by application
+  /// code, because the UPDATE it performs is also the realtime signal the list reorders on.
+  last_message_at DateTime? @db.Timestamptz(6)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  group     groups?   @relation(fields: [group_id], references: [id], onDelete: Cascade)
+  requester profiles? @relation("conversation_requester", fields: [requested_by], references: [id], onDelete: SetNull)
+  requestee profiles? @relation("conversation_requestee", fields: [requested_of], references: [id], onDelete: SetNull)
+
+  members        conversation_members[]
+  messages       messages[]
+  xp             channel_xp?
+  daily_activity daily_chat_activity[]
+  daily_bonuses  daily_bonus_awards[]
+  game_sessions  game_sessions[]
+
+  @@schema("public")
+}
+
+/// Who is in a conversation. One table for DMs and groups both, which is the thing Stream
+/// owning membership made impossible - a DM had no row in group_members at all, so
+/// "who is in this chat" had to be an API call (see the old channelMemberIds).
+model conversation_members {
+  conversation_id String @db.Uuid
+  profile_id      String @db.Uuid
+
+  /// Drives the unread badge: messages in this conversation newer than this. Written only
+  /// by markRead.
+  last_read_at DateTime @default(now()) @db.Timestamptz(6)
+  joined_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  conversation conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  profile      profiles      @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([conversation_id, profile_id])
+  /// The primary key leads with conversation_id, so "which conversations am I in" - the
+  /// query behind every page load - would sequential-scan without this.
+  @@index([profile_id])
+  @@schema("public")
+}
+
+/// One chat message. `kind` is what Stream's `messageType` custom field was, and is
+/// CHECK-constrained in the migration along with the rule that only a prompt_response may
+/// carry a prompt_id and only a game_invite a game_type.
+model messages {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversation_id String @db.Uuid
+
+  /// NULL means the Kindred bot posted it. A bot profile row would need an auth.users row
+  /// to point at, and the bot has no account - so absence is the marker.
+  ///
+  /// Cascades rather than SET NULL on purpose: SET NULL would quietly reattribute a
+  /// deleted person's messages to the bot.
+  sender_id String? @db.Uuid
+
+  /// 'text' | 'icebreaker_prompt' | 'prompt_response' | 'game_invite'.
+  kind String @default("text")
+  body String
+
+  /// The quoted message, if this is a reply to one.
+  reply_to_id String? @db.Uuid
+
+  /// prompt_response only: which icebreaker this answers. An explicit column rather than a
+  /// metadata blob, so IcebreakerCard's "who has answered this prompt" is an index rather
+  /// than a scan of everything loaded in the timeline.
+  prompt_id String? @db.Uuid
+
+  /// Threaded replies. NULL is a top-level message; non-NULL lives in that message's
+  /// thread and is kept out of the main timeline. One level deep, not a tree - the
+  /// "parent must itself be top-level" half of that is enforced in lib/chat/mutations.ts,
+  /// since a CHECK cannot see the parent row.
+  parent_id String? @db.Uuid
+
+  /// game_invite only.
+  game_type String?
+
+  /// Soft delete - the timeline keeps the slot, the way Stream's type: "deleted" did.
+  deleted_at DateTime? @db.Timestamptz(6)
+  edited_at  DateTime? @db.Timestamptz(6)
+  pinned_at  DateTime? @db.Timestamptz(6)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+
+  conversation conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  sender       profiles?     @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+
+  // Three self-relations, so each needs a name to tell them apart.
+  reply_to messages?  @relation("message_reply", fields: [reply_to_id], references: [id], onDelete: SetNull)
+  quotes   messages[] @relation("message_reply")
+  prompt   messages?  @relation("message_prompt", fields: [prompt_id], references: [id], onDelete: SetNull)
+  answers  messages[] @relation("message_prompt")
+  parent   messages?  @relation("message_thread", fields: [parent_id], references: [id], onDelete: Cascade)
+  thread   messages[] @relation("message_thread")
+
+  reactions message_reactions[]
+
+  /// The main timeline is "top-level messages in this conversation, newest first", so
+  /// parent_id belongs in the index rather than as a filter applied after it.
+  @@index([conversation_id, parent_id, created_at])
+  @@index([parent_id])
+  @@index([prompt_id])
+  @@schema("public")
+}
+
+/// One emoji from one person on one message.
+///
+/// The composite primary key makes reacting twice a no-op instead of a duplicate - the
+/// same trick prompt_awards and daily_bonus_awards use to make an insert the claim.
+model message_reactions {
+  message_id String   @db.Uuid
+  profile_id String   @db.Uuid
+  emoji      String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
+  @@id([message_id, profile_id, emoji])
+  @@index([message_id])
+  @@schema("public")
+}
+
 /// One shared XP total per Stream chat channel (group or DM) - not per person. Both/all
 /// participants in a channel see the same number; it reflects how "warmed up" that
 /// specific conversation is, separate from profiles.confidence_level (a per-person,
 /// global stat). channel_cid is Stream's own channel id (e.g. "messaging:abc123"),
 /// which is why this has no foreign key to any of our own tables - Stream owns
 /// channels, we just keep a counter next to one.
+///
+/// channel_cid is on its way out. conversation_id is nullable only until
+/// scripts/migrate-stream-to-supabase.ts backfills it (phase 7 of the chat rework, which
+/// has to run while Stream can still say which pair of people a cid belongs to); migration
+/// B then drops channel_cid and makes this the primary key.
 model channel_xp {
-  channel_cid String   @id
-  xp          Int      @default(0)
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  updated_at  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  channel_cid     String   @id
+  conversation_id String?  @unique @db.Uuid
+  xp              Int      @default(0)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
   @@schema("public")
 }
@@ -140,14 +304,18 @@ model prompt_awards {
 ///
 /// `day` is a UTC date, not a timestamp: the boundary has to be the same for both people
 /// in a conversation regardless of where they are.
+///
+/// conversation_id is nullable until the phase 7 backfill - see channel_xp above.
 model daily_chat_activity {
   channel_cid         String   @db.Text
+  conversation_id     String?  @db.Uuid
   profile_id          String   @db.Uuid
   day                 DateTime @db.Date
   qualifying_messages Int      @default(0)
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  profile      profiles       @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
   @@id([channel_cid, profile_id, day])
   @@schema("public")
@@ -161,11 +329,16 @@ model daily_chat_activity {
 ///
 /// channel_cid is Stream's id, so - like channel_xp - there is no foreign key to
 /// anything of ours.
+///
+/// conversation_id is nullable until the phase 7 backfill - see channel_xp above.
 model daily_bonus_awards {
-  channel_cid String   @db.Text
-  day         DateTime @db.Date
-  xp_awarded  Int
-  awarded_at  DateTime @default(now()) @db.Timestamptz(6)
+  channel_cid     String   @db.Text
+  conversation_id String?  @db.Uuid
+  day             DateTime @db.Date
+  xp_awarded      Int
+  awarded_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
   @@id([channel_cid, day])
   @@schema("public")
@@ -183,11 +356,14 @@ model groups {
   /// so a stale value here would silently undo a rename.
   title String
 
+  /// On its way out: conversations.group_id points here instead, so the group's chat is
+  /// reached by relation rather than by an id string with no foreign key behind it.
   stream_channel_id String? @unique
 
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
-  members group_members[]
+  members      group_members[]
+  conversation conversations?
 
   @@schema("public")
 }
@@ -213,11 +389,13 @@ model group_members {
 /// without a real Postgres enum, and a real enum would need its own migration every
 /// time a game is added anyway.
 model game_sessions {
-  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  channel_cid   String @db.Text
-  game_type     String @db.Text
-  player_one_id String @db.Uuid
-  player_two_id String @db.Uuid
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  channel_cid     String  @db.Text
+  /// Nullable until the phase 7 backfill - see channel_xp.
+  conversation_id String? @db.Uuid
+  game_type       String  @db.Text
+  player_one_id   String  @db.Uuid
+  player_two_id   String  @db.Uuid
 
   /// The game_invite chat message (GameControllerBar.tsx/GameInviteCard.tsx) this
   /// session was claimed from, if it started that way rather than an immediate 1:1
@@ -231,9 +409,11 @@ model game_sessions {
   created_at        DateTime @default(now()) @db.Timestamptz(6)
   updated_at        DateTime @updatedAt @db.Timestamptz(6)
 
-  player_one profiles @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
-  player_two profiles @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
+  player_one   profiles       @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
+  player_two   profiles       @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
+  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
+  @@index([conversation_id])
   @@index([channel_cid])
   @@index([player_two_id])
   @@schema("public")
