@@ -8,7 +8,7 @@ import TextInput from "@/components/ui/TextInput";
 import { ageFrom } from "@/lib/age";
 import type { ResolvedTag } from "@/lib/onboarding-tags";
 
-import { AVATAR_STYLES, AVATAR_SEED_OPTIONS, TOTAL_STEPS, MIN_AGE } from "./constants";
+import { AVATAR_STYLES, AVATAR_SEED_OPTIONS, MIN_AGE } from "./constants";
 import { Progress, Step, Heading, Sub, NavigationFooter } from "./WizardLayout";
 import { AvatarLookSelector } from "./AvatarSelector";
 import { HandleSelector, TagSelector, EaseInSelector, GenderSelector } from "./FormSelectors";

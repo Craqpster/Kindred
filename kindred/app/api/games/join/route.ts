@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const result = await streamServerClient.partialUpdateMessage(
+        await streamServerClient.partialUpdateMessage(
             messageId,
             {
                 set: {

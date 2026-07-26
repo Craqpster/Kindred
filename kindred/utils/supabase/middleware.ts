@@ -21,7 +21,10 @@ export const updateSession = async (request: NextRequest) => {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          // No options here on purpose: this copy only has to make the refreshed cookies
+          // visible to the rest of THIS request. The response copy below is the one the
+          // browser sees, and that is where the options matter.
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({
             request,
           })

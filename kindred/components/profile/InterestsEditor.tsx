@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
 import Button from "@/components/ui/Button";
@@ -54,7 +55,12 @@ export function InterestsEditor({
         }
     };
 
-    const renderGroup = (title: string, items: Item[], selected: Set<number>, setSelected: any) => (
+    const renderGroup = (
+        title: string,
+        items: Item[],
+        selected: Set<number>,
+        setSelected: Dispatch<SetStateAction<Set<number>>>,
+    ) => (
         <div className="mb-4 last:mb-0">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-star-sapphire/60 mb-2">{title}</h4>
             <div className="flex flex-wrap gap-2">

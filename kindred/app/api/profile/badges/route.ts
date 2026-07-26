@@ -70,7 +70,7 @@ export async function PATCH() {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { userId } = await verifySession();
 
@@ -171,7 +171,7 @@ export async function GET(req: Request) {
           for (const ch of channels) {
             const memberCount = (ch.data?.member_count) || (ch.state?.members ? Object.keys(ch.state.members).length : null);
             if (memberCount && memberCount > 2) {
-              const msgs = (ch.state && (ch.state.messages as any[])) || [];
+              const msgs = ch.state?.messages ?? [];
               if (msgs.some((m) => m.user && m.user.id === userId)) { sentInGroup = true; break; }
             }
           }
@@ -203,7 +203,7 @@ export async function GET(req: Request) {
           let emojiCount = 0;
           const emojiOnly = /^\p{Extended_Pictographic}+$|^[\p{Extended_Pictographic}\p{Emoji_Presentation}\s]+$/u;
           for (const ch of channels) {
-            const msgs = (ch.state && (ch.state.messages as any[])) || [];
+            const msgs = ch.state?.messages ?? [];
             for (const m of msgs) {
               if (m.user && m.user.id === userId && typeof m.text === 'string') {
                 if (emojiOnly.test(m.text.trim())) emojiCount += 1;
