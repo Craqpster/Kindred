@@ -61,7 +61,10 @@ export function messageFromRow(row: MessageRow, membersById: Map<string, ChatMem
 /// Both halves matter. Realtime can deliver a message the sender already added from its own
 /// send response, so appending blindly shows it twice; and a message that arrives while
 /// history is loading can land out of order, so appending to the end is not enough either.
-export function mergeMessage(messages: ChatMessage[], incoming: ChatMessage): ChatMessage[] {
+/// Generic over the element so a timeline holding TimelineMessage keeps its `status` in the
+/// type as well as at runtime. Returning ChatMessage[] would type-check — status is optional,
+/// so the two are assignable — while quietly claiming the field had been dropped.
+export function mergeMessage<T extends ChatMessage>(messages: T[], incoming: T): T[] {
     const withoutDuplicate = messages.filter((message) => message.id !== incoming.id);
 
     const index = withoutDuplicate.findIndex(

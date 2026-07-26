@@ -84,7 +84,25 @@ export type ChatConversation = {
     /// True when the viewer is the one being waved AT, so the UI can say "wants to say hi"
     /// rather than "waiting on a reply".
     awaitingYou: boolean;
+    /// When each OTHER member last read this conversation, keyed by profile id.
+    ///
+    /// A message counts as read by someone when their timestamp here is newer than it. That
+    /// makes a read receipt a comparison rather than a per-message table — one row per
+    /// member instead of one row per message per member, which is the difference between a
+    /// column and a write on every scroll.
+    readBy: Record<string, string>;
 };
+
+/// A message on its way out, before the server has confirmed it.
+///
+/// Only ever exists in the composer's own optimistic copy: `sending` becomes `sent` when the
+/// action returns, and there is no `delivered` because a browser has nothing to acknowledge
+/// delivery with. Whether the other person is actually there is presence, and says so.
+export type MessageStatus = "sending" | "sent" | "failed";
+
+/// What the timeline holds: the server's message, plus how far along it is if this client is
+/// the one sending it. Anything loaded from the server is simply `sent`.
+export type TimelineMessage = ChatMessage & { status?: MessageStatus };
 
 /// A page of messages, oldest-first the way a timeline reads.
 export type MessagePage = {

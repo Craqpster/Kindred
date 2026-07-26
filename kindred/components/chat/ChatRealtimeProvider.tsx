@@ -136,6 +136,36 @@ export default function ChatRealtimeProvider({
                     );
                 },
             )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "conversation_members" },
+                (payload) => {
+                    const row = payload.new as {
+                        conversation_id: string;
+                        profile_id: string;
+                        last_read_at: string;
+                    };
+
+                    // Somebody read a conversation. Their own client does not care, but the
+                    // person who sent the last message does — this is what turns one tick
+                    // into two without a table of per-message receipts.
+                    if (row.profile_id === userId) return;
+
+                    setConversations((current) =>
+                        current.map((conversation) =>
+                            conversation.id === row.conversation_id
+                                ? {
+                                      ...conversation,
+                                      readBy: {
+                                          ...conversation.readBy,
+                                          [row.profile_id]: row.last_read_at,
+                                      },
+                                  }
+                                : conversation,
+                        ),
+                    );
+                },
+            )
             .subscribe((status) => {
                 setConnected(status === "SUBSCRIBED");
             });
@@ -146,11 +176,18 @@ export default function ChatRealtimeProvider({
     }, [userId, showToast]);
 
     // Re-seed when the server sends a newer list — a wave creates a conversation this
-    // subscription never sees, since the INSERT lands on a row the user was not yet a member
-    // of when the socket applied its policy check.
-    useEffect(() => {
+    // subscription never sees, because the INSERT lands on a row the user was not yet a
+    // member of when Realtime applied its policy check.
+    //
+    // Adjusted during render rather than in an effect. Setting state from an effect renders
+    // once with the stale list and again with the new one, and React flags it for exactly
+    // that reason; this way the stale render never commits. Same shape OnboardingWizard.tsx
+    // uses to fold a server action's result into local state.
+    const [seenConversations, setSeenConversations] = useState(initialConversations);
+    if (seenConversations !== initialConversations) {
+        setSeenConversations(initialConversations);
         setConversations(initialConversations);
-    }, [initialConversations]);
+    }
 
     const value = useMemo(
         () => ({ conversations, onMessage, connected }),

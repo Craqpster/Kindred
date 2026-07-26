@@ -142,7 +142,10 @@ export async function listConversations(userId: string): Promise<ChatConversatio
                     requested_of: true,
                     last_message_at: true,
                     members: {
-                        select: { profile: { select: MEMBER_SELECT } },
+                        select: {
+                            last_read_at: true,
+                            profile: { select: MEMBER_SELECT },
+                        },
                         orderBy: { joined_at: "asc" },
                     },
                 },
@@ -159,10 +162,19 @@ export async function listConversations(userId: string): Promise<ChatConversatio
     ]);
 
     const conversations = memberships.map(({ conversation }) => {
-        const others = conversation.members
-            .map((member) => member.profile)
-            .filter((profile) => profile.id !== userId)
-            .map(toMember);
+        const otherMembers = conversation.members.filter(
+            (member) => member.profile.id !== userId,
+        );
+        const others = otherMembers.map((member) => toMember(member.profile));
+
+        // Only other people's timestamps: your own tells you nothing about whether anyone
+        // has seen what you said.
+        const readBy = Object.fromEntries(
+            otherMembers.map((member) => [
+                member.profile.id,
+                member.last_read_at.toISOString(),
+            ]),
+        );
 
         const latest = previews.get(conversation.id);
 
@@ -178,6 +190,7 @@ export async function listConversations(userId: string): Promise<ChatConversatio
             unreadCount: unread.get(conversation.id) ?? 0,
             pending: conversation.requested_of !== null,
             awaitingYou: conversation.requested_of === userId,
+            readBy,
         };
     });
 

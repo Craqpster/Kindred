@@ -10,7 +10,7 @@ import ConversationRow from "@/components/chat/ConversationRow";
 import MessageBubble from "@/components/chat/MessageBubble";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
 import { mergeMessage, messageFromRow } from "@/lib/chat/realtime";
-import type { ChatConversation, ChatMessage } from "@/lib/chat/types";
+import type { ChatConversation, ChatMessage, TimelineMessage } from "@/lib/chat/types";
 
 const GREETING = "👋";
 
@@ -101,8 +101,19 @@ function Thread({
     greet: boolean;
 }) {
     const { onMessage } = useChatRealtime();
-    const [messages, setMessages] = useState(initialMessages);
+    const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
     const bottomRef = useRef<HTMLDivElement>(null);
+
+    /// The oldest moment everyone else has read up to.
+    ///
+    /// The MINIMUM across the other members, so a group only shows two ticks once the whole
+    /// room has seen it. For a DM there is one other person and this is simply their
+    /// timestamp. Null when somebody has never opened the conversation at all.
+    const readThrough = useMemo(() => {
+        const timestamps = conversation.others.map((member) => conversation.readBy[member.id]);
+        if (timestamps.length === 0 || timestamps.some((at) => !at)) return null;
+        return timestamps.reduce((oldest, at) => (at < oldest ? at : oldest));
+    }, [conversation.others, conversation.readBy]);
 
     // Everyone who could have written in here, so an arriving row can be given a name and a
     // face without a round trip. See messageFromRow.
@@ -148,6 +159,7 @@ function Thread({
                             message={message}
                             isOwn={message.sender?.id === userId}
                             showSender={messages[index - 1]?.sender?.id !== message.sender?.id}
+                            read={!!readThrough && readThrough >= message.createdAt}
                         />
                     ))
                 )}
@@ -156,8 +168,19 @@ function Thread({
 
             <Composer
                 conversationId={conversation.id}
+                userId={userId}
                 greeting={greet ? GREETING : undefined}
-                onSent={(message) => setMessages((current) => mergeMessage(current, message))}
+                onOptimistic={(message) =>
+                    setMessages((current) => mergeMessage(current, message))
+                }
+                onSettled={(temporaryId, message) =>
+                    setMessages((current) => {
+                        // The optimistic copy goes either way: replaced by the server's
+                        // version, or dropped when the send was refused.
+                        const without = current.filter((m) => m.id !== temporaryId);
+                        return message ? mergeMessage(without, message) : without;
+                    })
+                }
             />
         </>
     );

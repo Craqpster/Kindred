@@ -4,7 +4,7 @@ import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { sendChatMessage } from "@/app/(app)/chats/actions";
-import type { ChatMessage } from "@/lib/chat/types";
+import type { TimelineMessage } from "@/lib/chat/types";
 
 /// How the moderation refusal is explained. The copy lives here so every surface that can
 /// send says the same thing.
@@ -17,15 +17,20 @@ function noticeFor(cooldownUntil: number | null, secondsLeft: number): string {
 
 export default function Composer({
     conversationId,
+    userId,
     greeting,
-    onSent,
+    onOptimistic,
+    onSettled,
 }: {
     conversationId: string;
+    userId: string;
     /// Prefilled when arriving from a wave, so the 👋 is already there to send.
     greeting?: string;
-    /// The server's copy of the message, so the timeline can show it without waiting for the
-    /// realtime round trip.
-    onSent: (message: ChatMessage) => void;
+    /// Shown immediately, before the server has been asked. Carries a temporary id.
+    onOptimistic: (message: TimelineMessage) => void;
+    /// The server's copy replaces the optimistic one — or null when the send was refused,
+    /// which removes it again.
+    onSettled: (temporaryId: string, message: TimelineMessage | null) => void;
 }) {
     const [draft, setDraft] = useState(greeting ?? "");
     const [sending, setSending] = useState(false);
@@ -63,23 +68,61 @@ export default function Composer({
         const body = draft.trim();
         if (!body || sending) return;
 
+        // Shown before the server is even asked, so the bubble appears the instant Enter is
+        // pressed rather than after a round trip. The id is temporary and gets swapped for
+        // the real one below — it exists so the optimistic copy can be found again.
+        const temporaryId = crypto.randomUUID();
+        onOptimistic({
+            id: temporaryId,
+            conversationId,
+            kind: "text",
+            body,
+            // Enough of a sender to be recognised as yours. Own messages render without a
+            // name or avatar, so nothing else here would be drawn.
+            sender: { id: userId, username: "", avatarId: null, avatarSeed: null },
+            replyTo: null,
+            promptId: null,
+            parentId: null,
+            replyCount: 0,
+            gameType: null,
+            reactions: [],
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+            deletedAt: null,
+            pinnedAt: null,
+            status: "sending",
+        });
+
+        // Cleared now rather than on success: the message is visibly in the timeline, so
+        // leaving it in the box too would read as though it had not sent.
+        setDraft("");
         setSending(true);
+
         try {
             const result = await sendChatMessage({ conversationId, body });
 
             if (result.ok) {
-                setDraft("");
                 setNotice(null);
-                onSent(result.message);
+                onSettled(temporaryId, { ...result.message, status: "sent" });
                 return;
             }
 
+            // Refused, so the optimistic bubble has to go — leaving it would show a message
+            // that does not exist and that nobody will ever receive.
+            onSettled(temporaryId, null);
+
             if (result.reason === "moderated") {
-                // The draft is deliberately kept: the message was refused, not lost, and
-                // making someone retype it to rephrase it would be its own punishment.
+                // The text comes back to the box: it was refused, not lost, and making
+                // someone retype it in order to rephrase it would be its own punishment.
+                setDraft(body);
                 setCooldownUntil(result.cooldownUntil);
                 setNotice(noticeFor(result.cooldownUntil, secondsLeft));
             }
+        } catch {
+            // The action never reached the server, or never came back. Same treatment.
+            onSettled(temporaryId, null);
+            setDraft(body);
+            setNotice("That message didn't send. Check your connection and try again.");
         } finally {
             setSending(false);
         }
