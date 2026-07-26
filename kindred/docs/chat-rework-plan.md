@@ -322,26 +322,25 @@ Two decisions worth making while building these rather than after:
 
 ---
 
-## 5. Cutover — keeping XP, dropping messages
+## 5. Cutover — done early, in phase 2
 
-XP tables are keyed by Stream's `channel_cid`, and the only thing that knows which two people a
-`messaging:!members-abc` belongs to is Stream. So the mapping has to be built **before** Stream
-is torn down. Three steps, in this order:
+**Superseded on 2026-07-25.** The original plan kept the old XP totals, which meant building a
+`channel_cid` → conversation mapping out of Stream before Stream could be removed, and carrying a
+dual-keyed schema until then. The decision changed to starting XP fresh, and that removed the
+entire problem: with nothing to carry across, there is nothing to read out of Stream, so the
+cutover stopped being a phase-7 dependency.
 
-1. **Migration A** — create the new tables and RLS; add a *nullable* `conversation_id` to
-   `channel_xp`, `daily_chat_activity`, `daily_bonus_awards`, `game_sessions`. Nothing breaks;
-   Stream still runs.
-2. **`scripts/migrate-stream-to-supabase.ts`** — query every Stream channel (members only, not
-   messages), create the matching `conversations` + `conversation_members` rows, then fill in
-   `conversation_id` on the four tables by matching `channel_cid`. Idempotent, so it can be run
-   twice. Prints a report of anything it couldn't match.
-3. **Migration B** — `conversation_id` NOT NULL, drop `channel_cid`, rebuild the primary keys,
-   delete `prompt_awards` rows (their prompts are gone), abandon any `in_progress` game session
-   (its `invite_message_id` pointed at a Stream message) while keeping completed ones so the
-   Game Winner badge survives.
+`20260726000000_rekey_xp_on_conversations` did it instead:
 
-Per [AGENTS.md](../AGENTS.md), migrations run through `DIRECT_URL`; the script uses Prisma and so
-goes through the pooler as usual.
+- deleted the XP history — 21 `channel_xp`, 20 `daily_chat_activity`, 13 `prompt_awards`
+- re-keyed all three onto `conversation_id`, dropping `channel_cid` entirely
+- turned `prompt_awards.prompt_id` from an opaque Stream id into a real foreign key
+- **kept every `game_sessions` row.** Games are not XP; they only shared the column. Those 43
+  rows are what `hasStartedAGame` / `hasWonAGame` read for the Game Starter and Game Winner
+  badges. In-progress games were marked abandoned, since the channel they were played in is
+  going away.
+
+No `channel_cid` column survives anywhere. Phase 7 is now only deleting Stream code.
 
 ---
 
@@ -368,7 +367,7 @@ Phase 4 is the first commit that would ship something half-built if merged early
 | 4 | List, timeline, composer, tabs. First point Stream is visibly unused. | large |
 | 5 | Kindred parity: icebreakers, XP ring, games, presence, typing, unread, toasts. | large |
 | 6 | Message actions: reactions, threads, edit, delete, pin, offline/reconnect handling. | large |
-| 7 | Cutover script, migration B, delete Stream (deps, env, CSS, files). | medium |
+| 7 | Delete Stream (deps, env, CSS, files). The data cutover already happened in phase 2. | small |
 | 8 | Rewrite the Chat section of CLAUDE.md, lint, manual QA. | small |
 
 ### Verify early, in phase 3

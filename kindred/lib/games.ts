@@ -24,7 +24,7 @@ export function initialStateFor(gameType: GameType) {
 /// message atomic: it's a plain unique column, so two people racing to join the same
 /// invite are really racing to insert the same value here, and only one create() wins.
 export async function createGameSession(
-    channelCid: string,
+    conversationId: string,
     gameType: string,
     playerOneId: string,
     playerTwoId: string,
@@ -33,7 +33,7 @@ export async function createGameSession(
 ) {
     return prisma.game_sessions.create({
         data: {
-            channel_cid: channelCid,
+            conversation_id: conversationId,
             game_type: gameType,
             player_one_id: playerOneId,
             player_two_id: playerTwoId,
@@ -74,10 +74,10 @@ export async function getGameSession(sessionId: string) {
 /// what GameControllerBar checks to decide between "start a game" and "resume mine".
 /// Normally zero or one, but nothing stops the same person playing two different
 /// partners in the same group at once, so this is a list, not a single lookup.
-export async function getMyActiveGameSessions(channelCid: string, userId: string) {
+export async function getMyActiveGameSessions(conversationId: string, userId: string) {
     const sessions = await prisma.game_sessions.findMany({
         where: {
-            channel_cid: channelCid,
+            conversation_id: conversationId,
             status: "in_progress",
             OR: [{ player_one_id: userId }, { player_two_id: userId }],
         },

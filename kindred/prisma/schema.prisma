@@ -219,7 +219,11 @@ model messages {
   parent   messages?  @relation("message_thread", fields: [parent_id], references: [id], onDelete: Cascade)
   thread   messages[] @relation("message_thread")
 
-  reactions message_reactions[]
+  reactions     message_reactions[]
+  /// Who has already been paid XP for answering this prompt, and the game claimed from this
+  /// invite — both used to be opaque Stream ids with no foreign key behind them.
+  prompt_awards prompt_awards[]
+  game_sessions game_sessions[]
 
   /// The main timeline is "top-level messages in this conversation, newest first", so
   /// parent_id belongs in the index rather than as a filter applied after it.
@@ -259,13 +263,12 @@ model message_reactions {
 /// has to run while Stream can still say which pair of people a cid belongs to); migration
 /// B then drops channel_cid and makes this the primary key.
 model channel_xp {
-  channel_cid     String   @id
-  conversation_id String?  @unique @db.Uuid
+  conversation_id String   @id @db.Uuid
   xp              Int      @default(0)
   created_at      DateTime @default(now()) @db.Timestamptz(6)
   updated_at      DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  conversation conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
   @@schema("public")
 }
@@ -281,11 +284,12 @@ model channel_xp {
 /// prompt_id is a Stream message id, so - like channel_xp.channel_cid - it has no foreign
 /// key to anything of ours. Stream owns the message; we only record that we paid for it.
 model prompt_awards {
-  prompt_id  String   @db.Text
+  prompt_id  String   @db.Uuid
   profile_id String   @db.Uuid
   awarded_at DateTime @default(now()) @db.Timestamptz(6)
 
   profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  prompt  messages @relation(fields: [prompt_id], references: [id], onDelete: Cascade)
 
   @@id([prompt_id, profile_id])
   @@schema("public")
@@ -307,17 +311,16 @@ model prompt_awards {
 ///
 /// conversation_id is nullable until the phase 7 backfill - see channel_xp above.
 model daily_chat_activity {
-  channel_cid         String   @db.Text
-  conversation_id     String?  @db.Uuid
+  conversation_id     String   @db.Uuid
   profile_id          String   @db.Uuid
   day                 DateTime @db.Date
   qualifying_messages Int      @default(0)
   updated_at          DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 
-  profile      profiles       @relation(fields: [profile_id], references: [id], onDelete: Cascade)
-  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  profile      profiles      @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  conversation conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
-  @@id([channel_cid, profile_id, day])
+  @@id([conversation_id, profile_id, day])
   @@schema("public")
 }
 
@@ -332,15 +335,14 @@ model daily_chat_activity {
 ///
 /// conversation_id is nullable until the phase 7 backfill - see channel_xp above.
 model daily_bonus_awards {
-  channel_cid     String   @db.Text
-  conversation_id String?  @db.Uuid
+  conversation_id String   @db.Uuid
   day             DateTime @db.Date
   xp_awarded      Int
   awarded_at      DateTime @default(now()) @db.Timestamptz(6)
 
-  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  conversation conversations @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
 
-  @@id([channel_cid, day])
+  @@id([conversation_id, day])
   @@schema("public")
 }
 
@@ -389,13 +391,16 @@ model group_members {
 /// without a real Postgres enum, and a real enum would need its own migration every
 /// time a game is added anyway.
 model game_sessions {
-  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  channel_cid     String  @db.Text
-  /// Nullable until the phase 7 backfill - see channel_xp.
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// Nullable, unlike the XP tables: a game played before the chat rework genuinely has no
+  /// conversation to point at, and these rows outlive their chat because lib/games.ts reads
+  /// them for the Game Starter and Game Winner badges.
   conversation_id String? @db.Uuid
-  game_type       String  @db.Text
-  player_one_id   String  @db.Uuid
-  player_two_id   String  @db.Uuid
+
+  game_type     String @db.Text
+  player_one_id String @db.Uuid
+  player_two_id String @db.Uuid
 
   /// The game_invite chat message (GameControllerBar.tsx/GameInviteCard.tsx) this
   /// session was claimed from, if it started that way rather than an immediate 1:1
@@ -403,18 +408,18 @@ model game_sessions {
   /// distinct, so any number of non-invite (NULL) sessions coexist fine, while this is
   /// what actually makes "first join wins" atomic: two people joining the same invite
   /// race to set the SAME non-null value here, and only one create() can win it.
-  invite_message_id String?  @unique @db.Text
+  invite_message_id String?  @unique @db.Uuid
   state             Json     @db.JsonB
   status            String   @default("in_progress") @db.Text
   created_at        DateTime @default(now()) @db.Timestamptz(6)
   updated_at        DateTime @updatedAt @db.Timestamptz(6)
 
-  player_one   profiles       @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
-  player_two   profiles       @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
-  conversation conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  player_one     profiles       @relation("game_session_player_one", fields: [player_one_id], references: [id], onDelete: Cascade)
+  player_two     profiles       @relation("game_session_player_two", fields: [player_two_id], references: [id], onDelete: Cascade)
+  conversation   conversations? @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+  invite_message messages?      @relation(fields: [invite_message_id], references: [id], onDelete: SetNull)
 
   @@index([conversation_id])
-  @@index([channel_cid])
   @@index([player_two_id])
   @@schema("public")
 }
