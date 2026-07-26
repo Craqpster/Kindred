@@ -82,8 +82,16 @@ model profiles {
 }
 
 /// One directional Meet action: `user_id` acted on `other_id`. The matcher excludes any
-/// `other_id` the current user already has a row for, so dismissed and greeted people do
-/// not resurface. `status` is CHECK-constrained in the migration (Prisma can't model it).
+/// `other_id` the current user already has a row for, so someone greeted never resurfaces
+/// on Meet — the conversation is where they live from then on.
+///
+/// In practice `status` is always 'greeted'. The CHECK constraint in the migration allows
+/// more, and this comment used to claim dismissed people were excluded too, but nothing
+/// writes a dismissal: Meet has no per-person reject by design (see MoreMatches.tsx), so
+/// sayHi is the only thing that ever inserts here.
+///
+/// scripts/reset-connections.ts clears these when testing, since two accounts otherwise use
+/// each other up on the first wave.
 model connections {
   user_id    String   @db.Uuid
   other_id   String   @db.Uuid
