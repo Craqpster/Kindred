@@ -34,11 +34,19 @@ function dmKeyFor(a: string, b: string): string {
 ///
 /// Returns the conversation id, and whether it had to be created — sayHi only drops an
 /// opening icebreaker into a genuinely new conversation, never into a retried wave.
-export async function startDm(
-    senderId: string,
-    recipientId: string,
-    { mutual = false }: { mutual?: boolean } = {},
-): Promise<{ conversationId: string; created: boolean }> {
+/// Named arguments because sender and recipient are both uuid strings and the order carries
+/// the entire meaning: swapped, this still succeeds and still creates a conversation, just
+/// with the wave pointing the wrong way. A wrong-but-plausible result is far worse than a
+/// failure, so the call site is made to say which is which.
+export async function startDm({
+    senderId,
+    recipientId,
+    mutual = false,
+}: {
+    senderId: string;
+    recipientId: string;
+    mutual?: boolean;
+}): Promise<{ conversationId: string; created: boolean }> {
     const dmKey = dmKeyFor(senderId, recipientId);
 
     const existing = await prisma.conversations.findUnique({
@@ -80,11 +88,15 @@ export async function startDm(
 /// Keyed by group_id rather than given a fresh id, which makes it idempotent: retrying after
 /// a failed run reuses the conversation instead of orphaning one. That is the same reason
 /// the Stream version passed the group's uuid as an explicit channel id.
-export async function createGroupConversation(
-    groupId: string,
-    title: string,
-    memberIds: string[],
-): Promise<{ conversationId: string; created: boolean }> {
+export async function createGroupConversation({
+    groupId,
+    title,
+    memberIds,
+}: {
+    groupId: string;
+    title: string;
+    memberIds: string[];
+}): Promise<{ conversationId: string; created: boolean }> {
     const existing = await prisma.conversations.findUnique({
         where: { group_id: groupId },
         select: { id: true },
@@ -139,7 +151,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     if (!text) return { ok: false, reason: "empty" };
 
     // A null sender is the bot, which is server-side by construction and has no membership.
-    if (senderId && !(await isMember(conversationId, senderId))) {
+    if (senderId && !(await isMember({ conversationId, userId: senderId }))) {
         return { ok: false, reason: "not_a_member" };
     }
 
@@ -179,7 +191,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     });
 
     if (senderId) {
-        await acceptWaveOnReply(conversationId, senderId);
+        await acceptWaveOnReply({ conversationId, senderId });
     }
 
     // Never allowed to throw: by this point the message is already in the conversation, and
@@ -187,13 +199,13 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     let award: AwardResult | null = null;
     if (senderId) {
         try {
-            award = await awardConfidenceForMessage(
-                senderId,
+            award = await awardConfidenceForMessage({
+                userId: senderId,
                 conversationId,
-                created.id,
+                messageId: created.id,
                 text,
-                input.promptId,
-            );
+                promptId: input.promptId,
+            });
         } catch (error) {
             console.error("XP award failed after a successful send", error);
         }
@@ -206,7 +218,13 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
 /// Replying to a wave accepts it, which moves the conversation out of Pending for both
 /// people. Only the recipient can: for the sender, requested_of names the other person, so
 /// this is a no-op on their side and their own wave stays pending until it is answered.
-async function acceptWaveOnReply(conversationId: string, senderId: string): Promise<void> {
+async function acceptWaveOnReply({
+    conversationId,
+    senderId,
+}: {
+    conversationId: string;
+    senderId: string;
+}): Promise<void> {
     // updateMany rather than update: the where clause carries the authorization, so a
     // conversation that is not pending on this person's account simply matches nothing
     // instead of throwing.
@@ -217,7 +235,13 @@ async function acceptWaveOnReply(conversationId: string, senderId: string): Prom
 }
 
 /// Marks everything up to now as read for one person.
-export async function markRead(conversationId: string, userId: string): Promise<void> {
+export async function markRead({
+    conversationId,
+    userId,
+}: {
+    conversationId: string;
+    userId: string;
+}): Promise<void> {
     await prisma.conversation_members.updateMany({
         where: { conversation_id: conversationId, profile_id: userId },
         data: { last_read_at: new Date() },
@@ -228,7 +252,13 @@ export async function markRead(conversationId: string, userId: string): Promise<
 ///
 /// The requested_of match IS the authorization: a conversation that was not waved at this
 /// person matches nothing.
-export async function acceptRequest(conversationId: string, userId: string): Promise<boolean> {
+export async function acceptRequest({
+    conversationId,
+    userId,
+}: {
+    conversationId: string;
+    userId: string;
+}): Promise<boolean> {
     const { count } = await prisma.conversations.updateMany({
         where: { id: conversationId, requested_of: userId },
         data: { requested_by: null, requested_of: null },
@@ -239,12 +269,16 @@ export async function acceptRequest(conversationId: string, userId: string): Pro
 
 /// Renames a group. Any member may do it — membership is the authorization, and the kind
 /// check stops it being pointed at a DM, which has no title of its own to change.
-export async function renameGroup(
-    conversationId: string,
-    userId: string,
-    title: string,
-): Promise<boolean> {
-    if (!(await isMember(conversationId, userId))) return false;
+export async function renameGroup({
+    conversationId,
+    userId,
+    title,
+}: {
+    conversationId: string;
+    userId: string;
+    title: string;
+}): Promise<boolean> {
+    if (!(await isMember({ conversationId, userId }))) return false;
 
     const { count } = await prisma.conversations.updateMany({
         where: { id: conversationId, kind: "group" },

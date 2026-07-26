@@ -82,18 +82,31 @@ function utcDay(): Date {
 /// through POST /api/confidence with a body the caller chose, so it had to fetch the message
 /// back out of Stream and prove the claim before paying anything. There is no longer a
 /// request to forge.
-export async function awardConfidenceForMessage(
-    userId: string,
-    conversationId: string,
-    messageId: string,
-    text: string,
-    promptId?: string,
-): Promise<AwardResult | null> {
+///
+/// Named arguments: this took five positional strings, and passing a conversation id where a
+/// Stream channel id belonged type-checked cleanly and wrote to the wrong column. Nothing
+/// about `(string, string, string, string, string?)` could have caught that.
+export async function awardConfidenceForMessage({
+    userId,
+    conversationId,
+    messageId,
+    text,
+    promptId,
+}: {
+    userId: string;
+    conversationId: string;
+    messageId: string;
+    text: string;
+    promptId?: string;
+}): Promise<AwardResult | null> {
     const guaranteed = promptId
-        ? await promptReplyIsUnclaimed(userId, promptId, conversationId)
+        ? await promptReplyIsUnclaimed({ userId, promptId, conversationId })
         : false;
 
-    if (!guaranteed && !(await isGenuineBackAndForth(conversationId, messageId, userId, text))) {
+    if (
+        !guaranteed &&
+        !(await isGenuineBackAndForth({ conversationId, messageId, userId, text }))
+    ) {
         return null;
     }
 
@@ -298,11 +311,15 @@ async function claimDailyBonus(
 ///
 /// The insert IS the claim: the composite primary key means a repeat loses the race and
 /// lands here as a unique violation, whether it arrives a second later or a week.
-async function promptReplyIsUnclaimed(
-    userId: string,
-    promptId: string,
-    conversationId: string,
-): Promise<boolean> {
+async function promptReplyIsUnclaimed({
+    userId,
+    promptId,
+    conversationId,
+}: {
+    userId: string;
+    promptId: string;
+    conversationId: string;
+}): Promise<boolean> {
     const alreadyAnsweredToday = await prisma.messages.findFirst({
         where: {
             conversation_id: conversationId,
@@ -335,12 +352,17 @@ async function promptReplyIsUnclaimed(
 /// One indexed read now. This used to pull the last five messages out of Stream over HTTP,
 /// which was the single clearest sign that the interactions and the score lived in two
 /// different systems.
-async function isGenuineBackAndForth(
-    conversationId: string,
-    messageId: string,
-    userId: string,
-    text: string,
-): Promise<boolean> {
+async function isGenuineBackAndForth({
+    conversationId,
+    messageId,
+    userId,
+    text,
+}: {
+    conversationId: string;
+    messageId: string;
+    userId: string;
+    text: string;
+}): Promise<boolean> {
     if (text.trim().length < MIN_MESSAGE_LENGTH) return false;
 
     const previousMessage = await prisma.messages.findFirst({

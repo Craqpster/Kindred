@@ -233,10 +233,13 @@ async function latestMessages(
 ///
 /// The null is the authorization: every caller has to handle "not yours" and "does not
 /// exist" the same way, so neither can be told apart from the outside.
-export async function getConversation(
-    conversationId: string,
-    userId: string,
-): Promise<ChatConversation | null> {
+export async function getConversation({
+    conversationId,
+    userId,
+}: {
+    conversationId: string;
+    userId: string;
+}): Promise<ChatConversation | null> {
     const conversations = await listConversations(userId);
     return conversations.find((conversation) => conversation.id === conversationId) ?? null;
 }
@@ -246,23 +249,27 @@ export async function getConversation(
 /// `before` is the createdAt of the oldest message already held, so paging up is "give me
 /// what came before this". Cursoring on a timestamp rather than an offset means messages
 /// arriving while someone reads history cannot shift the page under them.
-export async function getMessages(
-    conversationId: string,
-    userId: string,
-    options: { before?: string; limit?: number } = {},
-): Promise<MessagePage> {
-    if (!(await isMember(conversationId, userId))) {
+export async function getMessages({
+    conversationId,
+    userId,
+    before,
+    limit = PAGE_SIZE,
+}: {
+    conversationId: string;
+    userId: string;
+    before?: string;
+    limit?: number;
+}): Promise<MessagePage> {
+    if (!(await isMember({ conversationId, userId }))) {
         return { messages: [], nextCursor: null };
     }
-
-    const limit = options.limit ?? PAGE_SIZE;
 
     const rows = await prisma.messages.findMany({
         where: {
             conversation_id: conversationId,
             // Thread replies live behind their parent, not in the timeline.
             parent_id: null,
-            ...(options.before ? { created_at: { lt: new Date(options.before) } } : {}),
+            ...(before ? { created_at: { lt: new Date(before) } } : {}),
         },
         include: MESSAGE_INCLUDE,
         orderBy: { created_at: "desc" },
@@ -283,16 +290,21 @@ export async function getMessages(
 
 /// Every reply hanging off one message, oldest-first. Threads are one level deep and
 /// expected to be short, so this is not paginated.
-export async function getThread(
-    parentId: string,
-    userId: string,
-): Promise<ChatMessage[]> {
+export async function getThread({
+    parentId,
+    userId,
+}: {
+    parentId: string;
+    userId: string;
+}): Promise<ChatMessage[]> {
     const parent = await prisma.messages.findUnique({
         where: { id: parentId },
         select: { conversation_id: true },
     });
 
-    if (!parent || !(await isMember(parent.conversation_id, userId))) return [];
+    if (!parent || !(await isMember({ conversationId: parent.conversation_id, userId }))) {
+        return [];
+    }
 
     const rows = await prisma.messages.findMany({
         where: { parent_id: parentId },
@@ -321,7 +333,17 @@ export async function getMessageById(messageId: string): Promise<ChatMessage | n
 ///
 /// Exported because lib/chat/mutations.ts needs the same question answered, and two
 /// implementations of "may this person touch this conversation" is one more than is safe.
-export async function isMember(conversationId: string, userId: string): Promise<boolean> {
+///
+/// Named arguments, like everything here taking more than one id: both are uuid strings, so
+/// calling it the other way round type-checks perfectly and then denies access to a member
+/// forever. That reads as a permissions bug rather than a typo, which is the worst kind.
+export async function isMember({
+    conversationId,
+    userId,
+}: {
+    conversationId: string;
+    userId: string;
+}): Promise<boolean> {
     const membership = await prisma.conversation_members.findUnique({
         where: {
             conversation_id_profile_id: { conversation_id: conversationId, profile_id: userId },
