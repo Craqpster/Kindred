@@ -1,5 +1,17 @@
 # Chat rework: Stream → Supabase Realtime
 
+> **Status, 2026-07-26.** Stream is gone: both packages, the SDK, the token route, the games
+> UI, 252 lines of `.str-chat` CSS, and the env vars. The app builds (13.5s → 3.2s), lints
+> clean, and the new chat works end to end — a wave creates a conversation, the bot posts an
+> icebreaker, and a message goes through moderation into Postgres.
+>
+> Phases 1, 2, 4 and 7 are done. Phase 3 is built but **not verified**: nobody has yet proved
+> the browser websocket authenticates as the user rather than as `anon`. That needs two
+> logged-in accounts in one conversation, and it is the last unproven thing in the stack.
+>
+> Still to come: the parity pass (phase 5) and message actions including the games rebuild
+> (phase 6).
+
 Replacing Stream Chat with our own tables plus Supabase Realtime, and rebuilding the chat
 surface so it reads like one design instead of a pile of workarounds around someone else's SDK.
 
