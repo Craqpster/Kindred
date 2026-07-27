@@ -22,6 +22,7 @@ import type {
     ChatConversation,
     ChatMessage,
     ConversationXp,
+    PendingAttachment,
     TimelineMessage,
 } from "@/lib/chat/types";
 
@@ -50,6 +51,9 @@ export default function Thread({
     const { showToast } = useToast();
     const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
     const [xp, setXp] = useState(initialXp);
+    /// What the composer will attach to the next message — set by the icebreaker card's two
+    /// buttons, cleared once the message is away or the user backs out.
+    const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     /// The oldest moment everyone else has read up to.
@@ -204,6 +208,7 @@ export default function Thread({
                             read={!!readThrough && readThrough >= message.createdAt}
                             userId={userId}
                             onToggleReaction={toggle}
+                            onAttach={setAttachment}
                         />
                     ))
                 )}
@@ -218,6 +223,8 @@ export default function Thread({
                     setMessages((current) => mergeMessage(current, message))
                 }
                 onAward={applyAward}
+                attachment={attachment}
+                onClearAttachment={() => setAttachment(null)}
                 onSettled={(temporaryId, message) =>
                     setMessages((current) => {
                         // The optimistic copy goes either way: replaced by the server's

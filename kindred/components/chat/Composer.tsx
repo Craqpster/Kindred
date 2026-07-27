@@ -1,11 +1,11 @@
 "use client";
 
-import { SendHorizontal } from "lucide-react";
+import { SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { sendChatMessage } from "@/app/(app)/chats/actions";
 import type { AwardResult } from "@/lib/confidence";
-import type { TimelineMessage } from "@/lib/chat/types";
+import type { PendingAttachment, TimelineMessage } from "@/lib/chat/types";
 
 /// How the moderation refusal is explained. The copy lives here so every surface that can
 /// send says the same thing.
@@ -23,6 +23,8 @@ export default function Composer({
     onOptimistic,
     onSettled,
     onAward,
+    attachment,
+    onClearAttachment,
 }: {
     conversationId: string;
     userId: string;
@@ -36,6 +38,9 @@ export default function Composer({
     /// What the message earned, when it earned anything. Carries the conversation's new
     /// total, so the sender's badge moves without asking the server a second time.
     onAward: (award: AwardResult) => void;
+    /// What the next message attaches to, or null for a plain message.
+    attachment: PendingAttachment | null;
+    onClearAttachment: () => void;
 }) {
     const [draft, setDraft] = useState(greeting ?? "");
     const [sending, setSending] = useState(false);
@@ -73,6 +78,11 @@ export default function Composer({
         const body = draft.trim();
         if (!body || sending) return;
 
+        // Read once, up front. The attachment is cleared as soon as the send is under way, so
+        // reading it later in this function would find it already gone.
+        const answeringId = attachment?.mode === "answer" ? attachment.messageId : undefined;
+        const quotingId = attachment?.mode === "quote" ? attachment.messageId : undefined;
+
         // Shown before the server is even asked, so the bubble appears the instant Enter is
         // pressed rather than after a round trip. The id is temporary and gets swapped for
         // the real one below — it exists so the optimistic copy can be found again.
@@ -80,13 +90,22 @@ export default function Composer({
         onOptimistic({
             id: temporaryId,
             conversationId,
-            kind: "text",
+            // Matches what the server will derive from a promptId, so the optimistic copy and
+            // the row that replaces it are the same kind of thing.
+            kind: answeringId ? "prompt_response" : "text",
             body,
             // Enough of a sender to be recognised as yours. Own messages render without a
             // name or avatar, so nothing else here would be drawn.
             sender: { id: userId, username: "", avatarId: null, avatarSeed: null },
-            replyTo: null,
-            promptId: null,
+            replyTo:
+                attachment?.mode === "quote"
+                    ? {
+                          id: attachment.messageId,
+                          body: attachment.preview,
+                          senderName: attachment.author,
+                      }
+                    : null,
+            promptId: answeringId ?? null,
             parentId: null,
             replyCount: 0,
             gameType: null,
@@ -102,9 +121,17 @@ export default function Composer({
         // leaving it in the box too would read as though it had not sent.
         setDraft("");
         setSending(true);
+        // Cleared alongside the draft, and for the same reason: the attachment is visibly
+        // part of the message now sitting in the timeline.
+        onClearAttachment();
 
         try {
-            const result = await sendChatMessage({ conversationId, body });
+            const result = await sendChatMessage({
+                conversationId,
+                body,
+                promptId: answeringId,
+                replyToId: quotingId,
+            });
 
             if (result.ok) {
                 setNotice(null);
@@ -144,6 +171,32 @@ export default function Composer({
                 <p role="alert" className="border-b border-red-700/20 bg-red-50 px-4 py-2 text-sm text-red-700">
                     {notice}
                 </p>
+            )}
+
+            {/* What the next message will attach to. Named rather than merely quoted, because
+                "Answering the icebreaker" and "Quoting" produce different messages and the
+                difference is invisible once sent. */}
+            {attachment && (
+                <div className="flex items-center gap-2 border-b border-bone-300 bg-bone-100 px-3 py-2">
+                    <div className="min-w-0 flex-1 border-l-2 border-accent-600/40 pl-2">
+                        <p className="text-label uppercase text-ink-600">
+                            {attachment.mode === "answer"
+                                ? "Answering the icebreaker"
+                                : attachment.author
+                                  ? `Quoting ${attachment.author}`
+                                  : "Quoting"}
+                        </p>
+                        <p className="truncate text-label text-ink-900">{attachment.preview}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClearAttachment}
+                        aria-label="Cancel"
+                        className="shrink-0 rounded-full p-1 text-ink-600 transition-colors hover:bg-bone-300 hover:text-ink-900"
+                    >
+                        <X size={14} strokeWidth={2} aria-hidden />
+                    </button>
+                </div>
             )}
 
             <div className="flex items-end gap-2 p-3">
