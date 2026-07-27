@@ -93,6 +93,29 @@ export type ChatConversation = {
     readBy: Record<string, string>;
 };
 
+/// How warmed up one conversation is, and how close it is to today's bonus.
+///
+/// The level fields are derived from `xp` rather than stored, so there is one definition of
+/// what a level costs (lib/chat-level.ts) instead of a column that can disagree with it.
+export type ConversationXp = {
+    /// Shared by everyone in the conversation — this is not a per-person score.
+    xp: number;
+    level: number;
+    xpIntoLevel: number;
+    xpForNextLevel: number;
+    /// The VIEWER's own qualifying messages today, not the room's total. The bonus needs
+    /// everybody, but "how am I doing" is the only part worth showing one person, and it
+    /// avoids reporting other members' activity to them.
+    messagesToday: number;
+    /// How many each member has to send today for the conversation to earn its bonus.
+    bonusThreshold: number;
+    /// Already claimed today, so the meter is done rather than merely full.
+    bonusEarnedToday: boolean;
+    /// What that bonus paid, or null if it has not been earned today. Carried so the toast
+    /// can name the figure whether it was this client that triggered it or another.
+    bonusXpToday: number | null;
+};
+
 /// A message on its way out, before the server has confirmed it.
 ///
 /// Only ever exists in the composer's own optimistic copy: `sending` becomes `sent` when the

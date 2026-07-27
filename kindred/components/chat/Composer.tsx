@@ -4,6 +4,7 @@ import { SendHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { sendChatMessage } from "@/app/(app)/chats/actions";
+import type { AwardResult } from "@/lib/confidence";
 import type { TimelineMessage } from "@/lib/chat/types";
 
 /// How the moderation refusal is explained. The copy lives here so every surface that can
@@ -21,6 +22,7 @@ export default function Composer({
     greeting,
     onOptimistic,
     onSettled,
+    onAward,
 }: {
     conversationId: string;
     userId: string;
@@ -31,6 +33,9 @@ export default function Composer({
     /// The server's copy replaces the optimistic one — or null when the send was refused,
     /// which removes it again.
     onSettled: (temporaryId: string, message: TimelineMessage | null) => void;
+    /// What the message earned, when it earned anything. Carries the conversation's new
+    /// total, so the sender's badge moves without asking the server a second time.
+    onAward: (award: AwardResult) => void;
 }) {
     const [draft, setDraft] = useState(greeting ?? "");
     const [sending, setSending] = useState(false);
@@ -104,6 +109,9 @@ export default function Composer({
             if (result.ok) {
                 setNotice(null);
                 onSettled(temporaryId, { ...result.message, status: "sent" });
+                // Null whenever the message did not qualify — too short, or not a genuine
+                // turn. Most messages earn nothing, so this is the common path.
+                if (result.award) onAward(result.award);
                 return;
             }
 

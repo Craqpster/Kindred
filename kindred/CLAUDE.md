@@ -19,6 +19,7 @@ npx prisma db pull                     # re-introspect Supabase (incl. the auth 
 
 npm run verify:chat        # proves the chat RLS policies actually filter (see below)
 npm run verify:reactions   # the reaction state machine; pure, needs no database
+npm run verify:xp          # chat level maths behind the XP ring; pure, needs no database
 npm run reset:connections  # dev-only: clears connections rows so /meet has cards again
 
 npx tsx scripts/seed-dev-profiles.ts           # dev-only: fake profiles so /meet has matches
@@ -31,6 +32,7 @@ There is no test suite. The two `verify:*` scripts are the closest thing, and bo
 
 - `verify:chat` connects as the `authenticated` role with an impersonated `request.jwt.claims` — the same evaluation Realtime performs — and asserts that a member sees their conversation, messages, and reactions, that an outsider sees none of them, and that neither can write. Run it after touching a chat policy or grant. Needs `DIRECT_URL`.
 - `verify:reactions` exercises `applyReaction`, which has to be idempotent because the optimistic click, its realtime echo, and the server action all re-apply the same end state in no fixed order. Pure, so it runs anywhere.
+- `verify:xp` pins the chat level maths the XP ring divides by. If it *hangs* rather than failing, `getChatLevel`'s `Number.isFinite` guard is gone and `while (Infinity >= …)` is spinning.
 
 **Database connections are split on purpose.** `DATABASE_URL` is Supabase's transaction pooler (6543) and is used by Prisma Client at runtime; `DIRECT_URL` is the session pooler (5432) and is what `prisma.config.ts` hands the CLI. Migrations cannot run through the transaction pooler — it can't hold advisory locks. The Prisma CLI runs outside Next's env loader, so `prisma.config.ts` imports `dotenv/config` explicitly.
 
@@ -62,6 +64,7 @@ Four tables own chat: `conversations`, `conversation_members`, `messages`, `mess
 - **Nothing calls `realtime.setAuth()`, and nothing should.** supabase-js passes an `accessToken` callback into its realtime client and re-pushes on `INITIAL_SESSION` / `TOKEN_REFRESHED`, so the cookie-backed session reaches the socket on connect and after every refresh. Calling it by hand pins a manual token that survives resubscribes and stops tracking refreshes.
 - `dm_key` (`least(a,b):greatest(a,b)`, unique) is what makes waving at the same person twice reuse the conversation. `conversations.group_id` (unique) does the same for a group, which is what makes group creation idempotent and retryable.
 - The Kindred bot is `messages.sender_id IS NULL`, not a profile row — it has no `auth.users` row to key against, so absence is the marker.
+- **XP is per-conversation and shared.** `channel_xp` is one total for the whole conversation, distinct from `profiles.confidence_points`, which is per-person and global. `channel_xp` is deliberately **not** in the realtime publication, so the badge is refreshed by the *message* that moved it: your own sends settle from what `sendMessage` already returned, and someone else's arriving message is the cue to re-read. Anything derived from XP goes through `lib/chat-level.ts` and `lib/confidence-xp.ts` on both sides, so the badge repeats the server's arithmetic rather than approximating it.
 - **Reaction removals are not RLS-filtered.** Realtime evaluates a policy against the row it forwards, and a DELETE payload carries only the replica identity — so `message_reactions` INSERTs are filtered per subscriber but DELETEs are broadcast to everyone. `applyReaction` ignores message ids the client isn't holding, so a stranger's un-reaction lands on nothing. Closing it properly means soft-deleting reactions so a removal becomes an UPDATE with a full row to check.
 
 ### Meet / matching

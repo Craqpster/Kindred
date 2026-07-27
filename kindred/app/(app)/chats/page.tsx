@@ -1,6 +1,6 @@
 import ChatClient from "@/components/chat/ChatClient";
 import type { ChatTab } from "@/components/chat/ChatTabs";
-import { getConversation, getMessages } from "@/lib/chat/queries";
+import { getConversation, getConversationXp, getMessages } from "@/lib/chat/queries";
 import { requireProfile } from "@/lib/dal";
 
 export default async function ChatsPage({
@@ -19,11 +19,15 @@ export default async function ChatsPage({
         ? await getConversation({ conversationId: c, userId: profile.id })
         : null;
 
-    // The first page of history is rendered on the server, so the timeline is on screen at
-    // first paint instead of appearing after a client round trip.
-    const page = conversation
-        ? await getMessages({ conversationId: conversation.id, userId: profile.id })
-        : { messages: [], nextCursor: null };
+    // The first page of history and the XP badge are both rendered on the server, so the
+    // timeline and the level are on screen at first paint instead of appearing after a
+    // client round trip. Requested together because neither depends on the other.
+    const [page, xp] = conversation
+        ? await Promise.all([
+              getMessages({ conversationId: conversation.id, userId: profile.id }),
+              getConversationXp({ conversationId: conversation.id, userId: profile.id }),
+          ])
+        : [{ messages: [], nextCursor: null }, null];
 
     // Which tab opens is read off the conversation we already loaded. This used to be a
     // second query to Stream on every page load, asking it the same question.
@@ -37,6 +41,7 @@ export default async function ChatsPage({
                     userId={profile.id}
                     openConversationId={conversation?.id}
                     initialMessages={page.messages}
+                    initialXp={xp}
                     greet={greet === "1"}
                     initialTab={initialTab}
                 />

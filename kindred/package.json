@@ -9,6 +9,7 @@
     "lint": "eslint",
     "verify:chat": "tsx scripts/verify-chat-schema.ts",
     "verify:reactions": "tsx scripts/verify-reactions.ts",
+    "verify:xp": "tsx scripts/verify-xp.ts",
     "reset:connections": "tsx scripts/reset-connections.ts",
     "postinstall": "prisma generate"
   },

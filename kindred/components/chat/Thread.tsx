@@ -1,14 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
+import {
+    loadConversationXp,
+    markConversationRead,
+    toggleMessageReaction,
+} from "@/app/(app)/chats/actions";
+import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
+import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
+import { useToast } from "@/components/ui/ToastStack";
+import { getChatLevel } from "@/lib/chat-level";
+import { dailyBonusThreshold } from "@/lib/confidence-xp";
+import type { AwardResult } from "@/lib/confidence";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
 import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
-import type { ChatConversation, ChatMessage, TimelineMessage } from "@/lib/chat/types";
+import type {
+    ChatConversation,
+    ChatMessage,
+    ConversationXp,
+    TimelineMessage,
+} from "@/lib/chat/types";
 
 const GREETING = "👋";
 
@@ -20,15 +35,21 @@ export default function Thread({
     userId,
     conversation,
     initialMessages,
+    initialXp,
     greet,
 }: {
     userId: string;
     conversation: ChatConversation;
     initialMessages: ChatMessage[];
+    /// Rendered by the server so the badge is right at first paint. Null only if the
+    /// conversation was not readable, which the page has already handled by then.
+    initialXp: ConversationXp | null;
     greet: boolean;
 }) {
     const { onMessage, onReaction } = useChatRealtime();
+    const { showToast } = useToast();
     const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
+    const [xp, setXp] = useState(initialXp);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     /// The oldest moment everyone else has read up to.
@@ -49,15 +70,50 @@ export default function Thread({
         [conversation.others],
     );
 
+    /// Takes a new XP snapshot and announces whatever is worth announcing.
+    ///
+    /// The comparison runs against a ref rather than inside the state updater, because an
+    /// updater has to stay pure — React may call it twice, and a toast raised from in there
+    /// would fire twice with it.
+    const xpRef = useRef(initialXp);
+    const settleXp = useCallback(
+        (next: ConversationXp) => {
+            const previous = xpRef.current;
+            xpRef.current = next;
+            setXp(next);
+
+            if (previous && next.level > previous.level) {
+                showToast(chatLevelToast(next.level));
+            }
+            if (next.bonusEarnedToday && !previous?.bonusEarnedToday && next.bonusXpToday) {
+                showToast(dailyBonusToast(next.bonusXpToday));
+            }
+        },
+        [showToast],
+    );
+
     useEffect(() => {
         return onMessage((row) => {
             if (row.conversation_id !== conversation.id) return;
-            // Thread replies do not belong in the main timeline.
+
+            // Somebody else's message may have moved the conversation's XP, and channel_xp
+            // is not in the realtime publication — so this row is the only notice we get
+            // that there is something new to read. Own messages are settled by the composer
+            // from what the send already returned, so asking again here would be a round
+            // trip for a number we hold.
+            if (row.sender_id && row.sender_id !== userId) {
+                void loadConversationXp(conversation.id).then((next) => {
+                    if (next) settleXp(next);
+                });
+            }
+
+            // Thread replies do not belong in the main timeline. Checked after the XP read,
+            // since a reply earns XP the same as anything else.
             if (row.parent_id) return;
 
             setMessages((current) => mergeMessage(current, messageFromRow(row, membersById)));
         });
-    }, [onMessage, conversation.id, membersById]);
+    }, [onMessage, conversation.id, membersById, userId, settleXp]);
 
     // Reactions arrive for every conversation, not just this one. applyReaction ignores a
     // message id the timeline is not holding, so there is nothing to filter on the way in.
@@ -89,6 +145,32 @@ export default function Thread({
         );
     };
 
+    /// Folds an award from your own send into the badge, without asking the server again.
+    ///
+    /// Every figure here is derived with the same shared functions the award path used —
+    /// getChatLevel and dailyBonusThreshold — so this is the server's arithmetic repeated,
+    /// not a client-side guess at it. `channelXp` is the authoritative new total; the rest
+    /// follows from it.
+    ///
+    /// qualifying_messages is incremented for exactly the messages that produce an award, so
+    /// "+1" here is the same rule the row on disk follows rather than an approximation.
+    const applyAward = (award: AwardResult) => {
+        const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(award.channelXp);
+
+        settleXp({
+            xp: award.channelXp,
+            level,
+            xpIntoLevel,
+            xpForNextLevel,
+            messagesToday: (xpRef.current?.messagesToday ?? 0) + 1,
+            bonusThreshold: dailyBonusThreshold(level),
+            bonusEarnedToday: xpRef.current?.bonusEarnedToday || award.dailyBonusEarned,
+            bonusXpToday: award.dailyBonusEarned
+                ? award.bonusXp
+                : (xpRef.current?.bonusXpToday ?? null),
+        });
+    };
+
     // Opening a conversation reads it, and so does a message arriving while it is open.
     useEffect(() => {
         void markConversationRead(conversation.id);
@@ -101,9 +183,10 @@ export default function Thread({
     return (
         <>
             <header className="flex items-center gap-3 border-b border-ink-900/8 px-4 py-3">
-                <h1 className="truncate text-body font-medium text-ink-900">
+                <h1 className="flex-1 truncate text-body font-medium text-ink-900">
                     {conversation.title}
                 </h1>
+                {xp && <ChatLevelBadge xp={xp} />}
             </header>
 
             <ul className="flex-1 overflow-y-auto py-3">
@@ -134,6 +217,7 @@ export default function Thread({
                 onOptimistic={(message) =>
                     setMessages((current) => mergeMessage(current, message))
                 }
+                onAward={applyAward}
                 onSettled={(temporaryId, message) =>
                     setMessages((current) => {
                         // The optimistic copy goes either way: replaced by the server's

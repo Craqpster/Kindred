@@ -34,8 +34,25 @@
 > the wire. Fixing it properly means soft-deleting reactions so removal becomes an UPDATE, and
 > that is a schema change worth making deliberately.
 >
-> Still to come: the parity pass (phase 5) and the rest of phase 6 — threads, edit, delete,
-> pin, and the games rebuild.
+> **The XP ring is done** (2026-07-27), the first slice of phase 5. XP had been awarded on
+> every qualifying message since phase 2 and displayed nowhere — `/api/chat-xp` served it
+> once, and that route had no callers left by the time it was deleted. The conversation
+> header now carries a level ring with a popover, and `chatLevelToast`/`dailyBonusToast` in
+> sharedToasts.ts — dead since the Stream removal — are raised again.
+>
+> `channel_xp` is not in the realtime publication, and it stays out: every XP change is
+> caused by a message, and messages *are* realtime, so the message is the cue to re-read.
+> Own sends do not even need that, since `sendMessage` already returns the new total.
+>
+> Found while checking the level maths: `getChatLevel` clamped with
+> `Math.max(0, Math.floor(xp))`, which stops neither NaN nor Infinity — and the two fail in
+> opposite ways. NaN reaches the SVG as a NaN `strokeDashoffset` and draws nothing; Infinity
+> makes `while (safeXp >= …)` never terminate and hangs the render. Neither is reachable from
+> an integer column, so this was hardening rather than a live bug, but `verify:xp` now pins
+> it — and demonstrates the hang if the guard is removed.
+>
+> Still to come: the rest of phase 5 (games, presence, typing, the richer icebreaker card)
+> and the rest of phase 6 — threads, edit, delete, pin.
 
 Replacing Stream Chat with our own tables plus Supabase Realtime, and rebuilding the chat
 surface so it reads like one design instead of a pile of workarounds around someone else's SDK.

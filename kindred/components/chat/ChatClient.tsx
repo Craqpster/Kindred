@@ -7,7 +7,7 @@ import ChatTabs, { type ChatTab } from "@/components/chat/ChatTabs";
 import ConversationRow from "@/components/chat/ConversationRow";
 import Thread from "@/components/chat/Thread";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
-import type { ChatConversation, ChatMessage } from "@/lib/chat/types";
+import type { ChatConversation, ChatMessage, ConversationXp } from "@/lib/chat/types";
 
 /// The two-pane chat surface: the list of conversations, and whichever one is open.
 ///
@@ -17,12 +17,14 @@ export default function ChatClient({
     userId,
     openConversationId,
     initialMessages,
+    initialXp,
     greet = false,
     initialTab = "active",
 }: {
     userId: string;
     openConversationId?: string;
     initialMessages: ChatMessage[];
+    initialXp: ConversationXp | null;
     greet?: boolean;
     initialTab?: ChatTab;
 }) {
@@ -74,6 +76,7 @@ export default function ChatClient({
                         userId={userId}
                         conversation={open}
                         initialMessages={initialMessages}
+                        initialXp={initialXp}
                         greet={greet}
                     />
                 ) : (
