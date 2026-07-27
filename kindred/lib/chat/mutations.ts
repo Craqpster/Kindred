@@ -2,8 +2,10 @@ import "server-only";
 
 import { moderate } from "@/lib/chat/moderation";
 import { getMessageById, isMember } from "@/lib/chat/queries";
+import type { ReactionEmoji } from "@/lib/chat/reactions";
 import type { ChatMessage, MessageKind } from "@/lib/chat/types";
 import { awardConfidenceForMessage, type AwardResult } from "@/lib/confidence";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // Every write the chat can perform.
@@ -265,6 +267,67 @@ export async function acceptRequest({
     });
 
     return count > 0;
+}
+
+export type ToggleReactionResult =
+    | { ok: true; reacted: boolean }
+    | { ok: false; reason: "not_a_member" | "gone" };
+
+/// Adds a reaction, or takes it back if it is already there. One call for both, because the
+/// button the user pressed is a toggle and asking the client which direction it meant would
+/// let two tabs disagree.
+///
+/// `reacted` is the state afterwards, not what changed, so a caller that guessed wrong
+/// optimistically can settle on the truth without a second read.
+export async function toggleReaction({
+    messageId,
+    userId,
+    emoji,
+}: {
+    messageId: string;
+    userId: string;
+    emoji: ReactionEmoji;
+}): Promise<ToggleReactionResult> {
+    // The message is what says which conversation to check, so it has to be read before
+    // membership can be. Deleted messages are refused: the timeline keeps their slot, but
+    // reacting to something whose text is already gone has nothing to mean.
+    const message = await prisma.messages.findUnique({
+        where: { id: messageId },
+        select: { conversation_id: true, deleted_at: true },
+    });
+
+    if (!message || message.deleted_at) return { ok: false, reason: "gone" };
+
+    if (!(await isMember({ conversationId: message.conversation_id, userId }))) {
+        return { ok: false, reason: "not_a_member" };
+    }
+
+    // Delete first and branch on whether anything went: a read-then-write would let two
+    // clicks in flight at once both see "not reacted" and both try to insert.
+    const { count } = await prisma.message_reactions.deleteMany({
+        where: { message_id: messageId, profile_id: userId, emoji },
+    });
+
+    if (count > 0) return { ok: true, reacted: false };
+
+    try {
+        await prisma.message_reactions.create({
+            data: { message_id: messageId, profile_id: userId, emoji },
+        });
+    } catch (error) {
+        // The primary key is (message_id, profile_id, emoji), so the only way to collide is
+        // for the same person to have added the same reaction between the delete above and
+        // this insert — another tab, or a double-fired click. The end state is what they
+        // asked for either way, so this is success, not a failure to report.
+        if (
+            !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+            error.code !== "P2002"
+        ) {
+            throw error;
+        }
+    }
+
+    return { ok: true, reacted: true };
 }
 
 /// Renames a group. Any member may do it — membership is the authorization, and the kind
