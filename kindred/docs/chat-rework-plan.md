@@ -1,13 +1,25 @@
 # Chat rework: Stream → Supabase Realtime
 
-> **Status, 2026-07-26.** Stream is gone: both packages, the SDK, the token route, the games
-> UI, 252 lines of `.str-chat` CSS, and the env vars. The app builds (13.5s → 3.2s), lints
+> **Status, 2026-07-27.** Stream is gone: both packages, the SDK, the token route, the games
+> UI, 252 lines of `.str-chat` CSS, and the env vars. The app builds, typechecks, and lints
 > clean, and the new chat works end to end — a wave creates a conversation, the bot posts an
 > icebreaker, and a message goes through moderation into Postgres.
 >
-> Phases 1, 2, 4 and 7 are done. Phase 3 is built but **not verified**: nobody has yet proved
-> the browser websocket authenticates as the user rather than as `anon`. That needs two
-> logged-in accounts in one conversation, and it is the last unproven thing in the stack.
+> Phases 1, 2, 3, 4, 7 and 8 are done. Phase 3's one open question — whether the browser
+> socket authenticates as the user or as `anon` — was settled by reading supabase-js rather
+> than by staging two accounts; see "Verify early" below. It needs no code, and the manual
+> `setAuth()` call the plan expected to add would have made things worse.
+>
+> The last of Stream went out on 2026-07-27: `groups.stream_channel_id`, the dead
+> `kindred-bot` module, and the three API routes section 1 predicted would disappear
+> (`/api/chat-prompts`, `/api/chat-xp`, `/api/moderate-message` — `/api/confidence` went
+> earlier). Two of those still answered for any `conversationId` the caller named, with no
+> membership check, so removing them closed a real hole rather than just tidying.
+>
+> That cleanup also fixed a live bug: `FindGroupCard` gated on `stream_channel_id`, which
+> nothing had written since Stream was removed. It was permanently NULL, so **every** grouped
+> user saw "Still setting up this chat" instead of their group. The card now reads the
+> conversation relation.
 >
 > Still to come: the parity pass (phase 5) and message actions including the games rebuild
 > (phase 6).
@@ -392,10 +404,27 @@ to discover in phase 5:
    an outsider sees zero of each; and neither can write. It runs as the `authenticated` role
    with an impersonated `request.jwt.claims`, which is the same thing Realtime evaluates.
    What remains for phase 3 is only whether the *socket* carries the right identity.
-2. **The browser client's realtime connection is authenticated as the user.** `@supabase/ssr`'s
-   `createBrowserClient` reads the session from cookies; realtime needs that token pushed to the
-   socket (`supabase.realtime.setAuth()`) and re-pushed when it refreshes. If this is wrong,
-   everything silently arrives as anon and RLS drops all of it.
+2. ~~**The browser client's realtime connection is authenticated as the user.**~~ **Answered on
+   2026-07-27, in the library rather than in a browser.** The worry was that `@supabase/ssr`'s
+   `createBrowserClient` reads the session from cookies while the socket needs that token pushed
+   separately, so everything would silently arrive as `anon` and RLS would drop it.
+
+   supabase-js already does it, and reading the installed source settles it without two accounts
+   and a browser. `SupabaseClient` constructs its realtime client with an `accessToken` callback
+   bound to its own session getter, and realtime-js invokes that callback on every connect and
+   rejoin — so a reconnect re-reads the current token rather than replaying a stale one. On top
+   of that, `_handleTokenChanged` calls `realtime.setAuth(token)` on `INITIAL_SESSION`,
+   `SIGNED_IN`, and `TOKEN_REFRESHED`, which covers both first paint and the refresh that used
+   to be the scary part.
+
+   **So calling `supabase.realtime.setAuth()` by hand would be a mistake, not a missing step:**
+   a manually set token is preserved across resubscribes and *stops* tracking refreshes, which
+   is precisely the bug the call would have been trying to prevent. This is written down in
+   CLAUDE.md so nobody "fixes" it later.
+
+   What this does **not** prove is end-to-end delivery — that the policies say what we meant, on
+   live data, with two real accounts. `npm run verify:chat` covers the policy logic in SQL, so
+   what is left is a smoke test rather than an open risk.
 
 ### The grant that was missing
 

@@ -29,8 +29,9 @@ model profiles {
 
   /// An internal metric, never a user input: everyone starts at 1 and it grows as they
   /// interact with people. Onboarding does not ask for it.
-  /// Not derived data: the interactions live in Stream Chat, never in Postgres.
-  /// A chat's difficulty level is a property of the chat and does not belong here.
+  /// Stored rather than derived, even though the messages now live in Postgres and could
+  /// in principle be counted: this is a per-person, global stat, whereas channel_xp is
+  /// per-conversation. A chat's own warmth does not belong here.
   /// This is the TIER, not the raw counter — it only changes when confidence_points
   /// crosses a badge's tierRequirement. Floored at 1 by a CHECK Prisma can't model —
   /// see the migration.
@@ -259,17 +260,13 @@ model message_reactions {
   @@schema("public")
 }
 
-/// One shared XP total per Stream chat channel (group or DM) - not per person. Both/all
-/// participants in a channel see the same number; it reflects how "warmed up" that
-/// specific conversation is, separate from profiles.confidence_level (a per-person,
-/// global stat). channel_cid is Stream's own channel id (e.g. "messaging:abc123"),
-/// which is why this has no foreign key to any of our own tables - Stream owns
-/// channels, we just keep a counter next to one.
+/// One shared XP total per conversation (group or DM) - not per person. Both/all
+/// participants see the same number; it reflects how "warmed up" that specific
+/// conversation is, separate from profiles.confidence_level (a per-person, global stat).
 ///
-/// channel_cid is on its way out. conversation_id is nullable only until
-/// scripts/migrate-stream-to-supabase.ts backfills it (phase 7 of the chat rework, which
-/// has to run while Stream can still say which pair of people a cid belongs to); migration
-/// B then drops channel_cid and makes this the primary key.
+/// This used to key on Stream's channel_cid, an opaque string no foreign key could point
+/// at. 20260726000000_rekey_xp_on_conversations made conversation_id the primary key, so
+/// the counter now cascades with the conversation it counts instead of outliving it.
 model channel_xp {
   conversation_id String   @id @db.Uuid
   xp              Int      @default(0)
@@ -289,8 +286,9 @@ model channel_xp {
 /// can be answered over and over, and the request that awards it can simply be replayed.
 /// This table is what makes the guarantee once-per-person-per-prompt.
 ///
-/// prompt_id is a Stream message id, so - like channel_xp.channel_cid - it has no foreign
-/// key to anything of ours. Stream owns the message; we only record that we paid for it.
+/// prompt_id used to be an opaque Stream message id with nothing behind it. It is now a
+/// real foreign key to the icebreaker message, so an award cannot outlive the prompt it
+/// paid for - deleting the message takes the award row with it.
 model prompt_awards {
   prompt_id  String   @db.Uuid
   profile_id String   @db.Uuid
@@ -338,10 +336,8 @@ model daily_chat_activity {
 /// means a replay or a race between two members finishing at the same moment loses
 /// rather than paying twice.
 ///
-/// channel_cid is Stream's id, so - like channel_xp - there is no foreign key to
-/// anything of ours.
-///
-/// conversation_id is nullable until the phase 7 backfill - see channel_xp above.
+/// Keyed by conversation, like channel_xp, and cascades with it - a deleted conversation
+/// cannot leave a claim behind that would block nothing.
 model daily_bonus_awards {
   conversation_id String   @db.Uuid
   day             DateTime @db.Date
@@ -358,17 +354,14 @@ model daily_bonus_awards {
 model groups {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  /// The group's name. Seeded at formation with the top tag its members share, and
-  /// renameable by any member afterwards (renameGroup in chats/actions.ts).
+  /// The name the group is *formed* with — the top tag its members share.
   ///
-  /// Stream's channel `name` is what every chat surface actually displays; this copy is
-  /// kept in step because findMyGroup's repair branch pushes it back onto the channel,
-  /// so a stale value here would silently undo a rename.
+  /// Deliberately not kept in step with conversations.title, which is what every chat
+  /// surface displays and the only thing renameGroup writes. This copy is read exactly
+  /// twice, both before a conversation can exist: to seed the conversation's title, and by
+  /// findMyGroup's repair branch when it creates one late. A rename needs a conversation,
+  /// so it can never race either read, and nothing displays this value once one exists.
   title String
-
-  /// On its way out: conversations.group_id points here instead, so the group's chat is
-  /// reached by relation rather than by an id string with no foreign key behind it.
-  stream_channel_id String? @unique
 
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
@@ -392,8 +385,8 @@ model group_members {
   @@schema("public")
 }
 
-/// A two-player turn-based game (Tic-Tac-Toe, Connect Four, ...) attached to a Stream
-/// channel. state is opaque JSON - each game's own logic (components/chat/games/) is
+/// A two-player turn-based game (Tic-Tac-Toe, Connect Four, ...) played inside a
+/// conversation. state is opaque JSON - each game's own logic (components/chat/games/) is
 /// the only code that reads or writes its shape. game_type and status are both
 /// CHECK-constrained in the migration since Prisma can't model an enum-like string here
 /// without a real Postgres enum, and a real enum would need its own migration every
