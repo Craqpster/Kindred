@@ -335,22 +335,41 @@ async function checkRowLevelSecurity(
 
 // --- the tests must not have left anything behind -------------------------------------
 
-/// Runs last. Everything above writes real rows and relies on the rollback in `rolledBack`
-/// to take them away again - which is a claim about this file's own machinery, not about the
-/// schema, and is therefore exactly the kind of thing that should be checked rather than
-/// assumed. Counted rather than compared to a snapshot because nothing else writes to these
-/// tables yet; when the app does, take a before/after count instead.
-async function checkNothingPersisted(): Promise<Check[]> {
-    const [counts] = await prisma.$queryRaw<Record<string, bigint>[]>`
+type RowCounts = Record<string, bigint>;
+
+/// How many rows the chat tables hold right now.
+async function countChatRows(): Promise<RowCounts> {
+    const [counts] = await prisma.$queryRaw<RowCounts[]>`
         SELECT (SELECT count(*) FROM conversations)        AS conversations,
                (SELECT count(*) FROM conversation_members) AS members,
                (SELECT count(*) FROM messages)             AS messages,
                (SELECT count(*) FROM message_reactions)    AS reactions;
     `;
+    return counts;
+}
 
-    return Object.entries(counts).map(([table, count]) =>
-        Number(count) === 0 ? ok(`no ${table} left behind`) : not(`no ${table} left behind`, `${count} rows`),
-    );
+/// Runs last. Everything above writes real rows and relies on the rollback in `rolledBack`
+/// to take them away again - which is a claim about this file's own machinery, not about the
+/// schema, and is therefore exactly the kind of thing that should be checked rather than
+/// assumed.
+///
+/// Before-and-after rather than "the tables are empty". The original version asserted zero,
+/// which was true only while nothing but this script wrote here; the moment the app created
+/// its first real conversation it began reporting a person's actual chats as leaked test
+/// rows. A delta measures what this run did and is indifferent to what was already there,
+/// which is the property that was actually wanted all along.
+///
+/// It does mean a chat arriving from a real user mid-run reads as a leak. That is the right
+/// way round: a false alarm costs a second look, where the alternative — a filter clever
+/// enough to ignore other people's rows — could hide a genuine leak behind it.
+function checkNothingPersisted(before: RowCounts, after: RowCounts): Check[] {
+    return Object.keys(after).map((table) => {
+        const delta = Number(after[table]) - Number(before[table]);
+
+        if (delta === 0) return ok(`no ${table} left behind`);
+        if (delta > 0) return not(`no ${table} left behind`, `${delta} rows added by this run`);
+        return not(`no ${table} left behind`, `${-delta} rows disappeared during this run`);
+    });
 }
 
 // --- runner ---------------------------------------------------------------------------
@@ -374,11 +393,15 @@ async function main(): Promise<void> {
     const dmKey = dmKeyFor(alice, bob);
     console.log(`${alice.username} and ${bob.username} share a chat. ${carol.username} does not.`);
 
+    // Taken before anything writes, so the last group can measure this run rather than
+    // judging whatever the database already held.
+    const before = await countChatRows();
+
     const groups: [string, Check[]][] = [
         ["Malformed rows must be impossible:", await checkRejections(alice, dmKey)],
         ["last_message_at must track the newest message:", await checkTrigger(alice, dmKey)],
         ["RLS must show each person only their own chats:", await checkRowLevelSecurity(alice, bob, carol, dmKey)],
-        ["The run itself must be invisible:", await checkNothingPersisted()],
+        ["The run itself must be invisible:", checkNothingPersisted(before, await countChatRows())],
     ];
 
     const checks = groups.flatMap(([, group]) => group);
