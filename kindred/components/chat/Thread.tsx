@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { markConversationRead } from "@/app/(app)/chats/actions";
+import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
-import { mergeMessage, messageFromRow } from "@/lib/chat/realtime";
+import type { ReactionEmoji } from "@/lib/chat/reactions";
+import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
 import type { ChatConversation, ChatMessage, TimelineMessage } from "@/lib/chat/types";
 
 const GREETING = "👋";
@@ -26,7 +27,7 @@ export default function Thread({
     initialMessages: ChatMessage[];
     greet: boolean;
 }) {
-    const { onMessage } = useChatRealtime();
+    const { onMessage, onReaction } = useChatRealtime();
     const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
     const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -58,6 +59,36 @@ export default function Thread({
         });
     }, [onMessage, conversation.id, membersById]);
 
+    // Reactions arrive for every conversation, not just this one. applyReaction ignores a
+    // message id the timeline is not holding, so there is nothing to filter on the way in.
+    useEffect(() => {
+        return onReaction((row, present) => {
+            setMessages((current) => applyReaction(current, row, present));
+        });
+    }, [onReaction]);
+
+    /// Draws the change immediately, then lets the server settle it.
+    ///
+    /// The optimistic guess is a plain inversion of what is on screen. It can be wrong — the
+    /// same reaction from another tab, or a message deleted underneath — so the result is
+    /// applied unconditionally rather than only on failure: `reacted` is the state afterwards,
+    /// so re-applying it corrects a wrong guess and is a no-op when the guess was right.
+    const toggle = async (messageId: string, emoji: ReactionEmoji) => {
+        const message = messages.find((m) => m.id === messageId);
+        const mine = !!message?.reactions
+            .find((reaction) => reaction.emoji === emoji)
+            ?.reactedBy.includes(userId);
+
+        const row = { message_id: messageId, profile_id: userId, emoji };
+        setMessages((current) => applyReaction(current, row, !mine));
+
+        const result = await toggleMessageReaction({ messageId, emoji });
+
+        setMessages((current) =>
+            applyReaction(current, row, result.ok ? result.reacted : mine),
+        );
+    };
+
     // Opening a conversation reads it, and so does a message arriving while it is open.
     useEffect(() => {
         void markConversationRead(conversation.id);
@@ -88,6 +119,8 @@ export default function Thread({
                             isOwn={message.sender?.id === userId}
                             showSender={messages[index - 1]?.sender?.id !== message.sender?.id}
                             read={!!readThrough && readThrough >= message.createdAt}
+                            userId={userId}
+                            onToggleReaction={toggle}
                         />
                     ))
                 )}

@@ -8,9 +8,12 @@ import {
     markRead,
     renameGroup,
     sendMessage,
+    toggleReaction,
     type SendMessageResult,
+    type ToggleReactionResult,
 } from "@/lib/chat/mutations";
 import { getMessages } from "@/lib/chat/queries";
+import { REACTION_EMOJI } from "@/lib/chat/reactions";
 import type { MessagePage } from "@/lib/chat/types";
 import { verifySession } from "@/lib/dal";
 
@@ -116,6 +119,29 @@ export async function markConversationRead(conversationId: string) {
 
     await markRead({ conversationId: parsed.data, userId });
 }
+
+// z.enum over the shared allowlist, so an arbitrary emoji — or a megabyte of text in the
+// same field — is refused here rather than stored. The column is a free-form String at the
+// database level; this is what actually bounds it.
+const reactionInput = z.object({ messageId: uuid, emoji: z.enum(REACTION_EMOJI) });
+
+/// Adds or removes one of your reactions on a message.
+///
+/// Returns the state afterwards so the caller can settle an optimistic toggle, and does not
+/// revalidate: reactions reach every other client over realtime, and the acting client
+/// already drew the change before this was called.
+export async function toggleMessageReaction(
+    input: ToggleMessageReactionInput,
+): Promise<ToggleReactionResult | { ok: false; reason: "invalid" }> {
+    const { userId } = await verifySession();
+
+    const parsed = reactionInput.safeParse(input);
+    if (!parsed.success) return { ok: false, reason: "invalid" };
+
+    return toggleReaction({ ...parsed.data, userId });
+}
+
+export type ToggleMessageReactionInput = z.infer<typeof reactionInput>;
 
 const olderInput = z.object({ conversationId: uuid, before: z.iso.datetime() });
 

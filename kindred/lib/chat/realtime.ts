@@ -74,3 +74,53 @@ export function mergeMessage<T extends ChatMessage>(messages: T[], incoming: T):
     if (index === -1) return [...withoutDuplicate, incoming];
     return [...withoutDuplicate.slice(0, index), incoming, ...withoutDuplicate.slice(index)];
 }
+
+/// A `message_reactions` row as realtime delivers it. The primary key is
+/// (message_id, profile_id, emoji), and a DELETE payload carries exactly the replica
+/// identity — which for this table is that key — so a removal arrives fully described.
+export type ReactionRow = {
+    message_id: string;
+    profile_id: string;
+    emoji: string;
+};
+
+/// Adds or removes one person's reaction, in whatever state the list is already in.
+///
+/// Written as "make it so" rather than "apply this change", and that is the point: the same
+/// call has to be safe from an optimistic click AND from the realtime echo of that click
+/// coming back a moment later, in either order. Toggling would double-apply; this cannot.
+///
+/// A message that is not in the list is left alone rather than created — a reaction on a
+/// message this timeline has not loaded has nothing to attach to, and inventing a slot for
+/// it would put an empty bubble on screen.
+export function applyReaction<T extends ChatMessage>(
+    messages: T[],
+    row: ReactionRow,
+    present: boolean,
+): T[] {
+    return messages.map((message) => {
+        if (message.id !== row.message_id) return message;
+
+        const existing = message.reactions.find((r) => r.emoji === row.emoji);
+        const reactedBy = existing?.reactedBy ?? [];
+        const has = reactedBy.includes(row.profile_id);
+
+        if (has === present) return message;
+
+        const nextReactedBy = present
+            ? [...reactedBy, row.profile_id]
+            : reactedBy.filter((id) => id !== row.profile_id);
+
+        return {
+            ...message,
+            // An emoji nobody is left holding stops being a pill rather than becoming "0".
+            reactions: nextReactedBy.length
+                ? existing
+                    ? message.reactions.map((r) =>
+                          r.emoji === row.emoji ? { ...r, reactedBy: nextReactedBy } : r,
+                      )
+                    : [...message.reactions, { emoji: row.emoji, reactedBy: nextReactedBy }]
+                : message.reactions.filter((r) => r.emoji !== row.emoji),
+        };
+    });
+}

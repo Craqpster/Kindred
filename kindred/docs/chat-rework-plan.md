@@ -21,8 +21,21 @@
 > user saw "Still setting up this chat" instead of their group. The card now reads the
 > conversation relation.
 >
-> Still to come: the parity pass (phase 5) and message actions including the games rebuild
-> (phase 6).
+> **Reactions are done** (2026-07-27), the first slice of phase 6. The table, RLS grant,
+> types, mapping and read path had all existed since phase 1 with no write path at all — no
+> mutation, no action, no UI. `toggleReaction` closes that, membership-checked like every
+> other write, with a closed emoji allowlist shared by the picker and the server validator so
+> the two cannot drift. `npm run verify:reactions` covers the state machine.
+>
+> One thing worth knowing rather than discovering: **Realtime does not RLS-filter DELETEs**,
+> because a delete payload carries only the replica identity and a policy needs a full row.
+> Reaction *additions* are filtered per subscriber; *removals* go to everyone. `applyReaction`
+> ignores message ids the client is not holding, so nothing renders — but the tuple does reach
+> the wire. Fixing it properly means soft-deleting reactions so removal becomes an UPDATE, and
+> that is a schema change worth making deliberately.
+>
+> Still to come: the parity pass (phase 5) and the rest of phase 6 — threads, edit, delete,
+> pin, and the games rebuild.
 
 Replacing Stream Chat with our own tables plus Supabase Realtime, and rebuilding the chat
 surface so it reads like one design instead of a pile of workarounds around someone else's SDK.

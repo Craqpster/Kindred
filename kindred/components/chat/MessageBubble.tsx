@@ -2,7 +2,9 @@
 
 import { Check, CheckCheck, Clock, Lightbulb } from "lucide-react";
 
+import ReactionBar from "@/components/chat/ReactionBar";
 import Avatar from "@/components/ui/Avatar";
+import type { ReactionEmoji } from "@/lib/chat/reactions";
 import type { TimelineMessage } from "@/lib/chat/types";
 
 const KINDRED_BOT_NAME = "Kindred";
@@ -36,6 +38,8 @@ export default function MessageBubble({
     isOwn,
     showSender,
     read = false,
+    userId,
+    onToggleReaction,
 }: {
     message: TimelineMessage;
     isOwn: boolean;
@@ -44,6 +48,9 @@ export default function MessageBubble({
     showSender: boolean;
     /// Everyone else in the conversation has seen this one.
     read?: boolean;
+    /// Whose view this is — decides which reaction pills read as yours.
+    userId: string;
+    onToggleReaction: (messageId: string, emoji: ReactionEmoji) => void;
 }) {
     if (message.kind === "icebreaker_prompt") {
         return (
@@ -70,7 +77,9 @@ export default function MessageBubble({
     const senderName = message.sender?.username ?? KINDRED_BOT_NAME;
 
     return (
-        <li className={`flex gap-2 px-4 py-0.5 ${isOwn ? "justify-end" : "justify-start"}`}>
+        <li
+            className={`group flex gap-2 px-4 py-0.5 ${isOwn ? "justify-end" : "justify-start"}`}
+        >
             {/* A spacer keeps a run of messages aligned once the avatar stops repeating. */}
             {!isOwn &&
                 (showSender ? (
@@ -111,6 +120,17 @@ export default function MessageBubble({
                         </span>
                     )}
                 </div>
+
+                {/* Not while the message is still optimistic: its id is a placeholder the
+                    server has never seen, so a reaction sent against it would be refused. */}
+                {message.status !== "sending" && (
+                    <ReactionBar
+                        reactions={message.reactions}
+                        userId={userId}
+                        align={isOwn ? "end" : "start"}
+                        onToggle={(emoji) => onToggleReaction(message.id, emoji)}
+                    />
+                )}
             </div>
         </li>
     );

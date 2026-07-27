@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { useToast } from "@/components/ui/ToastStack";
 import type { ChatConversation } from "@/lib/chat/types";
-import type { MessageRow } from "@/lib/chat/realtime";
+import type { MessageRow, ReactionRow } from "@/lib/chat/realtime";
 import { createClient } from "@/utils/supabase/client";
 
 // One Supabase subscription for the whole authenticated shell.
@@ -30,6 +30,9 @@ type ChatRealtimeValue = {
     /// Fires for every message row that arrives for a conversation this user is in.
     /// The open thread subscribes to this rather than opening a second connection.
     onMessage: (listener: (row: MessageRow) => void) => () => void;
+    /// Fires when anyone reacts or un-reacts. `present` is whether the reaction exists
+    /// afterwards, so a listener can apply it without tracking which event it was.
+    onReaction: (listener: (row: ReactionRow, present: boolean) => void) => () => void;
     /// True once the socket has actually joined. Until then a message could be missed, which
     /// the UI can use to decide whether it still needs to poll on focus.
     connected: boolean;
@@ -61,12 +64,25 @@ export default function ChatRealtimeProvider({
     // Listeners live in a ref so that subscribing does not re-render this provider, and so
     // the socket effect below does not tear down and rebuild every time a thread mounts.
     const listenersRef = useRef(new Set<(row: MessageRow) => void>());
+    const reactionListenersRef = useRef(
+        new Set<(row: ReactionRow, present: boolean) => void>(),
+    );
 
     const onMessage = useMemo(
         () => (listener: (row: MessageRow) => void) => {
             listenersRef.current.add(listener);
             return () => {
                 listenersRef.current.delete(listener);
+            };
+        },
+        [],
+    );
+
+    const onReaction = useMemo(
+        () => (listener: (row: ReactionRow, present: boolean) => void) => {
+            reactionListenersRef.current.add(listener);
+            return () => {
+                reactionListenersRef.current.delete(listener);
             };
         },
         [],
@@ -166,6 +182,33 @@ export default function ChatRealtimeProvider({
                     );
                 },
             )
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "message_reactions" },
+                (payload) => {
+                    const row = payload.new as ReactionRow;
+                    for (const listener of reactionListenersRef.current) listener(row, true);
+                },
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "message_reactions" },
+                (payload) => {
+                    // Worth knowing, because it is asymmetric with the INSERT above: Realtime
+                    // evaluates RLS against the row it is forwarding, and a DELETE payload has
+                    // only the replica identity to evaluate — not enough to run the policy. So
+                    // removals are broadcast to every subscriber, where additions are filtered.
+                    //
+                    // What leaks is a (message_id, profile_id, emoji) triple for a message the
+                    // recipient cannot read, which is why applyReaction ignores ids it does not
+                    // already hold: a stranger's un-reaction reaches the client and changes
+                    // nothing. Closing it properly would mean soft-deleting reactions so the
+                    // removal is an UPDATE with a full row to check, and that is a schema change
+                    // to make deliberately rather than in passing.
+                    const row = payload.old as ReactionRow;
+                    for (const listener of reactionListenersRef.current) listener(row, false);
+                },
+            )
             .subscribe((status) => {
                 setConnected(status === "SUBSCRIBED");
             });
@@ -190,8 +233,8 @@ export default function ChatRealtimeProvider({
     }
 
     const value = useMemo(
-        () => ({ conversations, onMessage, connected }),
-        [conversations, onMessage, connected],
+        () => ({ conversations, onMessage, onReaction, connected }),
+        [conversations, onMessage, onReaction, connected],
     );
 
     return (
