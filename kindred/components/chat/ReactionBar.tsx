@@ -21,6 +21,8 @@ export default function ReactionBar({
     reactions: MessageReaction[];
     /// Which pills read as "you reacted".
     userId: string;
+    /// Which side the picker opens from. Row alignment is the caller's job — this sits in a
+    /// shared meta row with the delivery tick, so only the popover anchor is decided here.
     align: "start" | "end";
     onToggle: (emoji: ReactionEmoji) => void;
 }) {
@@ -51,9 +53,7 @@ export default function ReactionBar({
     return (
         <div
             ref={pickerRef}
-            className={`relative mt-1 flex flex-wrap items-center gap-1 ${
-                align === "end" ? "justify-end" : ""
-            }`}
+            className="relative flex flex-wrap items-center gap-1"
         >
             {reactions.map((reaction) => {
                 const mine = reaction.reactedBy.includes(userId);

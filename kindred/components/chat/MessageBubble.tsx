@@ -15,16 +15,24 @@ const KINDRED_BOT_NAME = "Kindred";
 /// Three states, not four. There is no "delivered": a browser has nothing to acknowledge
 /// delivery with, so a third tick would either duplicate "sent" or quietly mean "their tab
 /// is open", which is presence and belongs in the header where it can say so honestly.
+///
+/// Drawn on the page background rather than on the bubble, so these are ink colours. It used
+/// to sit inside the bubble and was styled in `surface` to read against the accent fill —
+/// which would now be a near-invisible pale tick on a pale background.
 function DeliveryState({ read, status }: { read: boolean; status?: string }) {
     if (status === "sending") {
-        return <Clock size={12} strokeWidth={2} aria-label="Sending" className="text-surface/60" />;
+        return <Clock size={12} strokeWidth={2} aria-label="Sending" className="text-ink-600" />;
     }
 
+    // Read is the one state worth colouring: it is the only one that says something happened
+    // at the other end rather than at ours.
     if (read) {
-        return <CheckCheck size={13} strokeWidth={2} aria-label="Read" className="text-surface" />;
+        return (
+            <CheckCheck size={13} strokeWidth={2} aria-label="Read" className="text-accent-600" />
+        );
     }
 
-    return <Check size={13} strokeWidth={2} aria-label="Sent" className="text-surface/60" />;
+    return <Check size={13} strokeWidth={2} aria-label="Sent" className="text-ink-600" />;
 }
 
 /// One message in the timeline.
@@ -111,26 +119,28 @@ export default function MessageBubble({
                             edited
                         </span>
                     )}
-
-                    {/* Inside the bubble, trailing the text: a tick in the gutter drifts away
-                        from the message it belongs to on a short line. */}
-                    {isOwn && (
-                        <span className="ml-1.5 inline-flex translate-y-0.5 align-baseline">
-                            <DeliveryState read={read} status={message.status} />
-                        </span>
-                    )}
                 </div>
 
-                {/* Not while the message is still optimistic: its id is a placeholder the
-                    server has never seen, so a reaction sent against it would be refused. */}
-                {message.status !== "sending" && (
-                    <ReactionBar
-                        reactions={message.reactions}
-                        userId={userId}
-                        align={isOwn ? "end" : "start"}
-                        onToggle={(emoji) => onToggleReaction(message.id, emoji)}
-                    />
-                )}
+                {/* One meta row under the bubble carrying both the reactions and, on your own
+                    messages, the tick. The tick used to sit inside the bubble trailing the
+                    text, which wrapped onto a line of its own whenever the text filled the
+                    width — leaving it stranded under the message rather than beside it. Below
+                    the bubble it lands in the same place every time. */}
+                <div className={`mt-1 flex items-center gap-1.5 ${isOwn ? "justify-end" : ""}`}>
+                    {/* Not while the message is still optimistic: its id is a placeholder the
+                        server has never seen, so a reaction sent against it would be refused. */}
+                    {message.status !== "sending" && (
+                        <ReactionBar
+                            reactions={message.reactions}
+                            userId={userId}
+                            align={isOwn ? "end" : "start"}
+                            onToggle={(emoji) => onToggleReaction(message.id, emoji)}
+                        />
+                    )}
+
+                    {/* Last, so it sits outermost on the right where a status marker reads. */}
+                    {isOwn && <DeliveryState read={read} status={message.status} />}
+                </div>
             </div>
         </li>
     );
