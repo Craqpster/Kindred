@@ -5,7 +5,7 @@ import { Check, CheckCheck, Clock, Lightbulb } from "lucide-react";
 import ReactionBar from "@/components/chat/ReactionBar";
 import Avatar from "@/components/ui/Avatar";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
-import type { TimelineMessage } from "@/lib/chat/types";
+import type { PendingAttachment, TimelineMessage } from "@/lib/chat/types";
 
 const KINDRED_BOT_NAME = "Kindred";
 
@@ -48,6 +48,7 @@ export default function MessageBubble({
     read = false,
     userId,
     onToggleReaction,
+    onAttach,
 }: {
     message: TimelineMessage;
     isOwn: boolean;
@@ -59,6 +60,8 @@ export default function MessageBubble({
     /// Whose view this is — decides which reaction pills read as yours.
     userId: string;
     onToggleReaction: (messageId: string, emoji: ReactionEmoji) => void;
+    /// Aims the composer at this message — as an answer, or as a quote.
+    onAttach: (attachment: PendingAttachment) => void;
 }) {
     if (message.kind === "icebreaker_prompt") {
         return (
@@ -69,6 +72,40 @@ export default function MessageBubble({
                         Icebreaker
                     </p>
                     <p className="mt-1.5 text-body font-medium text-ink-900">{message.body}</p>
+
+                    {/* Two actions, and the difference between them is the point. Answering
+                        sends a promptId, which is what earns the larger award; quoting only
+                        pulls the question above your message so you can talk about it. Both
+                        used to be here and people used them for different things. */}
+                    <div className="mt-3 flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() =>
+                                onAttach({
+                                    mode: "answer",
+                                    messageId: message.id,
+                                    preview: message.body,
+                                })
+                            }
+                            className="rounded-full bg-accent-600 px-3 py-1 text-label font-medium text-surface transition-colors hover:bg-accent-700"
+                        >
+                            Answer this
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                onAttach({
+                                    mode: "quote",
+                                    messageId: message.id,
+                                    preview: message.body,
+                                    author: null,
+                                })
+                            }
+                            className="rounded-full border border-bone-300 px-3 py-1 text-label text-ink-600 transition-colors hover:border-ink-900/20 hover:text-ink-900"
+                        >
+                            Quote
+                        </button>
+                    </div>
                 </div>
             </li>
         );
@@ -104,6 +141,27 @@ export default function MessageBubble({
             <div className={`flex max-w-[min(32rem,75%)] flex-col ${isOwn ? "items-end" : ""}`}>
                 {!isOwn && showSender && (
                     <span className="mb-0.5 text-label text-ink-600">{senderName}</span>
+                )}
+
+                {/* What this message is quoting, above it and clipped to one line. Sits
+                    outside the bubble so it reads as a reference to something else rather
+                    than as part of what was said. A quoted message that has since been
+                    deleted arrives as null from the mapper, so there is nothing to guard. */}
+                {message.replyTo && (
+                    <div
+                        className={`mb-0.5 max-w-full border-l-2 border-accent-600/40 py-0.5 pl-2 ${
+                            isOwn ? "text-right" : ""
+                        }`}
+                    >
+                        {message.replyTo.senderName && (
+                            <span className="text-label text-ink-600">
+                                {message.replyTo.senderName}
+                            </span>
+                        )}
+                        <p className="truncate text-label text-ink-600">
+                            {message.replyTo.body}
+                        </p>
+                    </div>
                 )}
 
                 <div

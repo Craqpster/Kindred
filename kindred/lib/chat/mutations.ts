@@ -133,7 +133,7 @@ export type SendMessageInput = {
 
 export type SendMessageResult =
     | { ok: true; message: ChatMessage; award: AwardResult | null }
-    | { ok: false; reason: "not_a_member" | "empty" | "bad_parent" }
+    | { ok: false; reason: "not_a_member" | "empty" | "bad_parent" | "bad_prompt" }
     | { ok: false; reason: "moderated"; cooldownUntil: number | null };
 
 /// Sends a message, and does everything that has to happen around one.
@@ -147,7 +147,14 @@ export type SendMessageResult =
 ///   4. accepting the wave, since replying IS accepting;
 ///   5. XP, which is bookkeeping and must never be able to fail the send.
 export async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
-    const { conversationId, senderId, kind = "text", body } = input;
+    const { conversationId, senderId, body } = input;
+
+    // Derived, not taken from the caller. messages_kind_fields_check enforces
+    // `prompt_id IS NULL OR kind = 'prompt_response'`, so a prompt_id sent alongside the
+    // default kind of 'text' is rejected by Postgres — the send would surface as a crash
+    // rather than a refusal. Deriving it means the one thing that sets prompt_id is the same
+    // thing that decides the kind, and the constraint cannot be reached from here at all.
+    const kind: MessageKind = input.promptId ? "prompt_response" : (input.kind ?? "text");
 
     const text = body.trim();
     if (!text) return { ok: false, reason: "empty" };
@@ -175,6 +182,31 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
 
         if (!parent || parent.parent_id !== null || parent.conversation_id !== conversationId) {
             return { ok: false, reason: "bad_parent" };
+        }
+    }
+
+    // The same treatment as parentId above, and for the same reason: this id comes from the
+    // client. The foreign key only proves the message exists somewhere, and the CHECK only
+    // ties prompt_id to the kind — neither can see that the prompt belongs to THIS
+    // conversation or that it is an icebreaker at all.
+    //
+    // Unchecked, pointing it at any message id in existence buys the prompt exemption in
+    // awardConfidenceForMessage, which pays the larger award and skips the back-and-forth
+    // test. prompt_awards and the daily rule bound how often that could be worked, so this
+    // was a small cheat rather than an open faucet — but it is a cheat that stops existing
+    // for one query.
+    if (input.promptId) {
+        const prompt = await prisma.messages.findUnique({
+            where: { id: input.promptId },
+            select: { conversation_id: true, kind: true },
+        });
+
+        if (
+            !prompt ||
+            prompt.conversation_id !== conversationId ||
+            prompt.kind !== "icebreaker_prompt"
+        ) {
+            return { ok: false, reason: "bad_prompt" };
         }
     }
 

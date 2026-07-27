@@ -116,6 +116,18 @@ export type ConversationXp = {
     bonusXpToday: number | null;
 };
 
+/// What the next message will be attached to, while the composer is still holding it.
+///
+/// Two modes because they are genuinely different acts, not two renderings of one. Answering
+/// an icebreaker sends a `promptId`, which makes the message a `prompt_response` and is what
+/// pays the larger award — at most once per person per prompt. Quoting sends a `replyToId`,
+/// which only draws the quoted line above the message and pays nothing extra. The old chat
+/// put both on the icebreaker card as separate buttons, and the distinction mattered: people
+/// quoted a prompt to talk *about* it and answered it to earn the award.
+export type PendingAttachment =
+    | { mode: "answer"; messageId: string; preview: string }
+    | { mode: "quote"; messageId: string; preview: string; author: string | null };
+
 /// A message on its way out, before the server has confirmed it.
 ///
 /// Only ever exists in the composer's own optimistic copy: `sending` becomes `sent` when the
