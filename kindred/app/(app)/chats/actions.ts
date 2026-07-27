@@ -12,9 +12,9 @@ import {
     type SendMessageResult,
     type ToggleReactionResult,
 } from "@/lib/chat/mutations";
-import { getMessages } from "@/lib/chat/queries";
+import { getConversationXp, getMessages } from "@/lib/chat/queries";
 import { REACTION_EMOJI } from "@/lib/chat/reactions";
-import type { MessagePage } from "@/lib/chat/types";
+import type { ConversationXp, MessagePage } from "@/lib/chat/types";
 import { verifySession } from "@/lib/dal";
 
 // Thin wrappers over lib/chat. Everything real lives there; these exist to validate input
@@ -142,6 +142,22 @@ export async function toggleMessageReaction(
 }
 
 export type ToggleMessageReactionInput = z.infer<typeof reactionInput>;
+
+/// Re-reads the XP badge.
+///
+/// Needed because channel_xp is not in the realtime publication, so a conversation's total
+/// moving is not something the socket can announce. What the socket DOES deliver is the
+/// message that moved it, which is the client's cue to ask — see Thread.
+export async function loadConversationXp(
+    conversationId: string,
+): Promise<ConversationXp | null> {
+    const { userId } = await verifySession();
+
+    const parsed = uuid.safeParse(conversationId);
+    if (!parsed.success) return null;
+
+    return getConversationXp({ conversationId: parsed.data, userId });
+}
 
 const olderInput = z.object({ conversationId: uuid, before: z.iso.datetime() });
 

@@ -6,6 +6,7 @@ import {
     dailyBonusThreshold,
     dailyBonusXp,
     DAILY_MESSAGE_XP_CAP,
+    utcDay,
     XP_PER_MESSAGE,
     XP_PER_PROMPT_ANSWER,
 } from "@/lib/confidence-xp";
@@ -44,14 +45,6 @@ export type AwardResult = {
     confidenceLevel: number;
     tierUp: boolean;
 };
-
-/// Midnight UTC for today, the key `daily_chat_activity` and `daily_bonus_awards` are
-/// bucketed by. UTC rather than either participant's local day so that two people in
-/// different timezones are always working toward the same bucket.
-function utcDay(): Date {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
 
 /// Awards XP to both profiles.confidence_points (the sender's own, global, per-person
 /// counter) AND channel_xp (a single number shared by everyone in that specific

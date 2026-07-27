@@ -7,11 +7,14 @@ import {
     toMember,
     toMessage,
 } from "@/lib/chat/mapping";
+import { getChatLevel } from "@/lib/chat-level";
+import { dailyBonusThreshold, utcDay } from "@/lib/confidence-xp";
 import { prisma } from "@/lib/prisma";
 import type {
     ChatConversation,
     ChatMessage,
     ConversationKind,
+    ConversationXp,
     MessagePage,
 } from "@/lib/chat/types";
 
@@ -158,6 +161,62 @@ export async function getConversation({
 }): Promise<ChatConversation | null> {
     const conversations = await listConversations(userId);
     return conversations.find((conversation) => conversation.id === conversationId) ?? null;
+}
+
+/// The XP badge in a conversation's header: its shared total, and the viewer's own progress
+/// toward today's mutual bonus.
+///
+/// Null for a non-member, same as getConversation — "not yours" and "does not exist" have to
+/// look identical from outside.
+///
+/// A conversation with no channel_xp row has simply never had a qualifying message in it,
+/// which is zero rather than an error. The badge draws level 1 from that without a special
+/// case, because level 1 is what zero XP means.
+export async function getConversationXp({
+    conversationId,
+    userId,
+}: {
+    conversationId: string;
+    userId: string;
+}): Promise<ConversationXp | null> {
+    if (!(await isMember({ conversationId, userId }))) return null;
+
+    const day = utcDay();
+
+    const [row, activity, bonus] = await Promise.all([
+        prisma.channel_xp.findUnique({
+            where: { conversation_id: conversationId },
+            select: { xp: true },
+        }),
+        prisma.daily_chat_activity.findUnique({
+            where: {
+                conversation_id_profile_id_day: {
+                    conversation_id: conversationId,
+                    profile_id: userId,
+                    day,
+                },
+            },
+            select: { qualifying_messages: true },
+        }),
+        prisma.daily_bonus_awards.findUnique({
+            where: { conversation_id_day: { conversation_id: conversationId, day } },
+            select: { xp_awarded: true },
+        }),
+    ]);
+
+    const xp = row?.xp ?? 0;
+    const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(xp);
+
+    return {
+        xp,
+        level,
+        xpIntoLevel,
+        xpForNextLevel,
+        messagesToday: activity?.qualifying_messages ?? 0,
+        bonusThreshold: dailyBonusThreshold(level),
+        bonusEarnedToday: !!bonus,
+        bonusXpToday: bonus?.xp_awarded ?? null,
+    };
 }
 
 /// A page of the main timeline, oldest-first.
