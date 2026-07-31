@@ -61,6 +61,38 @@ export function messageFromRow(row: MessageRow, membersById: Map<string, ChatMem
 /// Both halves matter. Realtime can deliver a message the sender already added from its own
 /// send response, so appending blindly shows it twice; and a message that arrives while
 /// history is loading can land out of order, so appending to the end is not enough either.
+/// Folds a realtime row into the timeline, whether it is a new message or a change to one
+/// already there.
+///
+/// The care is in what a row does NOT carry. Reactions, the quoted message and the reply count
+/// all need joins, so messageFromRow leaves them empty — fine for an arrival, wrong for an
+/// edit, where blanking them would make somebody's reactions vanish because the author fixed a
+/// typo. Anything the timeline already knows is kept; only what the row actually speaks to is
+/// replaced.
+export function applyRow<T extends ChatMessage>(
+    messages: T[],
+    row: MessageRow,
+    membersById: Map<string, ChatMember>,
+    /// Passed in because only the caller knows what its element type carries beyond
+    /// ChatMessage — TimelineMessage's `status`, for instance.
+    asTimelineMessage: (message: ChatMessage) => T,
+): T[] {
+    const existing = messages.find((message) => message.id === row.id);
+    const incoming = messageFromRow(row, membersById);
+
+    if (!existing) return mergeMessage(messages, asTimelineMessage(incoming));
+
+    return mergeMessage(
+        messages,
+        asTimelineMessage({
+            ...incoming,
+            reactions: existing.reactions,
+            replyTo: existing.replyTo,
+            replyCount: existing.replyCount,
+        }),
+    );
+}
+
 /// Generic over the element so a timeline holding TimelineMessage keeps its `status` in the
 /// type as well as at runtime. Returning ChatMessage[] would type-check — status is optional,
 /// so the two are assignable — while quietly claiming the field had been dropped.

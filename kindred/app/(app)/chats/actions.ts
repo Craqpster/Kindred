@@ -5,10 +5,13 @@ import { z } from "zod";
 
 import {
     acceptRequest,
+    deleteMessage,
+    editMessage,
     markRead,
     renameGroup,
     sendMessage,
     toggleReaction,
+    type EditMessageResult,
     type SendMessageResult,
     type ToggleReactionResult,
 } from "@/lib/chat/mutations";
@@ -158,6 +161,37 @@ export async function loadConversationXp(
     if (!parsed.success) return null;
 
     return getConversationXp({ conversationId: parsed.data, userId });
+}
+
+const editInput = z.object({
+    messageId: uuid,
+    // Same bound as sending: an edit is a message, and the limit belongs to the column rather
+    // than to which door the text came through.
+    body: z.string().trim().min(1).max(4000),
+});
+
+/// Rewrites one of your own messages. Returns the moderation verdict rather than throwing,
+/// for the same reason sending does — a refusal is something to explain, not an error.
+export async function editChatMessage(
+    input: z.infer<typeof editInput>,
+): Promise<EditMessageResult | { ok: false; reason: "invalid" }> {
+    const { userId } = await verifySession();
+
+    const parsed = editInput.safeParse(input);
+    if (!parsed.success) return { ok: false, reason: "invalid" };
+
+    return editMessage({ ...parsed.data, userId });
+}
+
+/// Takes back one of your own messages. The row survives with its body withheld, so the
+/// timeline keeps the slot rather than reshaping around a hole.
+export async function deleteChatMessage(messageId: string): Promise<boolean> {
+    const { userId } = await verifySession();
+
+    const parsed = uuid.safeParse(messageId);
+    if (!parsed.success) return false;
+
+    return deleteMessage({ messageId: parsed.data, userId });
 }
 
 /// Drops a fresh icebreaker into a conversation, as the Kindred bot.
