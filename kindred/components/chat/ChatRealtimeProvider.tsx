@@ -162,21 +162,30 @@ export default function ChatRealtimeProvider({
                         last_read_at: string;
                     };
 
-                    // Somebody read a conversation. Their own client does not care, but the
-                    // person who sent the last message does — this is what turns one tick
-                    // into two without a table of per-message receipts.
-                    if (row.profile_id === userId) return;
-
+                    // Two different things depending on whose read this is.
+                    //
+                    // Somebody else's turns one tick into two, without a table of per-message
+                    // receipts. Your OWN clears your unread badge — and that is the only thing
+                    // that does. The INSERT handler above increments for every message you did
+                    // not send, including in the conversation you are sitting in reading it, so
+                    // without this the badge climbed while you watched and only came down on a
+                    // full navigation.
+                    //
+                    // Round-tripping your own read through the socket rather than zeroing it
+                    // locally keeps one source of truth: the badge follows last_read_at, which
+                    // is the same column the server counts against.
                     setConversations((current) =>
                         current.map((conversation) =>
                             conversation.id === row.conversation_id
-                                ? {
-                                      ...conversation,
-                                      readBy: {
-                                          ...conversation.readBy,
-                                          [row.profile_id]: row.last_read_at,
-                                      },
-                                  }
+                                ? row.profile_id === userId
+                                    ? { ...conversation, unreadCount: 0 }
+                                    : {
+                                          ...conversation,
+                                          readBy: {
+                                              ...conversation.readBy,
+                                              [row.profile_id]: row.last_read_at,
+                                          },
+                                      }
                                 : conversation,
                         ),
                     );

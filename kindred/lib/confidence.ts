@@ -260,16 +260,24 @@ async function claimDailyBonus(
 
     const perMember = dailyBonusXp(chatLevel);
 
-    try {
-        // The insert is the claim. Two members finishing at the same instant both reach
-        // here; the composite primary key means exactly one wins and the other reads as
-        // already-awarded, the same guarantee promptReplyIsUnclaimed relies on.
-        await tx.daily_bonus_awards.create({
-            data: { conversation_id: conversationId, day, xp_awarded: perMember },
-        });
-    } catch {
-        return null;
-    }
+    // The insert is still the claim: the composite primary key means two members finishing at
+    // the same instant cannot both win, and count tells us which one this was.
+    //
+    // skipDuplicates rather than create-and-catch, and the difference is not stylistic.
+    // create() raises on the conflict, and **catching a Postgres error does not un-abort its
+    // transaction** — every statement after it fails with 25P02, which here means the whole
+    // XP award. Since this function only reaches the claim once the chat has earned its bonus,
+    // the conflict is not an edge case: it happened on every qualifying message for the rest
+    // of that day, and the award failed silently each time.
+    //
+    // skipDuplicates compiles to ON CONFLICT DO NOTHING, which resolves the race inside
+    // Postgres and never raises, so the transaction survives to pay out the rest.
+    const claim = await tx.daily_bonus_awards.createMany({
+        data: [{ conversation_id: conversationId, day, xp_awarded: perMember }],
+        skipDuplicates: true,
+    });
+
+    if (claim.count === 0) return null;
 
     // The chat's shared total moves once...
     await tx.channel_xp.upsert({
