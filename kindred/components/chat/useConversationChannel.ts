@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { createClient } from "@/utils/supabase/client";
 
@@ -26,6 +26,7 @@ const BROADCAST_TYPING_EVERY_MS = 2_000;
 const TYPING_EXPIRES_AFTER_MS = 5_000;
 
 const TYPING_EVENT = "typing";
+const MOVE_EVENT = "game-move";
 
 export type ConversationChannel = {
     /// Profile ids of everyone else with this conversation open.
@@ -34,6 +35,12 @@ export type ConversationChannel = {
     typingIds: string[];
     /// Called on every keystroke. Throttles internally, so callers do not have to.
     reportTyping: () => void;
+    /// Tells the other player a move landed. The move is already saved by then — this only
+    /// saves them waiting to find out, so a dropped broadcast means a board that is stale
+    /// until its next load rather than one that disagrees with the database.
+    reportMove: (sessionId: string) => void;
+    /// Fires when the other player moves, with the session it happened in.
+    onMove: (listener: (sessionId: string) => void) => () => void;
 };
 
 export function useConversationChannel(
@@ -48,6 +55,10 @@ export function useConversationChannel(
     // keystroke never re-renders anything just to find where to send.
     const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
     const lastBroadcastRef = useRef(0);
+
+    // Same reason as the channel itself: a board subscribing should not tear down and rebuild
+    // the socket, and there can be more than one board open in a group.
+    const moveListenersRef = useRef(new Set<(sessionId: string) => void>());
 
     useEffect(() => {
         const supabase = createClient();
@@ -73,6 +84,15 @@ export function useConversationChannel(
                     ...current,
                     [typistId]: Date.now() + TYPING_EXPIRES_AFTER_MS,
                 }));
+            })
+            .on("broadcast", { event: MOVE_EVENT }, ({ payload }) => {
+                const { sessionId, userId: moverId } = payload as {
+                    sessionId?: string;
+                    userId?: string;
+                };
+                if (!sessionId || moverId === userId) return;
+
+                for (const listener of moveListenersRef.current) listener(sessionId);
             })
             .subscribe((status) => {
                 // track() has to wait for the join to be accepted; calling it earlier is
@@ -122,9 +142,45 @@ export function useConversationChannel(
         });
     }, [userId]);
 
+    const reportMove = useCallback(
+        (sessionId: string) => {
+            void channelRef.current?.send({
+                type: "broadcast",
+                event: MOVE_EVENT,
+                payload: { sessionId, userId },
+            });
+        },
+        [userId],
+    );
+
+    const onMove = useCallback((listener: (sessionId: string) => void) => {
+        moveListenersRef.current.add(listener);
+        return () => {
+            moveListenersRef.current.delete(listener);
+        };
+    }, []);
+
     return {
         presentIds,
         typingIds: Object.keys(typingUntil),
         reportTyping,
+        reportMove,
+        onMove,
     };
+}
+
+// A game board sits inside a message, inside the timeline — three levels below the component
+// that owns the channel. Passing reportMove down through MessageBubble would mean teaching it
+// that games exist, which is a lot to ask of something whose job is drawing a bubble.
+const ConversationChannelContext = createContext<ConversationChannel | null>(null);
+
+export const ConversationChannelProvider = ConversationChannelContext.Provider;
+
+/// The open conversation's channel. Only valid inside a Thread.
+export function useChannel(): ConversationChannel {
+    const channel = useContext(ConversationChannelContext);
+    if (!channel) {
+        throw new Error("useChannel must be used inside a Thread's ConversationChannelProvider");
+    }
+    return channel;
 }

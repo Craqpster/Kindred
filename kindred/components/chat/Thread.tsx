@@ -8,7 +8,10 @@ import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
 import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
-import { useConversationChannel } from "@/components/chat/useConversationChannel";
+import {
+    ConversationChannelProvider,
+    useConversationChannel,
+} from "@/components/chat/useConversationChannel";
 import { useConversationXp } from "@/components/chat/useConversationXp";
 import { dayLabel, endsRun, startsNewDay, startsNewRun } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
@@ -43,10 +46,8 @@ export default function Thread({
     greet: boolean;
 }) {
     const { onMessage, onReaction } = useChatRealtime();
-    const { presentIds, typingIds, reportTyping } = useConversationChannel(
-        conversation.id,
-        userId,
-    );
+    const channel = useConversationChannel(conversation.id, userId);
+    const { presentIds, typingIds, reportTyping } = channel;
     const { xp, applyAward } = useConversationXp({
         conversationId: conversation.id,
         userId,
@@ -128,7 +129,10 @@ export default function Thread({
     }, [messages.length]);
 
     return (
-        <>
+        // Provided rather than drilled: a game board sits inside a message inside the
+        // timeline, three levels below this, and MessageBubble should not have to carry
+        // reportMove through just because one kind of message needs it.
+        <ConversationChannelProvider value={channel}>
             <header className="flex items-center gap-3 border-b border-ink-900/8 px-4 py-3">
                 <div className="min-w-0 flex-1">
                     <h1 className="truncate text-body font-medium text-ink-900">
@@ -208,7 +212,7 @@ export default function Thread({
                     })
                 }
             />
-        </>
+        </ConversationChannelProvider>
     );
 }
 
