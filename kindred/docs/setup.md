@@ -49,8 +49,8 @@ npm install
 ```
 
 `postinstall` runs `prisma generate`, so the client is built for you. It writes to
-`lib/generated/prisma`, which is committed — you may see it show as modified afterwards, which
-is normal and safe to discard.
+`lib/generated/`, which is **gitignored** — a fresh clone has no Prisma client at all until
+`npm install` has run, which is why type errors before that step are expected and mean nothing.
 
 ## 5. Check the database agrees with the repo
 
