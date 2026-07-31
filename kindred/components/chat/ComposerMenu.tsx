@@ -74,17 +74,17 @@ export default function ComposerMenu({ conversationId }: { conversationId: strin
                 aria-label="Add to this conversation"
                 aria-expanded={open}
                 aria-haspopup="menu"
-                className={`flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-bone-300 text-ink-900 transition-[background-color,transform] hover:bg-bone-200 ${
+                className={`flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-bone-300 text-ink-900 transition-[background-color,transform] hover:bg-bone-200 ${
                     open ? "rotate-45 bg-bone-200" : ""
                 }`}
             >
-                <Plus size={18} strokeWidth={1.5} aria-hidden />
+                <Plus size={21} strokeWidth={1.5} aria-hidden />
             </button>
 
             {open && (
                 <div
                     role="menu"
-                    className="absolute bottom-11 left-0 z-10 w-56 overflow-hidden rounded-card border border-bone-300 bg-surface shadow-hero"
+                    className="absolute bottom-13 left-0 z-10 w-56 overflow-hidden rounded-card border border-bone-300 bg-surface shadow-hero"
                 >
                     <button
                         type="button"
