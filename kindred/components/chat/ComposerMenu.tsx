@@ -4,6 +4,8 @@ import { Gamepad2, Lightbulb, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { sendIcebreaker } from "@/app/(app)/chats/actions";
+import { startGame } from "@/app/(app)/chats/game-actions";
+import { GAME_TYPES, GAMES, type GameType } from "@/components/chat/games/registry";
 
 /// Everything you can put into a conversation that is not typed.
 ///
@@ -50,6 +52,20 @@ export default function ComposerMenu({ conversationId }: { conversationId: strin
         }
     };
 
+    const invite = async (gameType: GameType) => {
+        if (sending) return;
+        setSending(true);
+        setOpen(false);
+
+        try {
+            // The invite is an ordinary message, so it arrives in the timeline over realtime
+            // like anything else — there is nothing to add to the thread by hand.
+            await startGame({ conversationId, gameType });
+        } finally {
+            setSending(false);
+        }
+    };
+
     return (
         <div ref={containerRef} className="relative">
             <button
@@ -81,21 +97,27 @@ export default function ComposerMenu({ conversationId }: { conversationId: strin
                         Send an icebreaker
                     </button>
 
-                    {/* Present but disabled on purpose. Games were built on Stream and came out
-                        with it; the sessions, the boards and the badges all survived, so this is
-                        waiting on the UI rather than on a decision. Showing it greyed says that
-                        far better than leaving a gap where it used to be. */}
-                    <button
-                        type="button"
-                        role="menuitem"
-                        disabled
-                        title="Games are being rebuilt"
-                        className="flex w-full cursor-not-allowed items-center gap-2.5 border-t border-bone-200 px-3 py-2.5 text-left text-meta text-ink-600"
-                    >
-                        <Gamepad2 size={16} strokeWidth={1.5} aria-hidden />
-                        Play a game
-                        <span className="ml-auto text-label uppercase text-ink-600">Soon</span>
-                    </button>
+                    {/* One row per game rather than a submenu. There are two, and a menu that
+                        opens another menu to show two things is a menu doing too much. */}
+                    <div className="border-t border-bone-200">
+                        <p className="flex items-center gap-2.5 px-3 pt-2.5 pb-1 text-label uppercase text-ink-600">
+                            <Gamepad2 size={16} strokeWidth={1.5} aria-hidden />
+                            Play a game
+                        </p>
+
+                        {GAME_TYPES.map((gameType) => (
+                            <button
+                                key={gameType}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => invite(gameType)}
+                                disabled={sending}
+                                className="flex w-full cursor-pointer items-center px-3 py-2 pl-10 text-left text-meta text-ink-900 transition-colors hover:bg-bone-100 disabled:opacity-60"
+                            >
+                                {GAMES[gameType].label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

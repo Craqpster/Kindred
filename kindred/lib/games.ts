@@ -1,20 +1,14 @@
 import "server-only";
 
-import { initialState as connectFourInitialState } from "@/components/chat/games/connect-four";
-import { initialState as ticTacToeInitialState } from "@/components/chat/games/tic-tac-toe";
+import { GAMES, type GameType } from "@/components/chat/games/registry";
 import type { game_sessions } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-/// Mirrors the game_sessions_game_type_check constraint in the migration - the one place
-/// both sides of that constraint have to agree, so a new game means updating exactly
-/// this list and adding the matching migration, nothing else.
-export const GAME_TYPES = ["tic-tac-toe", "connect-four"] as const;
-export type GameType = (typeof GAME_TYPES)[number];
-
-/// Shared by both routes that can create a session (immediate 1:1 start, and a group
-/// invite's first join) - one place to add a new game's starting state.
+/// The starting board for a game. Delegates to the registry, which is where a game's rules
+/// live and which the boards import too — the alternative is two lists of games that agree
+/// right up until one of them is edited.
 export function initialStateFor(gameType: GameType) {
-    return gameType === "tic-tac-toe" ? ticTacToeInitialState() : connectFourInitialState();
+    return GAMES[gameType].initialState();
 }
 
 /// Starts a new game session. The DB enforces at most one in_progress session per PAIR

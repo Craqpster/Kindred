@@ -2,6 +2,7 @@
 
 import { Check, CheckCheck, Clock, Lightbulb } from "lucide-react";
 
+import GameInviteCard from "@/components/chat/games/GameInviteCard";
 import ReactionBar from "@/components/chat/ReactionBar";
 import Avatar from "@/components/ui/Avatar";
 import { clockTime } from "@/lib/chat/grouping";
@@ -113,6 +114,18 @@ export default function MessageBubble({
                     </div>
                 </div>
             </li>
+        );
+    }
+
+    if (message.kind === "game_invite" && message.gameType) {
+        return (
+            <GameInviteCard
+                messageId={message.id}
+                gameType={message.gameType}
+                senderId={message.sender?.id ?? null}
+                senderName={message.sender?.username ?? KINDRED_BOT_NAME}
+                userId={userId}
+            />
         );
     }
 
