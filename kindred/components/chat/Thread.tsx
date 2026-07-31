@@ -7,6 +7,7 @@ import AvatarGroup from "@/components/chat/AvatarGroup";
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
+import PresenceLine, { GroupPresenceLine } from "@/components/chat/PresenceLine";
 import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
 import {
@@ -49,7 +50,7 @@ export default function Thread({
 }) {
     const { onMessage, onReaction } = useChatRealtime();
     const channel = useConversationChannel(conversation.id, userId);
-    const { presentIds, typingIds, reportTyping } = channel;
+    const { statusOf, typingIds, reportTyping } = channel;
     const { xp, applyAward } = useConversationXp({
         conversationId: conversation.id,
         userId,
@@ -160,24 +161,25 @@ export default function Thread({
                         {conversation.title}
                     </h1>
 
-                    {/* "Active now", not "Online". Presence here means somebody has THIS
-                        conversation open, which is a smaller and more useful claim: telling
-                        someone their friend is offline while they are busy messaging
-                        elsewhere is worse than saying nothing.
-
-                        Its row is always here, so the name does not shift up and down as
-                        somebody opens and closes the conversation. */}
-                    <p className="flex h-4 items-center gap-1.5 text-label text-ink-600">
-                        {presentIds.length > 0 && (
-                            <>
-                                <span
-                                    className="size-1.5 rounded-full bg-accent-600"
-                                    aria-hidden
-                                />
-                                Active now
-                            </>
-                        )}
-                    </p>
+                    {/* A DM has one other person, so their status can be stated plainly. A
+                        group has several in several states, so it is summarised instead. */}
+                    {conversation.kind === "group" ? (
+                        <GroupPresenceLine
+                            activeCount={
+                                conversation.others.filter(
+                                    (member) => statusOf(member.id) === "active",
+                                ).length
+                            }
+                        />
+                    ) : (
+                        <PresenceLine
+                            status={
+                                conversation.others[0]
+                                    ? statusOf(conversation.others[0].id)
+                                    : "away"
+                            }
+                        />
+                    )}
                 </div>
 
                 {/* Out of the centred stack so it cannot push the name off-centre, and it

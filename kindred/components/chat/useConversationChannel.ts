@@ -28,9 +28,30 @@ const TYPING_EXPIRES_AFTER_MS = 5_000;
 const TYPING_EVENT = "typing";
 const MOVE_EVENT = "game-move";
 
+/// How long since a tab last announced itself before its owner counts as idle.
+const IDLE_AFTER_MS = 2 * 60 * 1000;
+
+/// How often a visible tab re-announces. Well under IDLE_AFTER_MS so somebody reading without
+/// touching anything still reads as active — and a hidden or closed tab simply stops sending,
+/// which is what lets them fall to idle without needing to say goodbye.
+const HEARTBEAT_EVERY_MS = 45 * 1000;
+
+/// Where someone is, as far as THIS conversation can honestly tell.
+///
+/// Deliberately not "offline". The channel is per-conversation, so it knows who has this chat
+/// open and nothing else: somebody reading a different conversation two feet away looks
+/// identical to somebody who shut their laptop. "Away" claims only what is known.
+///
+/// Real app-wide offline needs a last_seen_at table and a heartbeat that writes — a decision
+/// deferred deliberately, partly on cost and partly because "online and not replying to me"
+/// is the exact anxiety this app exists to reduce.
+export type PresenceStatus = "active" | "idle" | "away";
+
 export type ConversationChannel = {
-    /// Profile ids of everyone else with this conversation open.
+    /// Profile ids of everyone else with this conversation open, active or idle.
     presentIds: string[];
+    /// Where one other member is. Anyone the channel cannot see is "away".
+    statusOf: (profileId: string) => PresenceStatus;
     /// Profile ids of everyone else currently typing.
     typingIds: string[];
     /// Called on every keystroke. Throttles internally, so callers do not have to.
@@ -47,9 +68,16 @@ export function useConversationChannel(
     conversationId: string,
     userId: string,
 ): ConversationChannel {
-    const [presentIds, setPresentIds] = useState<string[]>([]);
+    /// Profile id -> when their tab last announced itself. Present at all means they have
+    /// this conversation open; how recently decides active against idle.
+    const [activeAt, setActiveAt] = useState<Record<string, number>>({});
     /// Profile id -> the moment their typing signal goes stale.
     const [typingUntil, setTypingUntil] = useState<Record<string, number>>({});
+
+    /// Bumped on a timer so a status that has gone stale re-renders. Nothing arrives when
+    /// someone STOPS being active — they simply stop announcing — so the passage of time is
+    /// the only thing that can move them from active to idle.
+    const [, setTick] = useState(0);
 
     // Held in a ref so reportTyping can reach the channel without being rebuilt — and so a
     // keystroke never re-renders anything just to find where to send.
@@ -70,11 +98,19 @@ export function useConversationChannel(
         channel
             .on("presence", { event: "sync" }, () => {
                 // presenceState is keyed by the presence key set above, so the keys ARE the
-                // profile ids and nothing has to be dug out of the payloads.
-                const others = Object.keys(channel.presenceState()).filter(
-                    (id) => id !== userId,
-                );
-                setPresentIds(others);
+                // profile ids. The payload carries when that tab last announced itself.
+                const state = channel.presenceState<{ activeAt?: number }>();
+
+                const next: Record<string, number> = {};
+                for (const [profileId, entries] of Object.entries(state)) {
+                    if (profileId === userId) continue;
+                    // Someone can be present from more than one tab. The most recent one is
+                    // the honest answer — a phone left open should not drag a laptop that is
+                    // actively being used down to idle.
+                    next[profileId] = Math.max(...entries.map((e) => e.activeAt ?? 0));
+                }
+
+                setActiveAt(next);
             })
             .on("broadcast", { event: TYPING_EVENT }, ({ payload }) => {
                 const typistId = (payload as { userId?: string }).userId;
@@ -97,14 +133,42 @@ export function useConversationChannel(
             .subscribe((status) => {
                 // track() has to wait for the join to be accepted; calling it earlier is
                 // silently dropped, which shows up as "nobody is ever present".
-                if (status === "SUBSCRIBED") void channel.track({ userId });
+                if (status === "SUBSCRIBED") void channel.track({ userId, activeAt: Date.now() });
             });
 
+        // Re-announce while the tab is actually being looked at.
+        //
+        // The whole three-state model rests on this: a visible tab keeps refreshing its
+        // timestamp, a hidden or closed one silently stops, and everyone else works out the
+        // difference from how stale it has gone. Nothing has to detect a departure, which is
+        // what makes a killed browser resolve itself.
+        const announce = () => {
+            if (document.visibilityState !== "visible") return;
+            void channel.track({ userId, activeAt: Date.now() });
+        };
+
+        const heartbeat = setInterval(announce, HEARTBEAT_EVERY_MS);
+        // Immediately on return, so coming back to the tab does not leave you looking idle
+        // to the other person for most of a minute.
+        document.addEventListener("visibilitychange", announce);
+
         return () => {
+            clearInterval(heartbeat);
+            document.removeEventListener("visibilitychange", announce);
             channelRef.current = null;
             void supabase.removeChannel(channel);
         };
     }, [conversationId, userId]);
+
+    // Moves people from active to idle as their announcements age. Only runs while somebody
+    // is present, so an empty conversation costs no timer.
+    const someoneIsPresent = Object.keys(activeAt).length > 0;
+    useEffect(() => {
+        if (!someoneIsPresent) return;
+
+        const interval = setInterval(() => setTick((n) => n + 1), 15_000);
+        return () => clearInterval(interval);
+    }, [someoneIsPresent]);
 
     // Typing has no "stopped" event: someone who closes the tab mid-sentence would never send
     // one. Instead every signal carries its own expiry and this sweeps the stale ones, which
@@ -160,8 +224,18 @@ export function useConversationChannel(
         };
     }, []);
 
+    const statusOf = useCallback(
+        (profileId: string): PresenceStatus => {
+            const lastSeen = activeAt[profileId];
+            if (!lastSeen) return "away";
+            return Date.now() - lastSeen < IDLE_AFTER_MS ? "active" : "idle";
+        },
+        [activeAt],
+    );
+
     return {
-        presentIds,
+        presentIds: Object.keys(activeAt),
+        statusOf,
         typingIds: Object.keys(typingUntil),
         reportTyping,
         reportMove,
