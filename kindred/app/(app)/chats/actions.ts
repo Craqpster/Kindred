@@ -12,9 +12,9 @@ import {
     type SendMessageResult,
     type ToggleReactionResult,
 } from "@/lib/chat/mutations";
-import { getConversationXp, getMessages } from "@/lib/chat/queries";
+import { getConversation, getConversationXp, getMessages } from "@/lib/chat/queries";
 import { REACTION_EMOJI } from "@/lib/chat/reactions";
-import type { ConversationXp, MessagePage } from "@/lib/chat/types";
+import type { ChatConversation, ConversationXp, MessagePage } from "@/lib/chat/types";
 import { verifySession } from "@/lib/dal";
 
 // Thin wrappers over lib/chat. Everything real lives there; these exist to validate input
@@ -157,6 +157,23 @@ export async function loadConversationXp(
     if (!parsed.success) return null;
 
     return getConversationXp({ conversationId: parsed.data, userId });
+}
+
+/// One conversation, for a list that has just learned it exists.
+///
+/// Needed because a wave arrives as rows the subscriber could not see a moment earlier: the
+/// conversations INSERT lands before the membership row does, so RLS correctly refuses it.
+/// What does reach them is their own conversation_members INSERT, and that is the cue to ask
+/// for the rest. Returns null rather than throwing if it is not theirs after all.
+export async function loadConversation(
+    conversationId: string,
+): Promise<ChatConversation | null> {
+    const { userId } = await verifySession();
+
+    const parsed = uuid.safeParse(conversationId);
+    if (!parsed.success) return null;
+
+    return getConversation({ conversationId: parsed.data, userId });
 }
 
 const olderInput = z.object({ conversationId: uuid, before: z.iso.datetime() });
