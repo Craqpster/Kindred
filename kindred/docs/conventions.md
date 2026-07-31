@@ -195,7 +195,34 @@ grant before you debug the policy.
 
 ---
 
-## 5. What "done" means
+## 5. Known and accepted
+
+Not bugs. Decisions with a cost, written down so the next person inherits the reasoning rather
+than rediscovering the symptom.
+
+**Reaction removals reach everyone.** Realtime evaluates RLS against the row it forwards, and a
+DELETE payload carries only the replica identity — not enough to run the policy. So reaction
+*additions* are filtered per subscriber and *removals* are not. What escapes is a
+`(message_id, profile_id, emoji)` triple for a message the recipient cannot read; `applyReaction`
+ignores ids the timeline is not holding, so nothing renders. Closing it properly means
+soft-deleting reactions so the removal becomes an UPDATE with a full row to check — a schema
+change to make deliberately rather than in passing.
+
+**Moderation cooldowns reset on deploy.** `lib/moderation-rate-limit.ts` is a module-level Map.
+Every deploy clears everyone's strikes, and across more than one instance a user gets an
+allowance per instance. Moving it to a table is easy; it has not been worth it while this runs
+as one process.
+
+**Realtime has a ceiling in the low hundreds of concurrent subscribers.** Unfiltered
+`postgres_changes` means RLS is evaluated per subscriber per change. The escape hatch is
+broadcast-from-database: `realtime.broadcast_changes()` in an AFTER INSERT trigger, fanned out
+to a per-user topic. Same client shape, different plumbing.
+
+**The chat list is capped at 100 conversations.** It runs in the app-shell layout — on every
+page, not just `/chats` — because the unread badges it feeds work from everywhere. Someone who
+reaches the cap needs paging in the sidebar, which is a feature rather than a number to raise.
+
+## 6. What "done" means
 
 ```bash
 npm run lint          # zero problems, not "only warnings"

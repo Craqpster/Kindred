@@ -29,6 +29,12 @@ import type {
 /// How many messages a page of history holds.
 const PAGE_SIZE = 30;
 
+/// How many conversations the list loads. Generous rather than tuned: the point is that the
+/// query has a ceiling at all, since it fans out to every member of every conversation
+/// returned. Someone who reaches this needs paging in the sidebar, which is a feature rather
+/// than a number to raise.
+const CONVERSATION_LIMIT = 100;
+
 /// Every conversation this person is in, newest activity first.
 ///
 /// Three queries rather than one: the conversations with their members, then unread counts,
@@ -38,6 +44,15 @@ const PAGE_SIZE = 30;
 export async function listConversations(userId: string): Promise<ChatConversation[]> {
     const memberships = await prisma.conversation_members.findMany({
         where: { profile_id: userId },
+        // Ordered and bounded in SQL rather than in JS afterwards. This runs in the app-shell
+        // layout — on /meet and /me too, not only /chats — because the unread badges it feeds
+        // have to work from every tab, so it is the most frequently run query in the app and
+        // the one least able to afford loading everything.
+        //
+        // nulls first is not incidental: a conversation with no messages is a wave nobody has
+        // answered, and that belongs at the top rather than buried under months of history.
+        orderBy: { conversation: { last_message_at: { sort: "desc", nulls: "first" } } },
+        take: CONVERSATION_LIMIT,
         select: {
             conversation: {
                 select: {
@@ -103,11 +118,7 @@ export async function listConversations(userId: string): Promise<ChatConversatio
     // Sorted here rather than in SQL because the ordering key lives on the conversation
     // while the query above is anchored on membership. A conversation with no messages yet
     // — a wave — sorts to the top, which is where a brand new request belongs.
-    return conversations.sort((a, b) => {
-        if (!a.lastMessageAt) return -1;
-        if (!b.lastMessageAt) return 1;
-        return b.lastMessageAt.localeCompare(a.lastMessageAt);
-    });
+    return conversations;
 }
 
 /// Unread per conversation: messages newer than this person's last_read_at that they did
