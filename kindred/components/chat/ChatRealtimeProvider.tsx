@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { loadConversation } from "@/app/(app)/chats/actions";
 import { useToast } from "@/components/ui/ToastStack";
 import type { ChatConversation } from "@/lib/chat/types";
 import type { MessageRow, ReactionRow } from "@/lib/chat/realtime";
@@ -189,6 +190,42 @@ export default function ChatRealtimeProvider({
                                 : conversation,
                         ),
                     );
+                },
+            )
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "conversation_members" },
+                (payload) => {
+                    const row = payload.new as { conversation_id: string; profile_id: string };
+
+                    // Only your own: everyone else's joins are somebody else's business.
+                    if (row.profile_id !== userId) return;
+
+                    // A wave is the case this exists for. The conversations INSERT that goes
+                    // with it is refused by RLS — at that instant the recipient is not yet a
+                    // member, so the policy is correct to hide it — and this row is the first
+                    // thing they are allowed to see. Which means the list cannot patch itself
+                    // from the payload; it has to go and ask.
+                    //
+                    // Without it a wave sat unseen until the next navigation, which is what
+                    // made Pending look like it needed a refresh button.
+                    void loadConversation(row.conversation_id).then((conversation) => {
+                        if (!conversation) return;
+
+                        setConversations((current) =>
+                            current.some((existing) => existing.id === conversation.id)
+                                ? current
+                                : [conversation, ...current],
+                        );
+
+                        if (conversation.awaitingYou) {
+                            showToast({
+                                kind: "message",
+                                title: `${conversation.title} wants to say hi`,
+                                mergeKey: `wave:${conversation.id}`,
+                            });
+                        }
+                    });
                 },
             )
             .on(

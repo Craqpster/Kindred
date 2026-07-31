@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
@@ -10,6 +10,7 @@ import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
 import { useConversationChannel } from "@/components/chat/useConversationChannel";
 import { useConversationXp } from "@/components/chat/useConversationXp";
+import { dayLabel, endsRun, startsNewDay, startsNewRun } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
 import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
 import type {
@@ -158,18 +159,29 @@ export default function Thread({
                         Nothing here yet — say something.
                     </li>
                 ) : (
-                    messages.map((message, index) => (
-                        <MessageBubble
-                            key={message.id}
-                            message={message}
-                            isOwn={message.sender?.id === userId}
-                            showSender={messages[index - 1]?.sender?.id !== message.sender?.id}
-                            read={!!readThrough && readThrough >= message.createdAt}
-                            userId={userId}
-                            onToggleReaction={toggle}
-                            onAttach={setAttachment}
-                        />
-                    ))
+                    messages.map((message, index) => {
+                        const previous = messages[index - 1];
+                        const next = messages[index + 1];
+
+                        return (
+                            <Fragment key={message.id}>
+                                {startsNewDay(message, previous) && (
+                                    <DaySeparator iso={message.createdAt} />
+                                )}
+
+                                <MessageBubble
+                                    message={message}
+                                    isOwn={message.sender?.id === userId}
+                                    showSender={startsNewRun(message, previous)}
+                                    isRunEnd={endsRun(message, next)}
+                                    read={!!readThrough && readThrough >= message.createdAt}
+                                    userId={userId}
+                                    onToggleReaction={toggle}
+                                    onAttach={setAttachment}
+                                />
+                            </Fragment>
+                        );
+                    })
                 )}
                 <div ref={bottomRef} />
             </ul>
@@ -197,5 +209,24 @@ export default function Thread({
                 }
             />
         </>
+    );
+}
+
+/// The line a day starts on.
+///
+/// A pill on a rule rather than bare centred text: the rule is what actually divides the
+/// scroll, and without it the label reads as another message from nobody.
+function DaySeparator({ iso }: { iso: string }) {
+    return (
+        <li className="my-4 flex items-center gap-3 px-4" aria-hidden={false}>
+            <span className="h-px flex-1 bg-bone-300" />
+            <time
+                dateTime={iso}
+                className="rounded-full bg-bone-200 px-2.5 py-1 text-label uppercase text-ink-600"
+            >
+                {dayLabel(iso)}
+            </time>
+            <span className="h-px flex-1 bg-bone-300" />
+        </li>
     );
 }

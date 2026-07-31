@@ -4,6 +4,7 @@ import { Check, CheckCheck, Clock, Lightbulb } from "lucide-react";
 
 import ReactionBar from "@/components/chat/ReactionBar";
 import Avatar from "@/components/ui/Avatar";
+import { clockTime } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
 import type { PendingAttachment, TimelineMessage } from "@/lib/chat/types";
 
@@ -45,6 +46,7 @@ export default function MessageBubble({
     message,
     isOwn,
     showSender,
+    isRunEnd,
     read = false,
     userId,
     onToggleReaction,
@@ -55,6 +57,9 @@ export default function MessageBubble({
     /// False when the previous message was from the same person, so a run of messages reads
     /// as one turn rather than repeating a name and a face on every line.
     showSender: boolean;
+    /// The last message of a turn. Carries the timestamp and the squared-off corner, so one
+    /// time marks the whole run instead of every line carrying its own.
+    isRunEnd: boolean;
     /// Everyone else in the conversation has seen this one.
     read?: boolean;
     /// Whose view this is — decides which reaction pills read as yours.
@@ -164,11 +169,19 @@ export default function MessageBubble({
                     </div>
                 )}
 
+                {/* The squared corner on the last bubble of a run is this app's version of a
+                    tail: it points back at whoever is speaking without a literal triangle,
+                    which suits rounded warm cards better than a hard arrow would. Mid-run
+                    bubbles stay fully round, so a turn reads as one shape.
+
+                    Received messages are a soft fill with a card shadow rather than an
+                    outlined box — a hard border on bone reads as a form field, and there are
+                    already enough boxes on this screen. */}
                 <div
-                    className={`rounded-2xl px-3 py-2 text-meta wrap-break-word ${
+                    className={`rounded-2xl px-3.5 py-2 text-meta wrap-break-word transition-colors ${
                         isOwn
-                            ? "bg-accent-600 text-surface"
-                            : "border border-bone-300 bg-surface text-ink-900"
+                            ? `bg-accent-600 text-surface ${isRunEnd ? "rounded-br-sm" : ""}`
+                            : `bg-surface text-ink-900 shadow-card ${isRunEnd ? "rounded-bl-sm" : ""}`
                     } ${message.status === "sending" ? "opacity-70" : ""}`}
                 >
                     {message.body}
@@ -184,7 +197,13 @@ export default function MessageBubble({
                     text, which wrapped onto a line of its own whenever the text filled the
                     width — leaving it stranded under the message rather than beside it. Below
                     the bubble it lands in the same place every time. */}
-                <div className={`mt-1 flex items-center gap-1.5 ${isOwn ? "justify-end" : ""}`}>
+                <div
+                    className={`flex items-center gap-1.5 ${isOwn ? "justify-end" : ""} ${
+                        // Only a real row when it has something in it. An empty meta row on
+                        // every mid-run message is what spaces a turn out into a list.
+                        message.reactions.length > 0 || isRunEnd ? "mt-1" : ""
+                    }`}
+                >
                     {/* Not while the message is still optimistic: its id is a placeholder the
                         server has never seen, so a reaction sent against it would be refused. */}
                     {message.status !== "sending" && (
@@ -194,6 +213,18 @@ export default function MessageBubble({
                             align={isOwn ? "end" : "start"}
                             onToggle={(emoji) => onToggleReaction(message.id, emoji)}
                         />
+                    )}
+
+                    {/* Once per turn, not once per message. Mid-run messages can still be
+                        timed — the title is there for anyone who wants the exact minute. */}
+                    {isRunEnd && (
+                        <time
+                            dateTime={message.createdAt}
+                            title={new Date(message.createdAt).toLocaleString()}
+                            className="text-label font-normal tracking-normal text-ink-600"
+                        >
+                            {clockTime(message.createdAt)}
+                        </time>
                     )}
 
                     {/* Last, so it sits outermost on the right where a status marker reads. */}
