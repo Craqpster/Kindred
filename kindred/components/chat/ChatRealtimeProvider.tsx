@@ -1,6 +1,14 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import type { ReactNode } from "react";
 
 import { loadConversation } from "@/app/(app)/chats/actions";
@@ -37,6 +45,9 @@ type ChatRealtimeValue = {
     /// True once the socket has actually joined. Until then a message could be missed, which
     /// the UI can use to decide whether it still needs to poll on focus.
     connected: boolean;
+    /// Tells the shell which conversation is on screen, so it can stop announcing messages
+    /// the user is already looking at. Null when no conversation is open.
+    setOpenConversation: (conversationId: string | null) => void;
 };
 
 const ChatRealtimeContext = createContext<ChatRealtimeValue | null>(null);
@@ -65,6 +76,22 @@ export default function ChatRealtimeProvider({
     // Listeners live in a ref so that subscribing does not re-render this provider, and so
     // the socket effect below does not tear down and rebuild every time a thread mounts.
     const listenersRef = useRef(new Set<(row: MessageRow) => void>());
+
+    /// Which conversation is on screen, so an arriving message can decide whether announcing
+    /// itself would be telling the user something they can already see.
+    const openConversationRef = useRef<string | null>(null);
+
+    /// The list as the socket handlers need to read it. The subscription is built once, so it
+    /// closes over whatever `conversations` was at mount — a ref is what lets a handler see
+    /// the current one without rebuilding the socket every time a message arrives.
+    ///
+    /// Synced in an effect rather than assigned during render: a ref write during render is
+    /// unsafe once React can render speculatively, and the compiler rejects it. Being one
+    /// commit behind costs nothing here, because the only reader is a name lookup for a toast.
+    const conversationsRef = useRef(conversations);
+    useEffect(() => {
+        conversationsRef.current = conversations;
+    }, [conversations]);
     const reactionListenersRef = useRef(
         new Set<(row: ReactionRow, present: boolean) => void>(),
     );
@@ -88,6 +115,14 @@ export default function ChatRealtimeProvider({
         },
         [],
     );
+
+    /// Who sent a message, by looking them up among the members this client already holds.
+    /// Returns null for the Kindred bot and for anyone the list has not caught up with yet,
+    /// which the caller falls back on rather than guessing a name.
+    const nameOf = (senderId: string, conversationId: string): string | null => {
+        const conversation = conversationsRef.current.find((c) => c.id === conversationId);
+        return conversation?.others.find((m) => m.id === senderId)?.username ?? null;
+    };
 
     useEffect(() => {
         const supabase = createClient();
@@ -120,12 +155,22 @@ export default function ChatRealtimeProvider({
                         ),
                     );
 
-                    // The bot's icebreakers announce themselves in the timeline far better
-                    // than a toast can, and toasting your own message back at you is noise.
-                    if (row.sender_id && row.sender_id !== userId) {
+                    // Three things are deliberately not announced. Your own message, obviously.
+                    // The bot's icebreakers, which the card in the timeline introduces far
+                    // better than a toast could. And anything in the conversation currently on
+                    // screen — being told about a message you are looking at is the fastest
+                    // way to make someone start ignoring notifications altogether.
+                    if (
+                        row.sender_id &&
+                        row.sender_id !== userId &&
+                        row.conversation_id !== openConversationRef.current
+                    ) {
                         showToast({
                             kind: "message",
-                            title: "New message",
+                            // Named, not "New message". The payload has only a sender id, but
+                            // the list already holds every member of every conversation this
+                            // user is in — so the name is a lookup rather than a round trip.
+                            title: nameOf(row.sender_id, row.conversation_id) ?? "New message",
                             body: row.body,
                             mergeKey: `message:${row.sender_id}`,
                         });
@@ -278,9 +323,16 @@ export default function ChatRealtimeProvider({
         setConversations(initialConversations);
     }
 
+    // Writes a ref rather than state: which conversation is open only ever affects whether a
+    // toast fires, and putting it in state would re-render every consumer on navigation to
+    // change something nothing renders.
+    const setOpenConversation = useCallback((conversationId: string | null) => {
+        openConversationRef.current = conversationId;
+    }, []);
+
     const value = useMemo(
-        () => ({ conversations, onMessage, onReaction, connected }),
-        [conversations, onMessage, onReaction, connected],
+        () => ({ conversations, onMessage, onReaction, connected, setOpenConversation }),
+        [conversations, onMessage, onReaction, connected, setOpenConversation],
     );
 
     return (

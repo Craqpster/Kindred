@@ -48,7 +48,7 @@ export default function Thread({
     initialXp: ConversationXp | null;
     greet: boolean;
 }) {
-    const { onMessage, onReaction } = useChatRealtime();
+    const { onMessage, onReaction, setOpenConversation } = useChatRealtime();
     const channel = useConversationChannel(conversation.id, userId);
     const { statusOf, typingIds, reportTyping } = channel;
     const { xp, applyAward } = useConversationXp({
@@ -126,6 +126,13 @@ export default function Thread({
     useEffect(() => {
         void markConversationRead(conversation.id);
     }, [conversation.id, messages.length]);
+
+    // Tells the shell not to toast messages from this conversation while it is on screen.
+    // Cleared on unmount so closing the chat starts them announcing again.
+    useEffect(() => {
+        setOpenConversation(conversation.id);
+        return () => setOpenConversation(null);
+    }, [setOpenConversation, conversation.id]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ block: "end" });

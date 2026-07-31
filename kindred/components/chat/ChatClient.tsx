@@ -44,6 +44,21 @@ export default function ChatClient({
     const shown = tab === "active" ? active : pending;
     const open = conversations.find((conversation) => conversation.id === openConversationId);
 
+    // Groups and DMs are different kinds of thing to walk into — one has three strangers in
+    // it, the other has one person you waved at — so they get their own runs rather than
+    // interleaving by whoever spoke last. Order within each section is untouched, so recency
+    // still decides who is at the top of their own list.
+    //
+    // Pending is deliberately NOT split: a wave is always a DM, so a "Groups" heading there
+    // would introduce a section that can never have anything in it.
+    const sections =
+        tab === "pending"
+            ? [{ heading: null, rows: shown }]
+            : [
+                  { heading: "Groups", rows: shown.filter((c) => c.kind === "group") },
+                  { heading: "Direct messages", rows: shown.filter((c) => c.kind === "dm") },
+              ];
+
     return (
         <div className="flex flex-1 min-h-0 bg-bone-100">
             <div className="flex w-80 shrink-0 flex-col min-h-0 border-r border-ink-900/8">
@@ -57,14 +72,31 @@ export default function ChatClient({
                                 : "Nothing waiting on a reply."}
                         </p>
                     ) : (
-                        shown.map((conversation) => (
-                            <ConversationRow
-                                key={conversation.id}
-                                conversation={conversation}
-                                selected={conversation.id === openConversationId}
-                                onOpen={(id) => router.push(`/chats?c=${encodeURIComponent(id)}`)}
-                            />
-                        ))
+                        sections.map(
+                            ({ heading, rows }) =>
+                                // A heading with nothing under it is worse than no heading:
+                                // it reads as something missing rather than something absent.
+                                rows.length > 0 && (
+                                    <section key={heading ?? "all"}>
+                                        {heading && (
+                                            <h2 className="px-3 pt-3 pb-1 text-label uppercase text-ink-600">
+                                                {heading}
+                                            </h2>
+                                        )}
+
+                                        {rows.map((conversation) => (
+                                            <ConversationRow
+                                                key={conversation.id}
+                                                conversation={conversation}
+                                                selected={conversation.id === openConversationId}
+                                                onOpen={(id) =>
+                                                    router.push(`/chats?c=${encodeURIComponent(id)}`)
+                                                }
+                                            />
+                                        ))}
+                                    </section>
+                                ),
+                        )
                     )}
                 </div>
             </div>
