@@ -2,11 +2,17 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
-import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
+import {
+    deleteChatMessage,
+    editChatMessage,
+    markConversationRead,
+    toggleMessageReaction,
+} from "@/app/(app)/chats/actions";
 import AvatarGroup from "@/components/chat/AvatarGroup";
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
+import MessageEditor from "@/components/chat/MessageEditor";
 import PresenceLine, { GroupPresenceLine } from "@/components/chat/PresenceLine";
 import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
@@ -18,7 +24,7 @@ import { useConversationXp } from "@/components/chat/useConversationXp";
 import Avatar from "@/components/ui/Avatar";
 import { dayLabel, endsRun, startsNewDay, startsNewRun } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
-import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
+import { applyReaction, applyRow, mergeMessage } from "@/lib/chat/realtime";
 import type {
     ChatConversation,
     ChatMessage,
@@ -60,6 +66,12 @@ export default function Thread({
     /// What the composer will attach to the next message — set by the icebreaker card's two
     /// buttons, cleared once the message is away or the user backs out.
     const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
+    /// Which message is being rewritten, and why the last attempt was refused. Held here
+    /// rather than in the bubble so the draft survives the timeline re-rendering underneath
+    /// it — a message arriving mid-edit should not throw away what you were typing.
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editError, setEditError] = useState<string | null>(null);
+    const [savingEdit, setSavingEdit] = useState(false);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     /// The oldest moment everyone else has read up to.
@@ -88,7 +100,9 @@ export default function Thread({
             // still earns without this having to sequence the two.
             if (row.parent_id) return;
 
-            setMessages((current) => mergeMessage(current, messageFromRow(row, membersById)));
+            setMessages((current) =>
+                applyRow(current, row, membersById, (message) => ({ ...message, status: "sent" })),
+            );
         });
     }, [onMessage, conversation.id, membersById]);
 
@@ -120,6 +134,43 @@ export default function Thread({
         setMessages((current) =>
             applyReaction(current, row, result.ok ? result.reacted : mine),
         );
+    };
+
+    const saveEdit = async (messageId: string, body: string) => {
+        setSavingEdit(true);
+        try {
+            const result = await editChatMessage({ messageId, body });
+
+            if (result.ok) {
+                // Applied straight away rather than waiting for the realtime echo, so the
+                // person who made the edit sees it land immediately.
+                setMessages((current) => mergeMessage(current, { ...result.message, status: "sent" }));
+                setEditingId(null);
+                setEditError(null);
+                return;
+            }
+
+            setEditError(
+                result.reason === "moderated"
+                    ? "That edit wasn't saved — please keep this chat respectful."
+                    : "That edit couldn't be saved.",
+            );
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const removeMessage = async (messageId: string) => {
+        // Drawn immediately: a delete you have to wait for is one you press twice.
+        setMessages((current) =>
+            current.map((message) =>
+                message.id === messageId
+                    ? { ...message, body: "", deletedAt: new Date().toISOString() }
+                    : message,
+            ),
+        );
+
+        await deleteChatMessage(messageId);
     };
 
     // Opening a conversation reads it, and so does a message arriving while it is open.
@@ -223,6 +274,34 @@ export default function Thread({
                                     userId={userId}
                                     onToggleReaction={toggle}
                                     onAttach={setAttachment}
+                                    // Your own words only, and only ordinary ones — an
+                                    // icebreaker belongs to the bot and a game invite's text
+                                    // is generated. Matches what editMessage will accept, so
+                                    // no button is offered that the server would refuse.
+                                    {...(message.sender?.id === userId &&
+                                    message.kind === "text" &&
+                                    !message.deletedAt
+                                        ? {
+                                              onEdit: () => {
+                                                  setEditingId(message.id);
+                                                  setEditError(null);
+                                              },
+                                              onDelete: () => void removeMessage(message.id),
+                                          }
+                                        : {})}
+                                    editing={editingId === message.id}
+                                    editor={
+                                        <MessageEditor
+                                            initialBody={message.body}
+                                            saving={savingEdit}
+                                            error={editError}
+                                            onSave={(body) => void saveEdit(message.id, body)}
+                                            onCancel={() => {
+                                                setEditingId(null);
+                                                setEditError(null);
+                                            }}
+                                        />
+                                    }
                                 />
                             </Fragment>
                         );

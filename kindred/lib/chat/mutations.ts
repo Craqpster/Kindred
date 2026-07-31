@@ -268,6 +268,86 @@ async function acceptWaveOnReply({
     });
 }
 
+export type EditMessageResult =
+    | { ok: true; message: ChatMessage }
+    | { ok: false; reason: "not_yours" | "gone" | "empty" }
+    | { ok: false; reason: "moderated"; cooldownUntil: number | null };
+
+/// Rewrites a message you sent.
+///
+/// Re-moderates, and that is not belt and braces — it closes the hole that editing would
+/// otherwise open. Moderation runs on the way in, so without this anyone could post something
+/// innocuous, let it pass, and then edit it into whatever they liked: the filter would never
+/// see the text that ends up on screen.
+///
+/// No time limit. Most apps stop you editing after a few minutes to keep a conversation
+/// honest, which is a fair rule and a product decision rather than a technical one — say so
+/// and it is a single comparison against created_at.
+export async function editMessage({
+    messageId,
+    userId,
+    body,
+}: {
+    messageId: string;
+    userId: string;
+    body: string;
+}): Promise<EditMessageResult> {
+    const text = body.trim();
+    if (!text) return { ok: false, reason: "empty" };
+
+    const existing = await prisma.messages.findUnique({
+        where: { id: messageId },
+        select: { sender_id: true, deleted_at: true, kind: true },
+    });
+
+    if (!existing || existing.deleted_at) return { ok: false, reason: "gone" };
+
+    // Only your own words, and only ordinary ones. An icebreaker belongs to the bot, and a
+    // game invite's text is generated — editing either would let the card say one thing while
+    // meaning another.
+    if (existing.sender_id !== userId || existing.kind !== "text") {
+        return { ok: false, reason: "not_yours" };
+    }
+
+    const verdict = await moderate(userId, text);
+    if (!verdict.allowed) {
+        return { ok: false, reason: "moderated", cooldownUntil: verdict.cooldownUntil };
+    }
+
+    await prisma.messages.update({
+        where: { id: messageId },
+        data: { body: text, edited_at: new Date() },
+    });
+
+    return { ok: true, message: await readBack(messageId) };
+}
+
+/// Takes back a message you sent.
+///
+/// Soft, so the timeline keeps its slot and a conversation does not silently reshape itself
+/// around a hole. toMessage blanks the body on the way out, so the text stops reaching
+/// clients even though the row survives.
+///
+/// XP already awarded is deliberately not clawed back. Unpicking it would mean reversing a
+/// daily tally, possibly a level, and possibly a bonus that has already been announced to
+/// everyone — a lot of machinery to stop someone gaming a counter that only they see.
+export async function deleteMessage({
+    messageId,
+    userId,
+}: {
+    messageId: string;
+    userId: string;
+}): Promise<boolean> {
+    // The where clause carries the authorization: someone else's message, or one already
+    // deleted, matches nothing rather than throwing.
+    const { count } = await prisma.messages.updateMany({
+        where: { id: messageId, sender_id: userId, deleted_at: null },
+        data: { deleted_at: new Date() },
+    });
+
+    return count > 0;
+}
+
 /// Marks everything up to now as read for one person.
 export async function markRead({
     conversationId,

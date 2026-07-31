@@ -3,6 +3,7 @@
 import { Check, CheckCheck, Clock, Lightbulb } from "lucide-react";
 
 import GameInviteCard from "@/components/chat/games/GameInviteCard";
+import MessageActions from "@/components/chat/MessageActions";
 import ReactionBar from "@/components/chat/ReactionBar";
 import Avatar from "@/components/ui/Avatar";
 import { clockTime } from "@/lib/chat/grouping";
@@ -52,6 +53,10 @@ export default function MessageBubble({
     userId,
     onToggleReaction,
     onAttach,
+    onEdit,
+    onDelete,
+    editing = false,
+    editor,
 }: {
     message: TimelineMessage;
     isOwn: boolean;
@@ -68,6 +73,13 @@ export default function MessageBubble({
     onToggleReaction: (messageId: string, emoji: ReactionEmoji) => void;
     /// Aims the composer at this message — as an answer, or as a quote.
     onAttach: (attachment: PendingAttachment) => void;
+    /// Only ever passed for your own text messages; absent means no actions are drawn.
+    onEdit?: () => void;
+    onDelete?: () => void;
+    editing?: boolean;
+    /// The editor, rendered by the parent so the draft and its moderation error live with the
+    /// state that owns the message rather than inside a bubble that remounts.
+    editor?: React.ReactNode;
 }) {
     if (message.kind === "icebreaker_prompt") {
         return (
@@ -190,6 +202,9 @@ export default function MessageBubble({
                     Received messages are a soft fill with a card shadow rather than an
                     outlined box — a hard border on bone reads as a form field, and there are
                     already enough boxes on this screen. */}
+                {editing ? (
+                    editor
+                ) : (
                 <div
                     className={`rounded-2xl px-3.5 py-2 text-meta wrap-break-word transition-colors ${
                         isOwn
@@ -204,6 +219,7 @@ export default function MessageBubble({
                         </span>
                     )}
                 </div>
+                )}
 
                 {/* One meta row under the bubble carrying both the reactions and, on your own
                     messages, the tick. The tick used to sit inside the bubble trailing the
@@ -238,6 +254,13 @@ export default function MessageBubble({
                         >
                             {clockTime(message.createdAt)}
                         </time>
+                    )}
+
+                    {/* Only on your own text, and only once the server has a real id to act
+                        on. Placed before the tick so the outermost thing on the right stays
+                        the status marker. */}
+                    {onEdit && onDelete && !editing && message.status !== "sending" && (
+                        <MessageActions onEdit={onEdit} onDelete={onDelete} />
                     )}
 
                     {/* Last, so it sits outermost on the right where a status marker reads. */}

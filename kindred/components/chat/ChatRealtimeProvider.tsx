@@ -179,6 +179,17 @@ export default function ChatRealtimeProvider({
             )
             .on(
                 "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "messages" },
+                (payload) => {
+                    // An edit or a delete. Both rewrite a row the timeline is already holding,
+                    // so they go to the same listeners as an arrival and are told apart there
+                    // by whether the id is one already on screen.
+                    const row = payload.new as MessageRow;
+                    for (const listener of listenersRef.current) listener(row);
+                },
+            )
+            .on(
+                "postgres_changes",
                 { event: "UPDATE", schema: "public", table: "conversations" },
                 (payload) => {
                     const row = payload.new as { id: string; requested_of: string | null };
