@@ -280,6 +280,51 @@ async function visibilityFor(
     return { conversations, messages, reactions, writeRejected };
 }
 
+/// Presence and typing ride a private channel per conversation, authorized by RLS on
+/// realtime.messages rather than on any table of ours — there is no row behind a broadcast to
+/// check. can_use_conversation_channel is what those policies call, so testing it is testing
+/// who can join.
+///
+/// The garbage case matters as much as the other two: the topic is a client-supplied string,
+/// and an uncaught `topic::uuid` would turn a malformed join into a raised error instead of a
+/// refusal.
+async function checkConversationChannels(
+    alice: Actor,
+    bob: Actor,
+    carol: Actor,
+    dmKey: string,
+): Promise<Check[]> {
+    return rolledBack(async (tx) => {
+        const conversationId = await createDm(tx, dmKey);
+        await tx.$executeRaw`
+            INSERT INTO conversation_members (conversation_id, profile_id)
+            VALUES (${conversationId}::uuid, ${alice.id}::uuid),
+                   (${conversationId}::uuid, ${bob.id}::uuid);
+        `;
+
+        async function mayJoin(userId: string, topic: string) {
+            await actAs(tx, userId);
+            const [row] = await tx.$queryRaw<{ allowed: boolean }[]>`
+                SELECT public.can_use_conversation_channel(${topic}) AS allowed;
+            `;
+            await actAsOwner(tx);
+            return row.allowed;
+        }
+
+        return [
+            (await mayJoin(alice.id, conversationId))
+                ? ok("a member may join their conversation's channel")
+                : not("a member may join their conversation's channel", "refused"),
+            !(await mayJoin(carol.id, conversationId))
+                ? ok("an outsider may not join it")
+                : not("an outsider may not join it", "allowed — presence and typing would leak"),
+            !(await mayJoin(alice.id, "not-a-uuid"))
+                ? ok("a malformed topic is refused, not an error")
+                : not("a malformed topic is refused, not an error", "allowed"),
+        ];
+    });
+}
+
 async function checkRowLevelSecurity(
     alice: Actor,
     bob: Actor,
@@ -401,6 +446,7 @@ async function main(): Promise<void> {
         ["Malformed rows must be impossible:", await checkRejections(alice, dmKey)],
         ["last_message_at must track the newest message:", await checkTrigger(alice, dmKey)],
         ["RLS must show each person only their own chats:", await checkRowLevelSecurity(alice, bob, carol, dmKey)],
+        ["Conversation channels must only admit members:", await checkConversationChannels(alice, bob, carol, dmKey)],
         ["The run itself must be invisible:", checkNothingPersisted(before, await countChatRows())],
     ];
 

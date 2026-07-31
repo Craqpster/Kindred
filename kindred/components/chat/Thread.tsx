@@ -10,7 +10,9 @@ import {
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
+import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
+import { useConversationChannel } from "@/components/chat/useConversationChannel";
 import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
 import { useToast } from "@/components/ui/ToastStack";
 import { getChatLevel } from "@/lib/chat-level";
@@ -48,6 +50,10 @@ export default function Thread({
     greet: boolean;
 }) {
     const { onMessage, onReaction } = useChatRealtime();
+    const { presentIds, typingIds, reportTyping } = useConversationChannel(
+        conversation.id,
+        userId,
+    );
     const { showToast } = useToast();
     const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
     const [xp, setXp] = useState(initialXp);
@@ -187,9 +193,26 @@ export default function Thread({
     return (
         <>
             <header className="flex items-center gap-3 border-b border-ink-900/8 px-4 py-3">
-                <h1 className="flex-1 truncate text-body font-medium text-ink-900">
-                    {conversation.title}
-                </h1>
+                <div className="min-w-0 flex-1">
+                    <h1 className="truncate text-body font-medium text-ink-900">
+                        {conversation.title}
+                    </h1>
+
+                    {/* "Active now", not "Online". Presence here means somebody has THIS
+                        conversation open, which is a smaller and more useful claim: telling
+                        someone their friend is offline while they are busy messaging
+                        elsewhere is worse than saying nothing. */}
+                    {presentIds.length > 0 && (
+                        <p className="flex items-center gap-1.5 text-label text-ink-600">
+                            <span
+                                className="size-1.5 rounded-full bg-accent-600"
+                                aria-hidden
+                            />
+                            Active now
+                        </p>
+                    )}
+                </div>
+
                 {xp && <ChatLevelBadge xp={xp} />}
             </header>
 
@@ -215,9 +238,12 @@ export default function Thread({
                 <div ref={bottomRef} />
             </ul>
 
+            <TypingLine typingIds={typingIds} membersById={membersById} />
+
             <Composer
                 conversationId={conversation.id}
                 userId={userId}
+                onTyping={reportTyping}
                 greeting={greet ? GREETING : undefined}
                 onOptimistic={(message) =>
                     setMessages((current) => mergeMessage(current, message))

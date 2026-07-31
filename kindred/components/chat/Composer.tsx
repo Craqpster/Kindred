@@ -25,9 +25,12 @@ export default function Composer({
     onAward,
     attachment,
     onClearAttachment,
+    onTyping,
 }: {
     conversationId: string;
     userId: string;
+    /// Called on every keystroke. Throttled by the channel, so this stays a plain call.
+    onTyping: () => void;
     /// Prefilled when arriving from a wave, so the 👋 is already there to send.
     greeting?: string;
     /// Shown immediately, before the server has been asked. Carries a temporary id.
@@ -203,7 +206,12 @@ export default function Composer({
                 <textarea
                     ref={inputRef}
                     value={draft}
-                    onChange={(event) => setDraft(event.target.value)}
+                    onChange={(event) => {
+                        setDraft(event.target.value);
+                        // Only when there is something to type — clearing the box with
+                        // backspace should not announce you as still writing.
+                        if (event.target.value) onTyping();
+                    }}
                     onKeyDown={(event) => {
                         // Enter sends, Shift+Enter breaks the line — what every chat does.
                         if (event.key === "Enter" && !event.shiftKey) {
