@@ -181,7 +181,10 @@ export default function Composer({
                 "Answering the icebreaker" and "Quoting" produce different messages and the
                 difference is invisible once sent. */}
             {attachment && (
-                <div className="flex items-center gap-2 border-b border-bone-300 bg-bone-100 px-3 py-2">
+                /* Same width as the box below it: this strip describes what the next message
+                   attaches to, so running it full-bleed behind a capped composer would read
+                   as page furniture rather than as part of what is being written. */
+                <div className="mx-auto flex w-full max-w-3xl items-center gap-2 border-b border-bone-300 bg-bone-100 px-3 py-2">
                     <div className="min-w-0 flex-1 border-l-2 border-accent-600/40 pl-2">
                         <p className="text-label uppercase text-ink-600">
                             {attachment.mode === "answer"
@@ -203,7 +206,11 @@ export default function Composer({
                 </div>
             )}
 
-            <div className="flex items-end gap-2 p-3">
+            {/* Capped rather than edge to edge. A single-line box stretched across a wide
+                window reads as a search bar, and the eye has to travel the whole width to get
+                from the last message back to where it types. It still spans — the max-width
+                is a ceiling, not a fixed size, so a narrow window fills it. */}
+            <div className="mx-auto flex w-full max-w-3xl items-end gap-2.5 p-3">
                 <ComposerMenu conversationId={conversationId} />
 
                 <textarea
@@ -227,7 +234,7 @@ export default function Composer({
                     disabled={blocked}
                     placeholder={blocked ? "You can send again shortly…" : "Message"}
                     aria-label="Message"
-                    className="max-h-32 min-h-9 w-full flex-1 resize-none rounded-2xl border border-bone-300 bg-bone-100 px-3 py-2 text-meta text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40 disabled:opacity-60"
+                    className="max-h-40 min-h-11 w-full flex-1 resize-none rounded-2xl border border-bone-300 bg-bone-100 px-4 py-2.5 text-body text-ink-900 outline-none transition-colors placeholder:text-ink-600 focus:border-accent-600 focus-visible:ring-2 focus-visible:ring-accent-600/40 disabled:opacity-60"
                 />
 
                 <button
@@ -235,9 +242,9 @@ export default function Composer({
                     aria-label="Send"
                     disabled={!draft.trim() || sending || blocked}
                     onClick={send}
-                    className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
+                    className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent-600 text-surface transition-colors hover:bg-accent-700 disabled:cursor-not-allowed disabled:bg-bone-300 disabled:text-ink-600"
                 >
-                    <SendHorizontal size={16} strokeWidth={1.5} aria-hidden />
+                    <SendHorizontal size={19} strokeWidth={1.5} aria-hidden />
                 </button>
             </div>
         </div>
