@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
+import AvatarGroup from "@/components/chat/AvatarGroup";
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
@@ -13,6 +14,7 @@ import {
     useConversationChannel,
 } from "@/components/chat/useConversationChannel";
 import { useConversationXp } from "@/components/chat/useConversationXp";
+import Avatar from "@/components/ui/Avatar";
 import { dayLabel, endsRun, startsNewDay, startsNewRun } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
 import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
@@ -133,28 +135,58 @@ export default function Thread({
         // timeline, three levels below this, and MessageBubble should not have to carry
         // reportMove through just because one kind of message needs it.
         <ConversationChannelProvider value={channel}>
-            <header className="flex items-center gap-3 border-b border-ink-900/8 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                    <h1 className="truncate text-body font-medium text-ink-900">
+            {/* Whoever you are talking to, at the top and centred: a face and a name rather
+                than a line of text in a corner. A DM is one person, so the header can afford
+                to be about them — which is the difference between a chat and a ticket. */}
+            <header className="relative border-b border-ink-900/8 px-4 py-5">
+                <div className="flex flex-col items-center gap-2">
+                    {conversation.kind === "group" ? (
+                        <AvatarGroup
+                            users={conversation.others.map((member) => ({
+                                name: member.username,
+                            }))}
+                            size={56}
+                        />
+                    ) : (
+                        <Avatar
+                            name={conversation.title}
+                            avatarId={conversation.others[0]?.avatarId ?? undefined}
+                            avatarSeed={conversation.others[0]?.avatarSeed ?? undefined}
+                            size={56}
+                        />
+                    )}
+
+                    <h1 className="max-w-full truncate text-title text-ink-900">
                         {conversation.title}
                     </h1>
 
                     {/* "Active now", not "Online". Presence here means somebody has THIS
                         conversation open, which is a smaller and more useful claim: telling
                         someone their friend is offline while they are busy messaging
-                        elsewhere is worse than saying nothing. */}
-                    {presentIds.length > 0 && (
-                        <p className="flex items-center gap-1.5 text-label text-ink-600">
-                            <span
-                                className="size-1.5 rounded-full bg-accent-600"
-                                aria-hidden
-                            />
-                            Active now
-                        </p>
-                    )}
+                        elsewhere is worse than saying nothing.
+
+                        Its row is always here, so the name does not shift up and down as
+                        somebody opens and closes the conversation. */}
+                    <p className="flex h-4 items-center gap-1.5 text-label text-ink-600">
+                        {presentIds.length > 0 && (
+                            <>
+                                <span
+                                    className="size-1.5 rounded-full bg-accent-600"
+                                    aria-hidden
+                                />
+                                Active now
+                            </>
+                        )}
+                    </p>
                 </div>
 
-                {xp && <ChatLevelBadge xp={xp} />}
+                {/* Out of the centred stack so it cannot push the name off-centre, and it
+                    belongs to the conversation rather than to the person anyway. */}
+                {xp && (
+                    <div className="absolute top-5 right-4">
+                        <ChatLevelBadge xp={xp} />
+                    </div>
+                )}
             </header>
 
             <ul className="flex-1 overflow-y-auto py-3">
