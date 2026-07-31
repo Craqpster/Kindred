@@ -12,8 +12,9 @@ import {
     type SendMessageResult,
     type ToggleReactionResult,
 } from "@/lib/chat/mutations";
-import { getConversation, getConversationXp, getMessages } from "@/lib/chat/queries";
+import { getConversation, getConversationXp, getMessages, isMember } from "@/lib/chat/queries";
 import { REACTION_EMOJI } from "@/lib/chat/reactions";
+import { postIcebreakerPrompt } from "@/lib/prompts";
 import type { ChatConversation, ConversationXp, MessagePage } from "@/lib/chat/types";
 import { verifySession } from "@/lib/dal";
 
@@ -157,6 +158,24 @@ export async function loadConversationXp(
     if (!parsed.success) return null;
 
     return getConversationXp({ conversationId: parsed.data, userId });
+}
+
+/// Drops a fresh icebreaker into a conversation, as the Kindred bot.
+///
+/// Membership is checked HERE rather than being left to the write, and that is not belt and
+/// braces. postIcebreakerPrompt posts with senderId: null, and sendMessage deliberately skips
+/// the membership check for a null sender because the bot has no membership to check. Without
+/// this line, anyone signed in could post into any conversation by id.
+export async function sendIcebreaker(conversationId: string): Promise<boolean> {
+    const { userId } = await verifySession();
+
+    const parsed = uuid.safeParse(conversationId);
+    if (!parsed.success) return false;
+
+    if (!(await isMember({ conversationId: parsed.data, userId }))) return false;
+
+    await postIcebreakerPrompt(parsed.data);
+    return true;
 }
 
 /// One conversation, for a list that has just learned it exists.

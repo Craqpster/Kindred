@@ -4,6 +4,7 @@ import { SendHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { sendChatMessage } from "@/app/(app)/chats/actions";
+import ComposerMenu from "@/components/chat/ComposerMenu";
 import type { AwardResult } from "@/lib/confidence";
 import type { PendingAttachment, TimelineMessage } from "@/lib/chat/types";
 
@@ -203,6 +204,8 @@ export default function Composer({
             )}
 
             <div className="flex items-end gap-2 p-3">
+                <ComposerMenu conversationId={conversationId} />
+
                 <textarea
                     ref={inputRef}
                     value={draft}
