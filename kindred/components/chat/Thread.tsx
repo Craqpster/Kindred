@@ -1,23 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import {
-    loadConversationXp,
-    markConversationRead,
-    toggleMessageReaction,
-} from "@/app/(app)/chats/actions";
+import { markConversationRead, toggleMessageReaction } from "@/app/(app)/chats/actions";
 import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
 import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
 import { useConversationChannel } from "@/components/chat/useConversationChannel";
-import { chatLevelToast, dailyBonusToast } from "@/components/chat/sharedToasts";
-import { useToast } from "@/components/ui/ToastStack";
-import { getChatLevel } from "@/lib/chat-level";
-import { dailyBonusThreshold } from "@/lib/confidence-xp";
-import type { AwardResult } from "@/lib/confidence";
+import { useConversationXp } from "@/components/chat/useConversationXp";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
 import { applyReaction, mergeMessage, messageFromRow } from "@/lib/chat/realtime";
 import type {
@@ -54,9 +46,12 @@ export default function Thread({
         conversation.id,
         userId,
     );
-    const { showToast } = useToast();
+    const { xp, applyAward } = useConversationXp({
+        conversationId: conversation.id,
+        userId,
+        initialXp,
+    });
     const [messages, setMessages] = useState<TimelineMessage[]>(initialMessages);
-    const [xp, setXp] = useState(initialXp);
     /// What the composer will attach to the next message — set by the icebreaker card's two
     /// buttons, cleared once the message is away or the user backs out.
     const [attachment, setAttachment] = useState<PendingAttachment | null>(null);
@@ -80,50 +75,17 @@ export default function Thread({
         [conversation.others],
     );
 
-    /// Takes a new XP snapshot and announces whatever is worth announcing.
-    ///
-    /// The comparison runs against a ref rather than inside the state updater, because an
-    /// updater has to stay pure — React may call it twice, and a toast raised from in there
-    /// would fire twice with it.
-    const xpRef = useRef(initialXp);
-    const settleXp = useCallback(
-        (next: ConversationXp) => {
-            const previous = xpRef.current;
-            xpRef.current = next;
-            setXp(next);
-
-            if (previous && next.level > previous.level) {
-                showToast(chatLevelToast(next.level));
-            }
-            if (next.bonusEarnedToday && !previous?.bonusEarnedToday && next.bonusXpToday) {
-                showToast(dailyBonusToast(next.bonusXpToday));
-            }
-        },
-        [showToast],
-    );
-
     useEffect(() => {
         return onMessage((row) => {
             if (row.conversation_id !== conversation.id) return;
-
-            // Somebody else's message may have moved the conversation's XP, and channel_xp
-            // is not in the realtime publication — so this row is the only notice we get
-            // that there is something new to read. Own messages are settled by the composer
-            // from what the send already returned, so asking again here would be a round
-            // trip for a number we hold.
-            if (row.sender_id && row.sender_id !== userId) {
-                void loadConversationXp(conversation.id).then((next) => {
-                    if (next) settleXp(next);
-                });
-            }
-
-            // Thread replies do not belong in the main timeline. Checked after the XP read,
-            // since a reply earns XP the same as anything else.
+            // Thread replies belong behind their parent, not in the main timeline. XP is not
+            // affected either way — useConversationXp keeps its own subscription, so a reply
+            // still earns without this having to sequence the two.
             if (row.parent_id) return;
 
             setMessages((current) => mergeMessage(current, messageFromRow(row, membersById)));
         });
-    }, [onMessage, conversation.id, membersById, userId, settleXp]);
+    }, [onMessage, conversation.id, membersById]);
 
     // Reactions arrive for every conversation, not just this one. applyReaction ignores a
     // message id the timeline is not holding, so there is nothing to filter on the way in.
@@ -153,32 +115,6 @@ export default function Thread({
         setMessages((current) =>
             applyReaction(current, row, result.ok ? result.reacted : mine),
         );
-    };
-
-    /// Folds an award from your own send into the badge, without asking the server again.
-    ///
-    /// Every figure here is derived with the same shared functions the award path used —
-    /// getChatLevel and dailyBonusThreshold — so this is the server's arithmetic repeated,
-    /// not a client-side guess at it. `channelXp` is the authoritative new total; the rest
-    /// follows from it.
-    ///
-    /// qualifying_messages is incremented for exactly the messages that produce an award, so
-    /// "+1" here is the same rule the row on disk follows rather than an approximation.
-    const applyAward = (award: AwardResult) => {
-        const { level, xpIntoLevel, xpForNextLevel } = getChatLevel(award.channelXp);
-
-        settleXp({
-            xp: award.channelXp,
-            level,
-            xpIntoLevel,
-            xpForNextLevel,
-            messagesToday: (xpRef.current?.messagesToday ?? 0) + 1,
-            bonusThreshold: dailyBonusThreshold(level),
-            bonusEarnedToday: xpRef.current?.bonusEarnedToday || award.dailyBonusEarned,
-            bonusXpToday: award.dailyBonusEarned
-                ? award.bonusXp
-                : (xpRef.current?.bonusXpToday ?? null),
-        });
     };
 
     // Opening a conversation reads it, and so does a message arriving while it is open.
