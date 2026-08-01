@@ -1,0 +1,14 @@
+-- A separate switch for badges.
+--
+-- show_confidence already existed and covered the tier. Badges were folded in with it, which
+-- conflated two different disclosures: a tier is a number that grows with use, where a badge
+-- names a behaviour — "Game Winner", "Open Book", "Friend Maker". Someone can reasonably want
+-- their progress visible and their habits not.
+--
+-- Defaults true, matching the other two: a profile is open unless its owner closes it, which is
+-- what makes the toggles feel like control rather than setup.
+--
+-- Nullable like its neighbours. Not a style choice — dms_open, show_confidence and
+-- show_interests are all nullable in the live database because no NOT NULL was set when they
+-- were added, and a column that behaves differently from the three beside it is a trap.
+ALTER TABLE "profiles" ADD COLUMN "show_badges" BOOLEAN DEFAULT true;

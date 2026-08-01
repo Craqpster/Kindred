@@ -43,16 +43,20 @@ type ProfileSettings = {
     dms_open: boolean;
     show_confidence: boolean;
     show_interests: boolean;
+    show_badges: boolean;
 };
 
 /// The settings rendered as on/off switches, named so `settings[item.id]` is known to be a
 /// boolean rather than asserted to be one.
-type ToggleSetting = "dms_open" | "show_confidence" | "show_interests";
+type ToggleSetting = "dms_open" | "show_confidence" | "show_interests" | "show_badges";
 
 const TOGGLES: { id: ToggleSetting; label: string; desc: string }[] = [
     { id: "dms_open", label: "Open DMs", desc: "Allow anyone to send you a message" },
     { id: "show_confidence", label: "Show Confidence Tier", desc: "Display tier on your profile" },
     { id: "show_interests", label: "Show Interests", desc: "Make your hobbies public" },
+    // Its own switch rather than folded into the tier: a tier is a number, where a badge
+    // names something you did.
+    { id: "show_badges", label: "Show Badges", desc: "Let others see what you've earned" },
 ];
 
 export function PrivacySettings({
@@ -78,6 +82,7 @@ export function PrivacySettings({
         dms_open: profile.dms_open ?? true,
         show_confidence: profile.show_confidence ?? true,
         show_interests: profile.show_interests ?? true,
+        show_badges: profile.show_badges ?? true,
     });
 
     const [isSaving, setIsSaving] = useState(false);

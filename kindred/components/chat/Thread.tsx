@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -215,9 +216,20 @@ export default function Thread({
                         />
                     )}
 
-                    <h1 className="max-w-full truncate text-title text-ink-900">
-                        {conversation.title}
-                    </h1>
+                    {/* A DM's title IS a person, so it links to them. A group's is a name
+                        somebody typed, which links nowhere. */}
+                    {conversation.kind === "dm" && conversation.others[0] ? (
+                        <Link
+                            href={`/u/${conversation.others[0].id}`}
+                            className="max-w-full truncate text-title text-ink-900 underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                        >
+                            {conversation.title}
+                        </Link>
+                    ) : (
+                        <h1 className="max-w-full truncate text-title text-ink-900">
+                            {conversation.title}
+                        </h1>
+                    )}
 
                     {/* A DM has one other person, so their status can be stated plainly. A
                         group has several in several states, so it is summarised instead. */}
