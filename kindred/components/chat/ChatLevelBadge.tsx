@@ -9,7 +9,13 @@ import {
 } from "@/lib/confidence-xp";
 import type { ConversationXp } from "@/lib/chat/types";
 
-const RADIUS = 13;
+// 44px overall. The ring sits in the middle of the conversation header rather than in a
+// corner, so it is read rather than merely noticed — and at 32px the level number inside it
+// was smaller than any other text on the screen.
+const SIZE = 44;
+const CENTRE = SIZE / 2;
+const RADIUS = 18;
+const STROKE = 3.5;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /// The conversation's level, as a ring that fills toward the next one.
@@ -57,35 +63,35 @@ export default function ChatLevelBadge({ xp }: { xp: ConversationXp }) {
                 aria-label={`Chat level ${xp.level}, ${xp.xpIntoLevel} of ${xp.xpForNextLevel} XP to the next level`}
                 className="flex items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-600"
             >
-                <svg width={32} height={32} viewBox="0 0 32 32" aria-hidden>
+                <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-hidden>
                     <circle
-                        cx={16}
-                        cy={16}
+                        cx={CENTRE}
+                        cy={CENTRE}
                         r={RADIUS}
                         fill="none"
-                        strokeWidth={3}
+                        strokeWidth={STROKE}
                         className="stroke-bone-300"
                     />
                     <circle
-                        cx={16}
-                        cy={16}
+                        cx={CENTRE}
+                        cy={CENTRE}
                         r={RADIUS}
                         fill="none"
-                        strokeWidth={3}
+                        strokeWidth={STROKE}
                         strokeLinecap="round"
                         strokeDasharray={CIRCUMFERENCE}
                         strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
                         // Starts at 12 o'clock instead of 3, which is where a progress ring
                         // is read from.
-                        transform="rotate(-90 16 16)"
+                        transform={`rotate(-90 ${CENTRE} ${CENTRE})`}
                         className="stroke-accent-600 transition-[stroke-dashoffset] duration-500"
                     />
                     <text
-                        x={16}
-                        y={16}
+                        x={CENTRE}
+                        y={CENTRE}
                         textAnchor="middle"
                         dominantBaseline="central"
-                        className="fill-ink-900 text-label font-medium"
+                        className="fill-ink-900 text-meta font-semibold"
                     >
                         {xp.level}
                     </text>
@@ -96,7 +102,9 @@ export default function ChatLevelBadge({ xp }: { xp: ConversationXp }) {
                 <div
                     role="dialog"
                     aria-label="How this chat earns XP"
-                    className="absolute right-0 top-full z-20 mt-2 w-64 rounded-card border border-bone-300 bg-surface p-3 text-left shadow-card"
+                    // Centred under the ring rather than right-aligned to it, now that the
+                    // ring itself sits in the middle of the header instead of in a corner.
+                    className="absolute top-full left-1/2 z-20 mt-2 w-64 -translate-x-1/2 rounded-card border border-bone-300 bg-surface p-3 text-left shadow-card"
                 >
                     <p className="text-meta font-medium text-ink-900">
                         Chat level {xp.level}

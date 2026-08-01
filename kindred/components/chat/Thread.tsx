@@ -238,15 +238,15 @@ export default function Thread({
                             }
                         />
                     )}
-                </div>
 
-                {/* Out of the centred stack so it cannot push the name off-centre, and it
-                    belongs to the conversation rather than to the person anyway. */}
-                {xp && (
-                    <div className="absolute top-5 right-4">
-                        <ChatLevelBadge xp={xp} />
-                    </div>
-                )}
+                    {/* Last in the stack, and part of it rather than pinned to a corner: who
+                        you are talking to, then how warm the conversation has got. */}
+                    {xp && (
+                        <div className="mt-1">
+                            <ChatLevelBadge xp={xp} />
+                        </div>
+                    )}
+                </div>
             </header>
 
             <ul className="flex-1 overflow-y-auto py-3">
