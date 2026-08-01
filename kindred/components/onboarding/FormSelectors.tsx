@@ -1,11 +1,25 @@
 "use client";
 
+import type { Dispatch, SetStateAction } from "react";
 import { Shuffle } from "lucide-react";
 import TextInput from "@/components/ui/TextInput";
 import { randomHandle } from "@/lib/handles";
+import type { ResolvedTag } from "@/lib/onboarding-tags";
 import { CHIP, OPTION_CARD, EASE_IN_OPTIONS } from "./constants";
 
-export function HandleSelector({ handle, setHandle, error }: any) {
+// Field errors arrive as OnboardingState["errors"], where every field is a string[] — zod
+// reports all of a field's failures, not just the first. Only the first is ever shown.
+type FieldErrors = readonly string[] | undefined;
+
+export function HandleSelector({
+    handle,
+    setHandle,
+    error,
+}: {
+    handle: string;
+    setHandle: (val: string) => void;
+    error?: FieldErrors;
+}) {
     return (
         <div className="flex flex-col gap-2">
             <label htmlFor="username" className="block text-sm font-medium text-ink-900">Your handle</label>
@@ -28,18 +42,30 @@ export function HandleSelector({ handle, setHandle, error }: any) {
                     Shuffle
                 </button>
             </div>
-            {error && <p className="mt-1 text-sm font-medium text-red-600">{error}</p>}
+            {error?.[0] && <p className="mt-1 text-sm font-medium text-red-600">{error[0]}</p>}
         </div>
     );
 }
 
-export function TagSelector({ tags, picked, setPicked, error }: any) {
-    const toggleTag = (key: string) => setPicked((current: string[]) => current.includes(key) ? current.filter((k) => k !== key) : [...current, key]);
+export function TagSelector({
+    tags,
+    picked,
+    setPicked,
+    error,
+}: {
+    tags: readonly ResolvedTag[];
+    /// "hobby-3" / "interest-7" — the source is part of the key because the two tables
+    /// number their rows independently, so an id alone is ambiguous.
+    picked: readonly string[];
+    setPicked: Dispatch<SetStateAction<readonly string[]>>;
+    error?: FieldErrors;
+}) {
+    const toggleTag = (key: string) => setPicked((current) => current.includes(key) ? current.filter((k) => k !== key) : [...current, key]);
 
     return (
         <>
             <div className="mt-8 flex flex-wrap justify-center gap-2.5">
-                {tags.map((tag: any) => {
+                {tags.map((tag) => {
                     const key = `${tag.source}-${tag.id}`;
                     return (
                         <label key={key} className={CHIP}>
@@ -49,12 +75,18 @@ export function TagSelector({ tags, picked, setPicked, error }: any) {
                     );
                 })}
             </div>
-            {error && <p className="mt-4 text-sm font-medium text-red-600">{error[0]}</p>}
+            {error?.[0] && <p className="mt-4 text-sm font-medium text-red-600">{error[0]}</p>}
         </>
     );
 }
 
-export function EaseInSelector({ easeIn, setEaseIn }: any) {
+export function EaseInSelector({
+    easeIn,
+    setEaseIn,
+}: {
+    easeIn: string;
+    setEaseIn: (val: string) => void;
+}) {
     return (
         <div className="mt-8 flex flex-col gap-4">
             {EASE_IN_OPTIONS.map((option) => (
@@ -68,10 +100,20 @@ export function EaseInSelector({ easeIn, setEaseIn }: any) {
     );
 }
 
-export function GenderSelector({ genders, gender, setGender }: any) {
+export function GenderSelector({
+    genders,
+    gender,
+    setGender,
+}: {
+    genders: readonly { id: number; label: string }[];
+    /// A string, not a number: it mirrors the radio's value attribute, and comparing the
+    /// two without a cast is what keeps the checked state honest.
+    gender: string;
+    setGender: (val: string) => void;
+}) {
     return (
         <div className="mt-8 flex flex-wrap justify-center gap-2.5">
-            {genders.map((option: any) => (
+            {genders.map((option) => (
                 <label key={option.id} className={CHIP}>
                     <input type="radio" name="gender_id" value={option.id} checked={gender === String(option.id)} onChange={() => setGender(String(option.id))} className="sr-only" />
                     {option.label}

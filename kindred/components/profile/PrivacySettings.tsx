@@ -33,6 +33,28 @@ function generateRandomHandle(): string {
     return `${adjective}_${noun}_${number}`;
 }
 
+/// Everything this panel can change about a profile. The editable subset of the profile
+/// row, not the row itself — confidence, badges and the rest are not settings.
+type ProfileSettings = {
+    username: string;
+    gender_id: number;
+    avatar_id: string;
+    avatar_seed: string;
+    dms_open: boolean;
+    show_confidence: boolean;
+    show_interests: boolean;
+};
+
+/// The settings rendered as on/off switches, named so `settings[item.id]` is known to be a
+/// boolean rather than asserted to be one.
+type ToggleSetting = "dms_open" | "show_confidence" | "show_interests";
+
+const TOGGLES: { id: ToggleSetting; label: string; desc: string }[] = [
+    { id: "dms_open", label: "Open DMs", desc: "Allow anyone to send you a message" },
+    { id: "show_confidence", label: "Show Confidence Tier", desc: "Display tier on your profile" },
+    { id: "show_interests", label: "Show Interests", desc: "Make your hobbies public" },
+];
+
 export function PrivacySettings({
     profile,
     genders = [],
@@ -40,13 +62,15 @@ export function PrivacySettings({
 }: {
     profile: ProfileWithRelations;
     genders?: { id: number; label: string }[];
-    onProfilePreview?: (update: { username?: string; gender_id?: number; avatar_id?: string; avatar_seed?: string }) => void;
+    /// Fires on every edit so the profile card next to this panel updates live. Takes any
+    /// subset — the toggles are passed through too, and the preview simply ignores them.
+    onProfilePreview?: (update: Partial<ProfileSettings>) => void;
 }) {
     const router = useRouter();
     const cardRef = useRef<HTMLDivElement>(null);
     const [isExpanded, setIsExpanded] = useState(false);
 
-    const [settings, setSettings] = useState({
+    const [settings, setSettings] = useState<ProfileSettings>({
         username: profile.username,
         gender_id: profile.gender_id ?? genders[0]?.id ?? 1,
         avatar_id: profile.avatar_id || "adventurer",
@@ -68,7 +92,9 @@ export function PrivacySettings({
         }
     }, [isExpanded]);
 
-    const updateSetting = (key: string, value: any) => {
+    // Generic over the key so the value has to match that setting's own type — passing a
+    // string to dms_open, say, stops being something only a reader would catch.
+    const updateSetting = <K extends keyof ProfileSettings>(key: K, value: ProfileSettings[K]) => {
         setSettings(prev => ({ ...prev, [key]: value }));
         onProfilePreview?.({ [key]: value });
     };
@@ -242,18 +268,14 @@ export function PrivacySettings({
                             </div>
 
                             {/* Toggles */}
-                            {[
-                                { id: "dms_open", label: "Open DMs", desc: "Allow anyone to send you a message" },
-                                { id: "show_confidence", label: "Show Confidence Tier", desc: "Display tier on your profile" },
-                                { id: "show_interests", label: "Show Interests", desc: "Make your hobbies public" }
-                            ].map((item) => (
+                            {TOGGLES.map((item) => (
                                 <div key={item.id} className="flex items-center justify-between py-1 border-b border-star-sapphire/8 last:border-0">
                                     <div>
                                         <h3 className="font-semibold text-sm text-star-sapphire">{item.label}</h3>
                                         <p className="text-xs text-star-sapphire/60">{item.desc}</p>
                                     </div>
                                     <Switch.Root
-                                        checked={settings[item.id as keyof typeof settings] as boolean}
+                                        checked={settings[item.id]}
                                         onCheckedChange={(checked: boolean) => updateSetting(item.id, checked)}
                                         className="w-[42px] h-[24px] bg-bone-200 rounded-full relative outline-none data-[state=checked]:bg-star-sapphire transition-colors shadow-inner cursor-pointer"
                                     >

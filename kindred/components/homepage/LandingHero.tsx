@@ -79,7 +79,7 @@ export default function LandingHero() {
           {/* Top speech bubble */}
           <div className="absolute right-5 top-14 rotate-3 rounded-2xl rounded-br-sm bg-white px-5 py-4 text-sm text-star-sapphire shadow-lg shadow-star-sapphire/10">
             <span className="mr-2">👋</span>
-            hi, what's your favorite movie?
+            hi, what&apos;s your favorite movie?
           </div>
 
           {/* Person one */}

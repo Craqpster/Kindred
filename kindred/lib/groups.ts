@@ -16,9 +16,10 @@ export type GroupMember = {
 export type Group = {
     id: string;
     title: string;
-    /// NULL while the Stream channel has not been created yet — see the schema comment
-    /// on groups.stream_channel_id. The card renders a repair state for this.
-    streamChannelId: string | null;
+    /// NULL while the group's conversation has not been created yet. formGroupFor commits
+    /// the group before the conversation exists (see findMyGroup for why that order), so
+    /// this is the window the group card offers to repair.
+    conversationId: string | null;
     members: GroupMember[];
 };
 
@@ -68,6 +69,7 @@ export async function getGroupFor(profileId: string): Promise<Group | null> {
                         include: { profile: { select: { id: true, username: true } } },
                         orderBy: { joined_at: "asc" },
                     },
+                    conversation: { select: { id: true } },
                 },
             },
         },
@@ -79,7 +81,7 @@ export async function getGroupFor(profileId: string): Promise<Group | null> {
     return {
         id: group.id,
         title: group.title,
-        streamChannelId: group.stream_channel_id,
+        conversationId: group.conversation?.id ?? null,
         members: group.members.map((row) => row.profile),
     };
 }
@@ -179,7 +181,9 @@ export async function formGroupFor(profile: ProfileWithRelations): Promise<FormG
             group: {
                 id: created.id,
                 title: created.title,
-                streamChannelId: created.stream_channel_id,
+                // Always null here: this transaction commits the group only, and the
+                // caller creates the conversation immediately afterwards.
+                conversationId: null,
                 members: picked.map(({ id, username }) => ({ id, username })),
             },
         };

@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import FindGroupCard from "@/components/meet/FindGroupCard";
 import MatchCard from "@/components/meet/MatchCard";
 import MoreMatches from "@/components/meet/MoreMatches";
+import RefreshMatches from "@/components/meet/RefreshMatches";
 import SpotlightCard from "@/components/meet/SpotlightCard";
 import ViewToggle from "@/components/meet/ViewToggle";
 import { requireProfile } from "@/lib/dal";
@@ -44,7 +45,10 @@ export default async function MeetPage() {
                         </p>
                     </div>
 
-                    <ViewToggle view={view} />
+                    <div className="flex shrink-0 items-center gap-2">
+                        <ViewToggle view={view} />
+                        <RefreshMatches />
+                    </div>
                 </div>
 
                 {/* Renders nothing once they have a group, and carries its own top margin

@@ -84,215 +84,18 @@ body {
     font-family: var(--font-poppins), sans-serif;
 }
 
-/* Warm the message pane to match the rest of the app.
-
-   v14 ignores the variables you would expect here — --str-chat__background-color and
-   friends are still declared but referenced nowhere. The live chain is
-   --str-chat__chrome-0 -> --str-chat__background-core-app and all four elevation levels,
-   so overriding that one token covers the channel pane, the message list and the header.
-
-   --composer-bg is different: Stream USES it twice and never defines it, so it resolves to
-   nothing and the composer renders transparent. It has to be defined here, not overridden.
-
-   On .str-chat itself, not a wrapper — Stream sets these tokens on that element, and a
-   value declared on an element beats one inherited from an ancestor. Same reason as the
-   .str-chat__channel rule below. */
-/* The doubled class is load-bearing, not a typo.
-
-   Stream declares these same tokens on a bare `.str-chat`, and its stylesheet is imported
-   inside ChatConnectionProvider — a client component deep in the tree — while globals.css
-   comes from the root layout and gets hoisted to the top of the module graph. Stream's chunk
-   is therefore emitted LAST, so at equal specificity (0,1,0) it wins on source order and a
-   plain `.str-chat` block here does nothing. `.str-chat.str-chat` is (0,2,0) and wins
-   regardless of how Next orders the chunks.
-
-   The giveaway when this was wrong: --composer-bg applied and the others didn't. That is the
-   one token Stream reads but never declares, so it had nothing to lose to.
-
-   --str-chat__chrome-0 feeds --str-chat__background-core-app (the channel pane, message list
-   and empty state) plus all four elevation levels, so it warms the panel and header at once.
-   --composer-bg has to be DEFINED rather than overridden: Stream reads it twice and declares
-   it nowhere, so it otherwise resolves to nothing and the composer renders transparent. */
-.str-chat.str-chat {
-    --str-chat__chrome-0: var(--color-bone-100);
-    --composer-bg: var(--color-bone-100);
-
-    /* Bubbles. Stream maps these onto --chat-bg / --chat-text per direction on
-       .str-chat__message--me / --other, so setting the source tokens is enough and no
-       per-message selector is needed.
-
-       Incoming is a raised card on the bone page, the same relationship MatchCard has.
-       Outgoing borrows the accent Button's fill-and-text pairing so "mine" reads as the
-       app's action colour rather than a third new blue.
-
-       Both explicit overrides below are required, not tidiness: chat-bg-incoming chains
-       through background-core-surface-default to chrome-100, NOT chrome-0, so warming
-       chrome-0 alone would leave incoming bubbles on Stream's slate ramp. And
-       chat-text-outgoing defaults to brand-900, which is blue on blue once the fill is
-       sapphire. */
-    --str-chat__chat-bg-incoming: var(--color-surface);
-    --str-chat__chat-text-incoming: var(--color-ink-900);
-    --str-chat__chat-border-incoming: var(--color-bone-300);
-    --str-chat__chat-bg-attachment-incoming: var(--color-bone-200);
-
-    --str-chat__chat-bg-outgoing: var(--color-accent-600);
-    --str-chat__chat-text-outgoing: var(--color-surface);
-    --str-chat__chat-border-outgoing: var(--color-accent-600);
-    --str-chat__chat-bg-attachment-outgoing: var(--color-accent-700);
-
-    --str-chat__chat-text-username: var(--color-ink-600);
-    --str-chat__chat-text-timestamp: var(--color-ink-600);
-
-    /* Composer. Set as custom properties rather than direct declarations because they
-       inherit down to the composer from here, which sidesteps the specificity fight
-       entirely — Stream's composer rules are (0,2,0) and its button rules (0,4,0), so a
-       direct override would have to out-class those.
-
-       --str-chat__attachment-selector-button-icon-color is fixing a Stream bug rather than
-       overriding a choice: it falls back to --button-style-outline-text, which the
-       stylesheet never defines.
-
-       The input pill's own fill is --composer-bg, declared once at the top of this block.
-       It is bone-100, the same as the bar behind it, so the two read as a single surface
-       and the pill's bone-300 outline is what separates them. */
-    --str-chat__attachment-selector-button-icon-color: var(--color-ink-600);
-    --str-chat__attachment-selector-button-icon-color-hover: var(--color-ink-900);
-    --str-chat__border-core-default: var(--color-bone-300);
-    --str-chat__input-text-default: var(--color-ink-900);
-    --str-chat__input-text-placeholder: var(--color-ink-600);
-
-    /* Receded chrome: the "Today" date separator, system messages, the new-message
-       notification and the thread-start divider all read this one token. It defaults to
-       chrome-50 -> slate-50, which is a cool grey and reads as a foreign chip once the
-       pane behind it is bone.
-
-       Override this token rather than chrome-50 upstream: chrome-50 also feeds
-       --str-chat__background-core-surface-card, so moving it would drag card backgrounds
-       along with the dividers. */
-    --str-chat__background-core-surface-subtle: var(--color-bone-200);
-
-    /* What a jumped-to message flashes. Stream's default is yellow-50 (#fef9da), which
-       belongs to no part of this palette and reads as a browser find-in-page hit rather
-       than "here is the message you asked for".
-
-       One token, three surfaces: .str-chat__message--highlighted (which is also what the
-       "also sent in channel" link produces - that button has no highlight styling of its
-       own, it just triggers a jump), the pinned-message backdrop, and highlighted
-       thread-list items. */
-    --str-chat__background-core-highlight: var(--color-bone-200);
-}
-
-/* Unlike .str-chat__channel-list, Channel's root has no width rule of its own at all -
-   it just sizes to its content's natural width and leaves the rest of the row blank.
-   Setting it to fill its flex parent (the flex-1 wrapper around <Channel> in
-   ChatClient.tsx) is what makes the message pane actually use the space next to the
-   channel list instead of sitting narrow next to a blank gap. */
-.str-chat.str-chat__channel {
-    width: 100%;
-}
-
-/* The header is a fixed-height grid (72px by default) and the avatar inside it is 40px,
-   which leaves only a couple of pixels of slack once the md padding is accounted for. The
-   level ring in ChannelLevelAvatar.tsx draws OUTSIDE that 40px box, so without a little
-   more room it collides with the row.
-
-   Set on .str-chat__channel-header itself rather than a wrapper: Stream declares this
-   custom property directly on the element, so an ancestor never wins. Doubled class for
-   the same source-order reason as the block above. */
-/* The floating channel pill (ChannelPill.tsx) replaced the full-width header, so nothing
-   in the main panel reads --str-chat__channel-header-height any more. It is left alone
-   deliberately - the thread panel and thread-list header still use it, and overriding it
-   here would move those for no reason.
-
-   One number for the space the pill occupies: its own height plus the offset it floats
-   at. Both the list padding and the date-chip offset below read it, so they cannot drift
-   apart.
-
-   ChannelPill MEASURES itself and sets this on the message-list panel at runtime. The
-   value here is only the first-paint fallback. It was a hardcoded 60px, and the moment
-   the ring inside the pill changed size the pill became 80px - so the date chip rendered
-   inside it and the first messages hid underneath. A measured value cannot fall out of
-   step with the thing it is measuring. */
-.str-chat.str-chat {
-    --kindred-pill-space: 80px;
-}
-
-/* Nothing may hide under the pill.
-
-   Stream's only top breathing room is `padding-top: 4.5rem` on the first list item, and a
-   sibling rule CANCELS it whenever a date separator leads the list - which is most of the
-   time. So the clearance has to be stated here rather than inherited from that. Applied
-   to the scroll content, not the scroll container, so it scrolls with the messages
-   instead of pinning a permanent gap. */
-.str-chat .str-chat__message-list-scroll.str-chat__message-list-scroll {
-    padding-top: var(--kindred-pill-space);
-}
-
-/* Stream pins a duplicate date chip at top: 0 of the same relative box the pill floats
-   in, so without this they land on top of each other. Pushed below the pill, which is
-   also where it reads best - the pill says who, the chip says when. */
-.str-chat .str-chat__date-separator--floating.str-chat__date-separator--floating {
-    top: var(--kindred-pill-space);
-}
-
-/* A quoted message inside one of YOUR bubbles was rendering near-black on navy, about
-   1.3:1.
-
-   Two independent halves met. The background is --chat-bg-attachment, which for an own
-   message resolves to --str-chat__chat-bg-attachment-outgoing (accent-700 above). The
-   text comes from a Stream rule that hard-codes color: var(--str-chat__chat-text-incoming)
-   on quoted body text — it is NOT direction-aware, so a sent message still got the
-   incoming (dark) colour. The tell was the author line rendering white while the body
-   rendered black: the author correctly reads --chat-text, the body does not.
-
-   Fixed by redefining the incoming text token for the duration of an own message. This
-   works through custom-property INHERITANCE, not specificity: a declaration on the element
-   beats one inherited from .str-chat, so it never has to out-specify Stream's (0,5,0)
-   rule. Stream declares --chat-text/--chat-bg on this element but not this token, so
-   nothing here competes.
-
-   Incoming messages are untouched — their inset is bone-200 under ink-900, which passes. */
-.str-chat .str-chat__message--me {
-    --str-chat__chat-text-incoming: var(--color-surface);
-}
-
-/* The SAME illegibility, on a second element the rule above cannot reach.
-   The quote shown above the composer while you are replying is not inside a message at
-   all — its chain is composer-container > composer > compose-area > previews >
-   quoted-message-preview--own — so `.str-chat__message--me` is not an ancestor and the
-   in-bubble fix never applies. There, --own wins on source order and paints
-   --str-chat__chat-bg-outgoing (accent-600).
-
-   Two separate causes to fix, not one:
-   - the body text reads the same direction-blind --str-chat__chat-text-incoming, so the
-     token is redefined here too;
-   - the AUTHOR line has no colour rule anywhere and simply inherits --str-chat__text-primary
-     from .str-chat, so it needs a real `color` to inherit from instead. */
-.str-chat .str-chat__quoted-message-preview--own {
-    --str-chat__chat-text-incoming: var(--color-surface);
-    color: var(--color-surface);
-}
-
-/* The 2px rule down the left of a quote. Its own-message variant resolves to Stream's
-   --brand-400 (#4586ff), a blue from a palette this app does not use, sitting on our
-   navy. The class is shared by the composer preview and the in-bubble copy, so hiding it
-   covers both. */
-.str-chat .str-chat__quoted-message-indicator {
-    display: none;
-}
-
-/* The icebreaker card's "you jumped here" treatment.
-   Stream's own highlight class is applied inside MessageUI, which IcebreakerCard replaces
-   outright, so the card never receives it and has to say so itself.
+/* Points at a card the timeline has just scrolled to — a quoted message, or an icebreaker
+   someone answered.
 
    The border and shadow carry it, not the fill: tinting the whole card washed out the
    answers and the withheld-answer placeholders sitting on it, and a card that changes
    colour reads as a different KIND of card rather than the same one being pointed at.
-   A single static border swap was too easy to miss on a card the list had just scrolled
-   to, so it pulses twice and then leaves nothing behind.
+   A single static border swap was too easy to miss, so it pulses twice and leaves nothing
+   behind.
 
-   Namespaced because @keyframes names are global and resolved by source order — Stream
-   ships 22 of its own, including unprefixed ones like `rotate`. */
+   Still namespaced. @keyframes names are global and resolved by source order, which used to
+   matter because Stream shipped 22 of its own including unprefixed ones like `rotate`. That
+   collision risk left with Stream, but a name this generic is worth keeping scoped anyway. */
 @keyframes kindred-card-pulse {
     0%,
     100% {
@@ -306,8 +109,7 @@ body {
     }
 }
 
-/* 0.8s x 2 = 1.6s, matching HIGHLIGHT_MS in KindredQuotedMessage.tsx so the animation
-   ends exactly as Stream clears the highlight state. */
+/* 0.8s x 2 = 1.6s. Whatever clears the highlight state should match this. */
 .kindred-card-highlight {
     animation: kindred-card-pulse 0.8s ease-in-out 2;
 }
@@ -320,59 +122,4 @@ body {
         border-color: var(--color-accent-600);
         box-shadow: var(--shadow-hero);
     }
-}
-
-/* The line above the composer is on the CONTAINER, not on the compose area — the rounded
-   outline around the input itself is a separate, wanted border and stays.
-   border-top has no variable of its own, and its colour token is shared with that outline
-   and with every input border, so nulling the token was not an option: this has to be a
-   rule.
-
-   Thinner bar, closer to a modern mobile chat: the container's own padding is a real
-   variable, so halving it is a one-line change. The controls row's 11px comes from
-   spacing-sm, which is global — scoping the override to the controls element is what keeps
-   it off every other input and button in the app. Together: ~83px down to ~58px. */
-.str-chat .str-chat__message-composer-container.str-chat__message-composer-container {
-    border-top: none;
-
-    /* Asymmetric on purpose. The single --str-chat__message-composer-padding token pads
-       all four sides equally, and once it was small enough to give a slim bar the composer
-       sat almost flush against the bottom of the window. More room below than above lets
-       the bar sit ON the surface rather than fall off it. */
-    padding: var(--str-chat__spacing-xs) var(--str-chat__spacing-md)
-        var(--str-chat__spacing-md);
-}
-
-.str-chat .str-chat__message-composer-controls.str-chat__message-composer-controls {
-    --str-chat__spacing-sm: var(--str-chat__spacing-xs);
-
-    /* Stream uses align-items: end so the send button stays level with the LAST line of a
-       grown textarea. On a slim single-line bar - which is the state it is in almost all
-       the time - that reads as the placeholder sitting low against the buttons beside it.
-       Centred is right for the common case; a tall composer just centres its controls
-       against the block instead, which is no worse. */
-    align-items: center;
-}
-
-/* The input's own type, which was still on Stream's font stack and scale while every
-   other surface in the app is on ours. --text-body is the same token the message bubbles
-   and card copy use, so the thing you type now matches the thing it becomes.
-
-   Doubled class for specificity: Stream's rule is (0,3,0). */
-.str-chat .str-chat__textarea.str-chat__textarea textarea {
-    font-family: var(--font-poppins), sans-serif;
-    font-size: var(--text-body);
-    line-height: var(--text-body--line-height);
-}
-
-/* Stream fixes both action rows at 26px, which is shorter than the buttons they hold, so
-   the send circle and the "+" overflowed their own row and sat off-centre against the
-   text. 32px matches KindredSendButton's size-8 and lets align-items do its job. */
-.str-chat
-    .str-chat__message-composer-controls
-    .str-chat__message-composer__actions.str-chat__message-composer__actions,
-.str-chat
-    .str-chat__message-composer-controls
-    .str-chat__message-composer__additional-actions.str-chat__message-composer__additional-actions {
-    height: 32px;
 }

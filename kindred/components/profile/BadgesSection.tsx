@@ -4,10 +4,13 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { ChevronDown } from "lucide-react";
 
+import type { ProfileWithRelations } from "@/lib/dal";
+
 export function BadgesSection({
     badges: profileBadges,
 }: {
-    badges?: any[]; // Or use ProfileWithRelations["profile_badges"] if imported
+    /// The join rows the DAL already loads with their badge — see getProfile's include.
+    badges?: ProfileWithRelations["profile_badges"];
 }) {
     const cardRef = useRef<HTMLDivElement>(null);
     const [isExpanded, setIsExpanded] = useState(false);
@@ -40,9 +43,8 @@ export function BadgesSection({
         "Game Winner", "Chat Explorer", "Emoji Master", "Conversation Starter", "Friend Maker",
     ];
 
-    const unlockedNames = new Set(
-        (profileBadges || []).map((pb) => pb?.badge?.name).filter(Boolean) as string[]
-    );
+    // The include guarantees a badge on every join row, so no filtering or cast is needed.
+    const unlockedNames = new Set((profileBadges ?? []).map((row) => row.badge.name));
 
     return (
         <div ref={cardRef}>
@@ -70,8 +72,8 @@ export function BadgesSection({
                     >
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {order.map((name) => {
-                                const found = (profileBadges || []).find((pb) => pb?.badge?.name === name);
-                                const b = found?.badge || { name, description: "", icon: "" };
+                                const found = (profileBadges ?? []).find((row) => row.badge.name === name);
+                                const b = found?.badge ?? { name, description: "", icon: "" };
                                 const unlocked = unlockedNames.has(name);
                                 const unlockInfo = unlockHints[name] || b.description || "";
                                 const title = unlocked ? b.description || unlockInfo : `Locked — ${unlockInfo}`;

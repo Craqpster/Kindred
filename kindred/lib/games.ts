@@ -1,20 +1,14 @@
 import "server-only";
 
-import { initialState as connectFourInitialState } from "@/components/chat/games/connect-four";
-import { initialState as ticTacToeInitialState } from "@/components/chat/games/tic-tac-toe";
+import { GAMES, type GameType } from "@/components/chat/games/registry";
 import type { game_sessions } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
-/// Mirrors the game_sessions_game_type_check constraint in the migration - the one place
-/// both sides of that constraint have to agree, so a new game means updating exactly
-/// this list and adding the matching migration, nothing else.
-export const GAME_TYPES = ["tic-tac-toe", "connect-four"] as const;
-export type GameType = (typeof GAME_TYPES)[number];
-
-/// Shared by both routes that can create a session (immediate 1:1 start, and a group
-/// invite's first join) - one place to add a new game's starting state.
+/// The starting board for a game. Delegates to the registry, which is where a game's rules
+/// live and which the boards import too — the alternative is two lists of games that agree
+/// right up until one of them is edited.
 export function initialStateFor(gameType: GameType) {
-    return gameType === "tic-tac-toe" ? ticTacToeInitialState() : connectFourInitialState();
+    return GAMES[gameType].initialState();
 }
 
 /// Starts a new game session. The DB enforces at most one in_progress session per PAIR
@@ -24,7 +18,7 @@ export function initialStateFor(gameType: GameType) {
 /// message atomic: it's a plain unique column, so two people racing to join the same
 /// invite are really racing to insert the same value here, and only one create() wins.
 export async function createGameSession(
-    channelCid: string,
+    conversationId: string,
     gameType: string,
     playerOneId: string,
     playerTwoId: string,
@@ -33,7 +27,7 @@ export async function createGameSession(
 ) {
     return prisma.game_sessions.create({
         data: {
-            channel_cid: channelCid,
+            conversation_id: conversationId,
             game_type: gameType,
             player_one_id: playerOneId,
             player_two_id: playerTwoId,
@@ -74,10 +68,10 @@ export async function getGameSession(sessionId: string) {
 /// what GameControllerBar checks to decide between "start a game" and "resume mine".
 /// Normally zero or one, but nothing stops the same person playing two different
 /// partners in the same group at once, so this is a list, not a single lookup.
-export async function getMyActiveGameSessions(channelCid: string, userId: string) {
+export async function getMyActiveGameSessions(conversationId: string, userId: string) {
     const sessions = await prisma.game_sessions.findMany({
         where: {
-            channel_cid: channelCid,
+            conversation_id: conversationId,
             status: "in_progress",
             OR: [{ player_one_id: userId }, { player_two_id: userId }],
         },
