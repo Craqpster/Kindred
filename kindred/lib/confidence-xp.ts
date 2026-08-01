@@ -5,7 +5,7 @@
 /// Split out of lib/confidence.ts, which is `server-only`: the level popover tells the
 /// user how XP is earned, and those numbers have to be the ones actually being awarded
 /// rather than a copy in the markup that quietly drifts. Importing them from confidence.ts
-/// would drag Prisma and the Stream server client into the browser bundle.
+/// would drag Prisma into the browser bundle.
 export const XP_PER_MESSAGE = 1;
 export const XP_PER_PROMPT_ANSWER = 3;
 
@@ -27,6 +27,18 @@ const DAILY_BONUS_BASE_MESSAGES = 5;
 const DAILY_BONUS_MAX_MESSAGES = 15;
 const DAILY_BONUS_BASE_XP = 5;
 const DAILY_BONUS_XP_PER_LEVEL = 2;
+
+/// Midnight UTC for today — the key `daily_chat_activity` and `daily_bonus_awards` are
+/// bucketed by, and therefore the one the badge has to read back with.
+///
+/// UTC rather than either participant's local day so that two people in different timezones
+/// are always working toward the same bucket. Lives here, next to the amounts, because the
+/// award path and the read path have to agree on which day "today" is; two copies of this
+/// would differ for a few hours around midnight and be very hard to see.
+export function utcDay(): Date {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
 
 /// Qualifying messages EACH member must send today for the chat to earn its bonus.
 export function dailyBonusThreshold(chatLevel: number): number {

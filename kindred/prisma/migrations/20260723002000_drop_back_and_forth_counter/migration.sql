@@ -1,0 +1,2 @@
+-- RECONSTRUCTED, and deliberately empty - the other half of the reverted experiment.
+-- See 20260723000000_add_back_and_forth_counter for the full explanation.

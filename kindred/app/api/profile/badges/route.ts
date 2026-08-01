@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
-import { streamServerClient } from "@/lib/stream";
 import { tierForPoints } from "@/lib/confidence-tiers";
 import { hasStartedAGame, hasWonAGame } from "@/lib/games";
 
@@ -70,7 +69,7 @@ export async function PATCH() {
   }
 }
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { userId } = await verifySession();
 
@@ -150,76 +149,59 @@ export async function GET(req: Request) {
       console.warn("Game checks failed", e);
     }
 
-    // Stream-based checks (group messages, channels visited, emoji messages, chats started)
+    // Chat-based checks. These used to pull up to 1000 channels out of Stream with their
+    // message state attached and loop over them in memory; the counts are now four queries
+    // against our own tables, and "Emoji Master" went from approximate (it could only see
+    // whatever messages happened to be loaded in channel state) to exact.
     try {
-      const channels = await streamServerClient.queryChannels({ members: { $in: [userId] } }, { last_message_at: -1 }, { state: true, limit: 1000 });
+      const [conversationCount, groupMessage, chatsStarted, emojiCount] = await Promise.all([
+        // Chat Explorer: been in 5 conversations.
+        prisma.conversation_members.count({ where: { profile_id: userId } }),
 
-      // Chat Explorer: visited 5 unique rooms
-      try {
-        const uniqueRooms = channels.length;
-        const explorerId = findBadge("Chat Explorer");
-        if (explorerId && uniqueRooms >= 5 && !unlockedSet.has(explorerId)) toUnlock.push(explorerId);
-      } catch (e) {
-        console.warn("Chat explorer check failed", e);
+        // Community Helper: said something in a group, not just a DM.
+        prisma.messages.findFirst({
+          where: { sender_id: userId, conversation: { kind: "group" } },
+          select: { id: true },
+        }),
+
+        // Conversation Starter: waves this user sent. requested_by survives being accepted
+        // only on conversations still pending, so this counts openers that stayed
+        // unanswered - matching the old "channels created by me" reading closely enough,
+        // and worth revisiting if the badge should mean "conversations I opened, ever".
+        prisma.conversations.count({ where: { requested_by: userId } }),
+
+        // Emoji Master: 50 messages that are nothing but emoji. The regex lives in Postgres
+        // rather than in a loop here, so it never loads 50 messages' worth of rows to count
+        // them.
+        prisma.$queryRaw<{ count: bigint }[]>`
+          SELECT count(*) AS count FROM messages
+          WHERE sender_id = ${userId}::uuid
+            AND deleted_at IS NULL
+            AND btrim(body) ~ '^[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\s]+$'
+        `,
+      ]);
+
+      const explorerId = findBadge("Chat Explorer");
+      if (explorerId && conversationCount >= 5 && !unlockedSet.has(explorerId)) {
+        toUnlock.push(explorerId);
       }
 
-      // Community Helper: sent message in group chat (member_count > 2)
-      try {
-        const helperId = findBadge("Community Helper");
-        if (helperId && !unlockedSet.has(helperId)) {
-          let sentInGroup = false;
-          for (const ch of channels) {
-            const memberCount = (ch.data?.member_count) || (ch.state?.members ? Object.keys(ch.state.members).length : null);
-            if (memberCount && memberCount > 2) {
-              const msgs = (ch.state && (ch.state.messages as any[])) || [];
-              if (msgs.some((m) => m.user && m.user.id === userId)) { sentInGroup = true; break; }
-            }
-          }
-          if (sentInGroup) toUnlock.push(helperId);
-        }
-      } catch (e) {
-        console.warn("Community helper check failed", e);
+      const helperId = findBadge("Community Helper");
+      if (helperId && groupMessage && !unlockedSet.has(helperId)) toUnlock.push(helperId);
+
+      const starterId = findBadge("Conversation Starter");
+      if (starterId && chatsStarted >= 10 && !unlockedSet.has(starterId)) {
+        toUnlock.push(starterId);
       }
 
-      // Conversation Starter: number of channels created_by this user (approx)
-      try {
-        const starterId = findBadge("Conversation Starter");
-        if (starterId && !unlockedSet.has(starterId)) {
-          let started = 0;
-          for (const ch of channels) {
-            const createdBy = ch.data?.created_by_id;
-            if (createdBy === userId) started += 1;
-          }
-          if (started >= 10) toUnlock.push(starterId);
-        }
-      } catch (e) {
-        console.warn("Conversation starter check failed", e);
+      const emojiId = findBadge("Emoji Master");
+      if (emojiId && Number(emojiCount[0]?.count ?? 0) >= 50 && !unlockedSet.has(emojiId)) {
+        toUnlock.push(emojiId);
       }
-
-      // Emoji Master: approx count messages containing emoji by this user across channels
-      try {
-        const emojiId = findBadge("Emoji Master");
-        if (emojiId && !unlockedSet.has(emojiId)) {
-          let emojiCount = 0;
-          const emojiOnly = /^\p{Extended_Pictographic}+$|^[\p{Extended_Pictographic}\p{Emoji_Presentation}\s]+$/u;
-          for (const ch of channels) {
-            const msgs = (ch.state && (ch.state.messages as any[])) || [];
-            for (const m of msgs) {
-              if (m.user && m.user.id === userId && typeof m.text === 'string') {
-                if (emojiOnly.test(m.text.trim())) emojiCount += 1;
-                if (emojiCount >= 50) break;
-              }
-            }
-            if (emojiCount >= 50) break;
-          }
-          if (emojiCount >= 50) toUnlock.push(emojiId);
-        }
-      } catch (e) {
-        console.warn("Emoji master check failed", e);
-      }
-
     } catch (e) {
-      console.warn("Stream checks failed", e);
+      // Badges are decoration: a failed check should leave the profile page alone rather
+      // than take it down. Same posture the Stream version had.
+      console.warn("Chat badge checks failed", e);
     }
 
     // Insert unlocks into profile_badges

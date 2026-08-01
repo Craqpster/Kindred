@@ -1,31 +1,30 @@
 "use client";
 
 import { ReactNode } from "react";
-import ChatConnectionProvider from "./ChatConnectionProvider";
+
+import ChatRealtimeProvider from "@/components/chat/ChatRealtimeProvider";
 import { ToastProvider } from "@/components/ui/ToastStack";
+import type { ChatConversation } from "@/lib/chat/types";
 
-type Profile = {
-    id: string;           
-    username: string;
-    avatar_id?: string | null;   // Allow string, undefined, or null
-    avatar_seed?: string | null; // Allow string, undefined, or null
-};
-
+/// Wraps the whole authenticated shell.
+///
+/// The chat subscription lives up here rather than on /chats because unread badges and
+/// new-message toasts have to keep working from /meet and /me. That was true of Stream's
+/// connection too, and moving it down is what made the old one racy.
 export default function AppProviders({
-    profile,
+    userId,
+    conversations,
     children,
 }: {
-    profile: Profile;
+    userId: string;
+    conversations: ChatConversation[];
     children: ReactNode;
 }) {
     return (
         <ToastProvider>
-            <ChatConnectionProvider
-                userId={profile.id}
-                username={profile.username}
-            >
+            <ChatRealtimeProvider userId={userId} initialConversations={conversations}>
                 {children}
-            </ChatConnectionProvider>
+            </ChatRealtimeProvider>
         </ToastProvider>
     );
 }

@@ -25,7 +25,16 @@ export function getChatLevel(xp: number) {
     // in floating point - a value that should land exactly on a boundary can come back as
     // 2.9999... and silently floor to the level below. Chat XP is small enough that the
     // loop costs nothing and states the rule it implements.
-    const safeXp = Math.max(0, Math.floor(xp));
+    //
+    // Number.isFinite before the clamp, not just Math.max: Math.floor(NaN) is NaN and
+    // Math.max(0, NaN) is NaN too, so clamping alone lets both NaN and Infinity through, and
+    // they fail in opposite ways. NaN fails quietly — every `NaN >= x` is false, so the loop
+    // settles on level 1 and returns a NaN xpIntoLevel, which reaches the badge as a NaN
+    // strokeDashoffset and simply draws no ring. Infinity does not fail quietly at all:
+    // `Infinity >= x` is always true, so the loop below never terminates and takes the render
+    // with it. Neither is reachable from an integer column today; this is one line to make
+    // sure neither ever becomes reachable. See scripts/verify-xp.ts.
+    const safeXp = Number.isFinite(xp) ? Math.max(0, Math.floor(xp)) : 0;
 
     let level = 1;
     while (safeXp >= xpAtLevelStart(level + 1)) level++;

@@ -6,11 +6,11 @@ import {
     dailyBonusThreshold,
     dailyBonusXp,
     DAILY_MESSAGE_XP_CAP,
+    utcDay,
     XP_PER_MESSAGE,
     XP_PER_PROMPT_ANSWER,
 } from "@/lib/confidence-xp";
 import { prisma } from "@/lib/prisma";
-import { streamServerClient } from "@/lib/stream";
 import { tierForPoints } from "@/lib/confidence-tiers";
 
 // Below this, a message doesn't count as "real effort" - filters out "ok", "lol",
@@ -46,14 +46,6 @@ export type AwardResult = {
     tierUp: boolean;
 };
 
-/// Midnight UTC for today, the key `daily_chat_activity` and `daily_bonus_awards` are
-/// bucketed by. UTC rather than either participant's local day so that two people in
-/// different timezones are always working toward the same bucket.
-function utcDay(): Date {
-    const now = new Date();
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
-
 /// Awards XP to both profiles.confidence_points (the sender's own, global, per-person
 /// counter) AND channel_xp (a single number shared by everyone in that specific
 /// conversation) when a just-sent message is substantial (see MIN_MESSAGE_LENGTH) AND
@@ -75,36 +67,57 @@ function utcDay(): Date {
 /// `promptId` marks this as a reply to an icebreaker (IcebreakerCard.tsx), which should
 /// always count even if short, since responding to one at all is the "real effort" signal
 /// rather than length or turn-taking. That exemption is granted at most once per person
-/// per prompt, and only after Stream confirms the message really is that person's reply
-/// to that prompt - see promptReplyIsUnclaimed. A second answer to the same prompt, or a
-/// forged one, falls back to the normal checks rather than being refused outright.
-export async function awardConfidenceForMessage(
-    userId: string,
-    channelCid: string,
-    messageId: string,
-    text: string,
-    promptId?: string,
-): Promise<AwardResult | null> {
-    // Pass channelCid down so we can check if they already answered a prompt in this chat today
+/// per prompt, and at most once per chat per day - see promptReplyIsUnclaimed. A second
+/// answer falls back to the normal checks rather than being refused outright.
+///
+/// Only ever called from lib/chat/mutations.ts's sendMessage, which has just written the
+/// message itself. That is what retired the old anti-forgery step: this used to be reachable
+/// through POST /api/confidence with a body the caller chose, so it had to fetch the message
+/// back out of Stream and prove the claim before paying anything. There is no longer a
+/// request to forge.
+///
+/// Named arguments: this took five positional strings, and passing a conversation id where a
+/// Stream channel id belonged type-checked cleanly and wrote to the wrong column. Nothing
+/// about `(string, string, string, string, string?)` could have caught that.
+export async function awardConfidenceForMessage({
+    userId,
+    conversationId,
+    messageId,
+    text,
+    promptId,
+}: {
+    userId: string;
+    conversationId: string;
+    messageId: string;
+    text: string;
+    promptId?: string;
+}): Promise<AwardResult | null> {
     const guaranteed = promptId
-        ? await promptReplyIsUnclaimed(userId, messageId, promptId, channelCid)
+        ? await promptReplyIsUnclaimed({ userId, promptId, conversationId })
         : false;
 
-    if (!guaranteed && !(await isGenuineBackAndForth(channelCid, messageId, userId, text))) {
+    if (
+        !guaranteed &&
+        !(await isGenuineBackAndForth({ conversationId, messageId, userId, text }))
+    ) {
         return null;
     }
 
     const day = utcDay();
-    const members = await channelMemberIds(channelCid);
+    const members = await conversationMemberIds(conversationId);
 
     return prisma.$transaction(async (tx) => {
         // Counted before anything is paid...
         const activity = await tx.daily_chat_activity.upsert({
             where: {
-                channel_cid_profile_id_day: { channel_cid: channelCid, profile_id: userId, day },
+                conversation_id_profile_id_day: {
+                    conversation_id: conversationId,
+                    profile_id: userId,
+                    day,
+                },
             },
             create: {
-                channel_cid: channelCid,
+                conversation_id: conversationId,
                 profile_id: userId,
                 day,
                 qualifying_messages: 1,
@@ -121,7 +134,7 @@ export async function awardConfidenceForMessage(
               : 0;
 
         const bonus = await claimDailyBonus(tx, {
-            channelCid,
+            conversationId,
             day,
             members,
             senderId: userId,
@@ -160,8 +173,8 @@ export async function awardConfidenceForMessage(
         }
 
         const channel = await tx.channel_xp.upsert({
-            where: { channel_cid: channelCid },
-            create: { channel_cid: channelCid, xp: messageXp },
+            where: { conversation_id: conversationId },
+            create: { conversation_id: conversationId, xp: messageXp },
             update: { xp: { increment: messageXp } },
             select: { xp: true },
         });
@@ -179,19 +192,20 @@ export async function awardConfidenceForMessage(
     });
 }
 
-/// Everyone in the channel, from Stream rather than from our own tables.
+/// Everyone in the conversation.
 ///
-/// Stream owns membership: a 1:1 has no row in group_members at all, so asking Postgres
-/// would silently report an empty channel and hand out the bonus to nobody. The Kindred
-/// bot posts prompts but is never a member, so nothing needs filtering out.
-async function channelMemberIds(channelCid: string): Promise<string[]> {
-    const [channelType, channelId] = channelCid.split(":");
-    const channel = streamServerClient.channel(channelType, channelId);
-    const { members } = await channel.query({ members: { limit: 100 } });
+/// This used to be an API call to Stream, with a comment explaining that Postgres could not
+/// answer it - a DM had no row in group_members, so asking our own database reported an empty
+/// room and paid the bonus to nobody. conversation_members covers DMs and groups alike, so
+/// the question is now a single indexed read. The Kindred bot posts prompts but is never a
+/// member, so nothing needs filtering out.
+async function conversationMemberIds(conversationId: string): Promise<string[]> {
+    const members = await prisma.conversation_members.findMany({
+        where: { conversation_id: conversationId },
+        select: { profile_id: true },
+    });
 
-    return (members ?? [])
-        .map((member) => member.user_id ?? member.user?.id)
-        .filter((id): id is string => !!id);
+    return members.map((member) => member.profile_id);
 }
 
 /// Pays the chat's "everyone showed up today" bonus, once, if it has just been earned.
@@ -202,13 +216,13 @@ async function channelMemberIds(channelCid: string): Promise<string[]> {
 async function claimDailyBonus(
     tx: Prisma.TransactionClient,
     {
-        channelCid,
+        conversationId,
         day,
         members,
         senderId,
         senderTally,
     }: {
-        channelCid: string;
+        conversationId: string;
         day: Date;
         members: string[];
         senderId: string;
@@ -220,7 +234,7 @@ async function claimDailyBonus(
     // Read the level BEFORE this award lands, so a bonus large enough to level the chat up
     // cannot move the goalposts it was just measured against.
     const channel = await tx.channel_xp.findUnique({
-        where: { channel_cid: channelCid },
+        where: { conversation_id: conversationId },
         select: { xp: true },
     });
     const chatLevel = getChatLevel(channel?.xp ?? 0).level;
@@ -230,7 +244,7 @@ async function claimDailyBonus(
     if (senderTally < threshold) return null;
 
     const tallies = await tx.daily_chat_activity.findMany({
-        where: { channel_cid: channelCid, day, profile_id: { in: members } },
+        where: { conversation_id: conversationId, day, profile_id: { in: members } },
         select: { profile_id: true, qualifying_messages: true },
     });
 
@@ -246,21 +260,29 @@ async function claimDailyBonus(
 
     const perMember = dailyBonusXp(chatLevel);
 
-    try {
-        // The insert is the claim. Two members finishing at the same instant both reach
-        // here; the composite primary key means exactly one wins and the other reads as
-        // already-awarded, the same guarantee promptReplyIsUnclaimed relies on.
-        await tx.daily_bonus_awards.create({
-            data: { channel_cid: channelCid, day, xp_awarded: perMember },
-        });
-    } catch {
-        return null;
-    }
+    // The insert is still the claim: the composite primary key means two members finishing at
+    // the same instant cannot both win, and count tells us which one this was.
+    //
+    // skipDuplicates rather than create-and-catch, and the difference is not stylistic.
+    // create() raises on the conflict, and **catching a Postgres error does not un-abort its
+    // transaction** — every statement after it fails with 25P02, which here means the whole
+    // XP award. Since this function only reaches the claim once the chat has earned its bonus,
+    // the conflict is not an edge case: it happened on every qualifying message for the rest
+    // of that day, and the award failed silently each time.
+    //
+    // skipDuplicates compiles to ON CONFLICT DO NOTHING, which resolves the race inside
+    // Postgres and never raises, so the transaction survives to pay out the rest.
+    const claim = await tx.daily_bonus_awards.createMany({
+        data: [{ conversation_id: conversationId, day, xp_awarded: perMember }],
+        skipDuplicates: true,
+    });
+
+    if (claim.count === 0) return null;
 
     // The chat's shared total moves once...
     await tx.channel_xp.upsert({
-        where: { channel_cid: channelCid },
-        create: { channel_cid: channelCid, xp: perMember },
+        where: { conversation_id: conversationId },
+        create: { conversation_id: conversationId, xp: perMember },
         update: { xp: { increment: perMember } },
     });
 
@@ -281,59 +303,38 @@ async function claimDailyBonus(
     return { perMember };
 }
 
-/// Whether this really is `userId`'s first answer to `promptId`, claiming it if so.
+/// Whether this really is `userId`'s first answer to `promptId` today, claiming it if so.
 ///
-/// Everything the caller knows comes from the request body, which is attacker-controlled:
-/// on its own, "this was a prompt reply" is a claim anyone can make about any message to
-/// mint the guaranteed award. So the message is fetched back from Stream - the system of
-/// record - and has to actually be this user's, actually be a prompt_response, and
-/// actually name this prompt.
+/// Two separate limits, and they are not the same rule. prompt_awards stops one prompt from
+/// ever paying the same person twice - a guarantee that has to hold forever, which is why it
+/// is a row and not a query. The daily check stops someone farming the exemption by asking
+/// for a fresh prompt every few minutes and answering each one.
 ///
-/// The insert is the claim: the composite primary key means a replayed or repeated award
-/// loses the race and lands here as P2002, whether it arrives a second later or a week.
-async function promptReplyIsUnclaimed(
-    userId: string,
-    messageId: string,
-    promptId: string,
-    channelCid: string
-): Promise<boolean> {
-    try {
-        const { message } = await streamServerClient.getMessage(messageId);
+/// The insert IS the claim: the composite primary key means a repeat loses the race and
+/// lands here as a unique violation, whether it arrives a second later or a week.
+async function promptReplyIsUnclaimed({
+    userId,
+    promptId,
+    conversationId,
+}: {
+    userId: string;
+    promptId: string;
+    conversationId: string;
+}): Promise<boolean> {
+    const alreadyAnsweredToday = await prisma.messages.findFirst({
+        where: {
+            conversation_id: conversationId,
+            sender_id: userId,
+            kind: "prompt_response",
+            created_at: { gte: utcDay() },
+            // The message being scored was written moments ago and is already in the table,
+            // so it has to be excluded or it would count as its own earlier answer.
+            prompt_id: { not: promptId },
+        },
+        select: { id: true },
+    });
 
-        if (
-            message.user?.id !== userId ||
-            message.messageType !== "prompt_response" ||
-            message.promptId !== promptId
-        ) {
-            return false;
-        }
-
-        // --- DEDUPE LOGIC ---
-        // Check if the user already earned XP for ANY icebreaker in this chat today
-        const [channelType, channelId] = channelCid.split(":");
-        const channel = streamServerClient.channel(channelType, channelId);
-        const today = utcDay();
-        
-        // Grab recent messages to verify daily task completion
-        const { messages } = await channel.query({
-            messages: { limit: 50 } 
-        });
-        
-        const alreadyAnsweredToday = messages.some(m => 
-            m.id !== messageId && // Exclude the message we are currently processing
-            m.user?.id === userId && 
-            m.messageType === "prompt_response" &&
-            new Date(m.created_at || "").getTime() >= today.getTime()
-        );
-
-        if (alreadyAnsweredToday) {
-            return false; // Task already completed today, deny bonus XP
-        }
-        // ------------------------
-
-    } catch {
-        return false;
-    }
+    if (alreadyAnsweredToday) return false;
 
     try {
         await prisma.prompt_awards.create({
@@ -341,26 +342,42 @@ async function promptReplyIsUnclaimed(
         });
         return true;
     } catch {
-        // Already claimed this exact prompt previously (P2002 on the composite key).
+        // Already claimed this exact prompt before (a unique violation on the composite key).
         return false;
     }
 }
 
-async function isGenuineBackAndForth(
-    channelCid: string,
-    messageId: string,
-    userId: string,
-    text: string,
-): Promise<boolean> {
+/// A message counts when it took some effort AND answers someone - not when it is the fifth
+/// thing said into a silence.
+///
+/// One indexed read now. This used to pull the last five messages out of Stream over HTTP,
+/// which was the single clearest sign that the interactions and the score lived in two
+/// different systems.
+async function isGenuineBackAndForth({
+    conversationId,
+    messageId,
+    userId,
+    text,
+}: {
+    conversationId: string;
+    messageId: string;
+    userId: string;
+    text: string;
+}): Promise<boolean> {
     if (text.trim().length < MIN_MESSAGE_LENGTH) return false;
 
-    const [channelType, channelId] = channelCid.split(":");
-    const channel = streamServerClient.channel(channelType, channelId);
-    const { messages } = await channel.query({ messages: { limit: 5 } });
+    const previousMessage = await prisma.messages.findFirst({
+        where: {
+            conversation_id: conversationId,
+            // Everything before the message being scored, which is already written.
+            id: { not: messageId },
+            deleted_at: null,
+        },
+        orderBy: { created_at: "desc" },
+        select: { sender_id: true },
+    });
 
-    // Messages come back oldest-first. Exclude the message we're scoring itself, then
-    // the last one remaining is the most recent message that came before it.
-    const previousMessage = messages.filter((m) => m.id !== messageId).at(-1);
-
-    return !!previousMessage && previousMessage.user?.id !== userId;
+    // The bot's icebreaker counts as somebody else having spoken, which is the point of
+    // posting one into a quiet chat.
+    return !!previousMessage && previousMessage.sender_id !== userId;
 }

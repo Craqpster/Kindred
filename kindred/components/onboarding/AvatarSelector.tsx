@@ -6,6 +6,13 @@ import { motion } from "motion/react";
 import { ChevronDown, Check, ChevronLeft, ChevronRight, Shuffle } from "lucide-react";
 import { AVATAR_STYLES, AVATAR_SEED_OPTIONS } from "./constants";
 
+// Outside the component because Math.random() is impure, and the React Compiler rightly
+// refuses to reason about an impure call sitting in a component body — even one that only
+// ever runs from a click handler.
+function randomSeed(): string {
+    return Math.random().toString(36).slice(2, 10);
+}
+
 export function AvatarLookSelector({ 
     avatarStyle, 
     setAvatarStyle, 
@@ -21,7 +28,7 @@ export function AvatarLookSelector({
     const [seeds, setSeeds] = useState<string[]>(AVATAR_SEED_OPTIONS);
 
     const handleShuffleLook = () => {
-        const newSeed = Math.random().toString(36).slice(2, 10);
+        const newSeed = randomSeed();
         setSeeds(prev => [newSeed, ...prev]);
         setAvatarSeed(newSeed);
         setTimeout(() => {

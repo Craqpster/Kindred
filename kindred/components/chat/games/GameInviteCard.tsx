@@ -1,187 +1,176 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { CircleDashed, Gamepad2, Hash } from "lucide-react";
-import type { Channel, LocalMessage } from "stream-chat";
-import { useChatContext } from "stream-chat-react";
+import { Gamepad2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
-import type { GameSession } from "@/components/chat/games/GameDefinition";
-import GameModal from "@/components/chat/games/GameModal";
-import { GAMES } from "@/components/chat/games/registry";
+import {
+    joinGame,
+    loadGame,
+    loadGameByInvite,
+    playGameMove,
+    type GameSessionView,
+} from "@/app/(app)/chats/game-actions";
+import ConnectFourBoard from "@/components/chat/games/ConnectFourBoard";
+import TicTacToeBoard from "@/components/chat/games/TicTacToeBoard";
+import { GAMES, isGameType } from "@/components/chat/games/registry";
+import type { ConnectFourState } from "@/components/chat/games/connect-four";
+import type { TicTacToeState } from "@/components/chat/games/tic-tac-toe";
+import { useChannel } from "@/components/chat/useConversationChannel";
 
-/// Renders a game_invite message (posted by GameControllerBar.tsx or AttachmentMenu) as a
-/// GamePigeon-style card: open while nobody has joined, resolved once someone has.
+/// A game_invite message: an invitation until somebody takes it, then the board itself.
+///
+/// The board lives in the card rather than in a modal. A game here is a thing two people are
+/// doing inside a conversation, not an app they leave the conversation to open — and keeping
+/// it in the timeline means the messages either side of it stay visible while you play.
 export default function GameInviteCard({
-    message,
-    channel,
+    messageId,
+    gameType,
+    senderId,
+    senderName,
+    userId,
 }: {
-    message: LocalMessage;
-    channel: Channel;
+    messageId: string;
+    gameType: string;
+    /// Who posted the invite. They are player one and they move first.
+    senderId: string | null;
+    senderName: string;
+    userId: string;
 }) {
-    const { client } = useChatContext();
-    const [modalOpen, setModalOpen] = useState(false);
-    const [joining, setJoining] = useState(false);
-    const [joinError, setJoinError] = useState<string | null>(null);
-    const [optimistic, setOptimistic] = useState<{ gameSessionId: string; gameJoinerId: string } | null>(null);
-    const [gameResult, setGameResult] = useState<"won" | "lost" | null>(null);
+    const { reportMove, onMove } = useChannel();
+    const [session, setSession] = useState<GameSessionView | null>(null);
+    const [busy, setBusy] = useState(false);
 
-    const game = GAMES[message.gameType as keyof typeof GAMES];
-    const starterId = message.user?.id;
-    const starterName = message.user?.name ?? "Someone";
-    const isStarter = client.userID === starterId;
+    const refresh = useCallback(async () => {
+        if (!session) return;
+        const result = await loadGame(session.id);
+        if (result.ok) setSession(result.session);
+    }, [session]);
 
-    // Single source of truth: server-confirmed state (message.*) wins once it arrives,
-    // the optimistic values fill the gap for the joiner before the WS event lands.
-    const resolvedSessionId = message.gameSessionId ?? optimistic?.gameSessionId;
-    const resolvedJoinerId = message.gameJoinerId ?? optimistic?.gameJoinerId;
-    const resolved = !!resolvedSessionId;
+    // The other player moved. The move is already saved by then, so this is a nudge to re-read
+    // rather than the move itself — a dropped broadcast leaves the board stale until its next
+    // load, never wrong.
+    useEffect(() => {
+        return onMove((sessionId) => {
+            if (sessionId === session?.id) void refresh();
+        });
+    }, [onMove, session?.id, refresh]);
 
-    const handleJoin = async () => {
-        if (!starterId) return;
-        setJoining(true);
-        setJoinError(null);
+    // A game may already be under way — started from another tab, or before a reload. This is
+    // the read-only lookup on purpose: asking whether a game exists must not start one, which
+    // is why joinGame is reached only from the button.
+    useEffect(() => {
+        let cancelled = false;
+
+        void loadGameByInvite(messageId).then((result) => {
+            if (!cancelled && result.ok) setSession(result.session);
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [messageId]);
+
+    if (!isGameType(gameType)) return null;
+
+    const game = GAMES[gameType];
+    const isMine = senderId === userId;
+
+    const join = async () => {
+        if (busy) return;
+        setBusy(true);
         try {
-            const res = await fetch("/api/games/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    channelCid: channel.cid,
-                    gameType: message.gameType,
-                    starterId,
-                    messageId: message.id,
-                }),
-            });
-            const data = await res.json().catch(() => null);
-
-            if (res.ok) {
-                setOptimistic({ gameSessionId: data.gameSessionId, gameJoinerId: data.gameJoinerId });
-                setModalOpen(true);
-            } else {
-                setJoinError(data?.error ?? "Couldn't join that game");
-            }
+            const result = await joinGame(messageId);
+            if (result.ok) setSession(result.session);
         } finally {
-            setJoining(false);
+            setBusy(false);
         }
     };
 
-    if (!game) return null;
-
-    const joinerName = resolvedJoinerId
-        ? (channel.state.members[resolvedJoinerId]?.user?.name ?? "Someone")
-        : null;
-
-    const session: GameSession | null = useMemo(
-        () =>
-            resolved
-                ? {
-                    id: resolvedSessionId!,
-                    game_type: message.gameType!,
-                    player_one_id: starterId!,
-                    player_two_id: resolvedJoinerId!,
-                }
-                : null,
-        [resolved, resolvedSessionId, resolvedJoinerId, message.gameType, starterId],
-    );
-
-    useEffect(() => {
-        if (!session) return;
-
-        fetch(`/api/games/${session.id}`)
-            .then((res) => res.json())
-            .then((data) => {
-                const winner = data.session?.state?.winner;
-
-                if (!winner || winner === "draw") {
-                    return;
-                }
-
-                const mySymbol =
-                    client.userID === session.player_one_id ? "X" : "O";
-
-                setGameResult(winner === mySymbol ? "won" : "lost");
-            })
-            .catch(() => {});
-    }, [session, client.userID]);
-
-    const SpecificGameIcon = message.gameType === "tic-tac-toe" ? Hash : CircleDashed;
+    const move = async (index: number) => {
+        if (!session || busy) return;
+        setBusy(true);
+        try {
+            const result = await playGameMove({ sessionId: session.id, move: index });
+            if (result.ok) {
+                setSession(result.session);
+                reportMove(session.id);
+            }
+        } finally {
+            setBusy(false);
+        }
+    };
 
     return (
-        <div className="my-3 flex justify-center">
-            <div className="w-full max-w-md rounded-card border border-bone-300 bg-surface p-4 shadow-card">
-
+        <li className="my-3 flex justify-center">
+            <div className="w-full max-w-sm rounded-card border border-bone-300 bg-surface p-4 shadow-card">
                 <p className="flex items-center gap-1.5 text-label uppercase text-ink-600">
                     <Gamepad2 size={13} strokeWidth={1.5} aria-hidden />
-                    Game Invite • {game.label}
+                    {game.label}
                 </p>
 
-                <p className="mt-1.5 text-body font-medium text-ink-900">
-                    {resolved ? (
-                        <>{starterName} vs {joinerName}</>
-                    ) : isStarter ? (
-                        <>You started a game of {game.label}.</>
-                    ) : (
-                        <>{starterName} challenged the chat to a game!</>
-                    )}
-                </p>
+                {!session ? (
+                    <>
+                        <p className="mt-1.5 text-body font-medium text-ink-900">
+                            {isMine ? "Waiting for someone to join" : `${senderName} wants to play`}
+                        </p>
 
-                <div className="mt-3 flex items-center justify-between gap-3">
-                    <p className="flex min-w-0 items-center gap-2 text-meta text-ink-600">
-                        <SpecificGameIcon size={16} strokeWidth={1.5} className="text-metro-blue" />
-                        <span className="truncate">
-                            {gameResult === "won"
-                                ? "Victory!"
-                                : gameResult === "lost"
-                                ? "Defeat"
-                                : resolved
-                                    ? "Game in progress"
-                                    : "First to join plays"}
-                        </span>
-                    </p>
-
-                    <span className="flex shrink-0 items-center gap-2">
-                        {resolved ? (
+                        {/* The poster gets no button. Both players come from the invite — one
+                            posted it, one takes it — so joining your own would be playing
+                            yourself, and the server refuses it anyway. */}
+                        {!isMine && (
                             <button
                                 type="button"
-                                onClick={() => setModalOpen(true)}
-                                className="cursor-pointer rounded-full bg-metro-blue px-4 py-1.5 text-meta font-medium text-white transition-colors hover:bg-metro-blue/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-metro-blue/40"
+                                onClick={join}
+                                disabled={busy}
+                                className="mt-3 rounded-full bg-accent-600 px-4 py-1.5 text-label font-medium text-surface transition-colors hover:bg-accent-700 disabled:opacity-60"
                             >
-                                {gameResult === "won"
-                                    ? "I Won 🏆"
-                                    : gameResult === "lost"
-                                    ? "I Lost"
-                                    : "Open game"}
-                            </button>
-                        ) : isStarter ? (
-                            <button
-                                type="button"
-                                disabled
-                                className="cursor-not-allowed rounded-full bg-bone-200 px-4 py-1.5 text-meta font-medium text-ink-500"
-                            >
-                                Waiting…
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleJoin}
-                                disabled={joining}
-                                className="cursor-pointer rounded-full bg-metro-blue px-4 py-1.5 text-meta font-medium text-white transition-colors hover:bg-metro-blue/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-metro-blue/40 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {joining ? "Joining…" : "Join"}
+                                {busy ? "Joining…" : "Join game"}
                             </button>
                         )}
-                    </span>
-                </div>
+                    </>
+                ) : (
+                    <>
+                        <p className="mt-1.5 mb-3 text-meta text-ink-600">
+                            {statusLine(session, userId)}
+                        </p>
 
-                {joinError && (
-                    <p role="alert" className="mt-3 text-meta text-red-700">
-                        {joinError}
-                    </p>
-                )}
-
-                {modalOpen && session && (
-                    <GameModal session={session} channel={channel} onClose={() => setModalOpen(false)} />
+                        {gameType === "tic-tac-toe" ? (
+                            <TicTacToeBoard
+                                state={session.state as TicTacToeState}
+                                yourTurn={session.yourTurn && !busy}
+                                onMove={move}
+                            />
+                        ) : (
+                            <ConnectFourBoard
+                                state={session.state as ConnectFourState}
+                                yourTurn={session.yourTurn && !busy}
+                                onMove={move}
+                            />
+                        )}
+                    </>
                 )}
             </div>
-        </div>
+        </li>
     );
+}
+
+/// Whose turn it is, or how it ended.
+///
+/// Each game names its players in its own vocabulary — "X"/"O" and 1/2 — and both put player
+/// one first. That one fact is enough to turn a winner into a profile id, and a profile id
+/// into "You won" rather than a symbol the reader has to decode.
+function statusLine(session: GameSessionView, userId: string): string {
+    const winner = (session.state as { winner?: unknown }).winner;
+
+    if (winner === "draw") return "A draw.";
+
+    if (winner !== null && winner !== undefined) {
+        const winnerId =
+            winner === "X" || winner === 1 ? session.playerOneId : session.playerTwoId;
+        return winnerId === userId ? "You won." : "You lost.";
+    }
+
+    if (session.status !== "in_progress") return "This game was abandoned.";
+
+    return session.yourTurn ? "Your turn." : "Their turn.";
 }

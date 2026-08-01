@@ -16,11 +16,11 @@ const FAILURE_COPY: Record<FormGroupFailure, string> = {
 const CARD = "mt-8 rounded-card border border-ink-900/8 bg-surface p-4 shadow-card";
 
 /// Finding a group lives on /meet; opening one lives on /chats. So this renders nothing
-/// once the group has a channel — there is nothing left to find, and the group itself is
-/// pinned to the Active tab over there.
+/// once the group has a conversation — there is nothing left to find, and the group itself
+/// is pinned to the Active tab over there.
 export default function FindGroupCard({ group }: { group: Group | null }) {
     if (!group) return <FindGroup />;
-    if (!group.streamChannelId) return <FinishSetup title={group.title} />;
+    if (!group.conversationId) return <FinishSetup title={group.title} />;
     return null;
 }
 
@@ -63,8 +63,8 @@ function FindGroup() {
     );
 }
 
-/// The group exists in Postgres but its Stream channel never got created — see the repair
-/// path in findMyGroup. Retrying finishes the job rather than forming a second group.
+/// The group row exists but its conversation never got created — see the repair path in
+/// findMyGroup. Retrying finishes the job rather than forming a second group.
 function FinishSetup({ title }: { title: string }) {
     const [pending, start] = useTransition();
 

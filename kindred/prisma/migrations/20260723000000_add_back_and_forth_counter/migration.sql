@@ -1,0 +1,15 @@
+-- RECONSTRUCTED, and deliberately empty. See 20260723001000_drop_daily_bonus_awards for
+-- why these five migrations had no files in the repo.
+--
+-- This migration added a "back and forth counter" somewhere and 20260723002000 dropped it
+-- again forty minutes later - an experiment that was reverted the same afternoon. It left
+-- no trace: no column matching that name survives on profiles, daily_chat_activity,
+-- channel_xp, or game_sessions.
+--
+-- So the original SQL is genuinely unrecoverable, and this file is empty rather than a
+-- guess. That is not a loss - the pair had no net effect, so an empty file here and an
+-- empty file at 20260723002000 rebuild exactly the database that exists today. Inventing
+-- a plausible ADD COLUMN would make the history look precise about something nobody
+-- actually knows.
+--
+-- If you remember what this was and it matters, replace both files together.
