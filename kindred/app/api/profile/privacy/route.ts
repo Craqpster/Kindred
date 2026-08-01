@@ -10,6 +10,7 @@ const PrivacySchema = z.object({
   dms_open: z.boolean().optional(),
   show_confidence: z.boolean().optional(),
   show_interests: z.boolean().optional(),
+  show_badges: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request) {

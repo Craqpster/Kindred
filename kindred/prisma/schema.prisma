@@ -50,6 +50,9 @@ model profiles {
   dms_open          Boolean? @default(true)
   show_confidence   Boolean? @default(true)
   show_interests    Boolean? @default(true)
+  /// Separate from show_confidence on purpose: a tier is a number that grows with use, where
+  /// a badge names a behaviour. Someone can want their progress visible and their habits not.
+  show_badges       Boolean? @default(true)
 
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
