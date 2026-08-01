@@ -52,6 +52,17 @@ npm install
 `lib/generated/`, which is **gitignored** — a fresh clone has no Prisma client at all until
 `npm install` has run, which is why type errors before that step are expected and mean nothing.
 
+Do step 3 before this one. `prisma generate` itself needs no database, but the CLI loads
+`prisma.config.ts` first, and that file warns loudly when `DIRECT_URL` is missing:
+
+```
+[prisma.config.ts] DIRECT_URL is not set, so no database command will work.
+```
+
+Install still finishes — the warning is not an error — but nothing that talks to Postgres will
+run until `.env` exists. On Windows, note that `cp` is `copy .env.example .env` in cmd, and
+that `.env` belongs in `kindred/`, next to `package.json`, not at the clone root.
+
 ## 5. Check the database agrees with the repo
 
 ```bash
