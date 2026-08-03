@@ -1,5 +1,6 @@
 import "server-only";
 
+import { blockedIdsFor } from "@/lib/blocks";
 import type { ProfileWithRelations } from "@/lib/dal";
 import { isEaseIn, type EaseIn } from "@/lib/ease-in";
 import { prisma } from "@/lib/prisma";
@@ -32,7 +33,12 @@ export async function getMatchesFor(profile: ProfileWithRelations): Promise<Matc
         where: { user_id: profile.id },
         select: { other_id: true },
     });
-    const excludedIds = [profile.id, ...connections.map((c) => c.other_id)];
+    // Blocks are excluded alongside people already acted on, and for the same reason: Meet
+    // should never offer somebody this person cannot reach. Symmetric, so being blocked hides
+    // them from you as well as you from them.
+    const blockedIds = await blockedIdsFor(profile.id);
+
+    const excludedIds = [profile.id, ...connections.map((c) => c.other_id), ...blockedIds];
 
     const myHobbyNames = new Set(profile.profile_hobbies.map((row) => row.hobby.name));
     const myInterestNames = new Set(profile.profile_interests.map((row) => row.interest.name));
