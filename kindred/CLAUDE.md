@@ -13,13 +13,16 @@ npm run dev            # next dev
 npm run build          # next build
 npm run lint           # eslint (flat config, eslint-config-next core-web-vitals + typescript)
 
-npx prisma migrate dev --name <name>   # create + apply a migration
+npx prisma migrate status              # ALWAYS check this before applying anything
+npx prisma migrate deploy              # apply pending migrations — never `migrate dev`, see below
 npx prisma generate                    # regenerate client into lib/generated/prisma (also runs postinstall)
 npx prisma db pull                     # re-introspect Supabase (incl. the auth schema)
 
 npm run verify:chat        # proves the chat RLS policies actually filter (see below)
+npm run verify:games       # both games' rules, which the server enforces; pure
 npm run verify:reactions   # the reaction state machine; pure, needs no database
 npm run verify:xp          # chat level maths behind the XP ring; pure, needs no database
+npm run verify:moderation  # the strike escalation, end to end against the database
 npm run reset:connections  # dev-only: clears connections rows so /meet has cards again
 
 npx tsx scripts/seed-dev-profiles.ts           # dev-only: fake profiles so /meet has matches
@@ -28,11 +31,15 @@ npx tsx scripts/seed-dev-profiles.ts --clean   # remove them
 
 `seed-dev-profiles.ts` is gitignored (it creates real auth users), so it exists only on machines where someone wrote it.
 
-There is no test suite. The two `verify:*` scripts are the closest thing, and both are worth running when you touch what they cover:
+There is no test suite. The `verify:*` scripts are the closest thing, and each is worth running when you touch what it covers:
 
 - `verify:chat` connects as the `authenticated` role with an impersonated `request.jwt.claims` — the same evaluation Realtime performs — and asserts that a member sees their conversation, messages, and reactions, that an outsider sees none of them, and that neither can write. Run it after touching a chat policy or grant. Needs `DIRECT_URL`.
+- `verify:games` pins both games' rules, which matter more than they look: `playGameMove` takes a move rather than a board and recomputes with these functions, so they are the whole of the referee. An illegal move must return the *same object* — that identity is how the action tells "nothing happened" from "something happened".
 - `verify:reactions` exercises `applyReaction`, which has to be idempotent because the optimistic click, its realtime echo, and the server action all re-apply the same end state in no fixed order. Pure, so it runs anywhere.
 - `verify:xp` pins the chat level maths the XP ring divides by. If it *hangs* rather than failing, `getChatLevel`'s `Number.isFinite` guard is gone and `while (Infinity >= …)` is spinning.
+- `verify:moderation` flags a real profile six times and prints the escalation. Unlike the others it writes real rows — `recordFlaggedAttempt` calls `prisma` directly and cannot be enrolled in a transaction to roll back — so it clears the row before and after. Needs `--conditions=react-server` in its npm script, because the module it imports is marked `server-only` and would otherwise throw outside Next.
+
+**Never run `prisma migrate dev` on this project.** It reruns migration history in a shadow database to detect drift and **offers to reset the real one** when it finds any — and this schema finds it every time, because it covers the introspected Supabase `auth` schema alongside `public` and Supabase adds tables there on its own schedule. Write migration SQL by hand (copy the shape of a neighbouring folder) and apply it with `migrate deploy`, which only applies what is pending and never resets. Full reasoning in [docs/conventions.md](docs/conventions.md) §1, including the time five migrations were applied straight to Supabase and never committed.
 
 **Database connections are split on purpose.** `DATABASE_URL` is Supabase's transaction pooler (6543) and is used by Prisma Client at runtime; `DIRECT_URL` is the session pooler (5432) and is what `prisma.config.ts` hands the CLI. Migrations cannot run through the transaction pooler — it can't hold advisory locks. The Prisma CLI runs outside Next's env loader, so `prisma.config.ts` imports `dotenv/config` explicitly.
 
@@ -77,7 +84,7 @@ Four tables own chat: `conversations`, `conversation_members`, `messages`, `mess
 
 ### Message moderation
 
-[lib/chat/moderation.ts](lib/chat/moderation.ts) is two layers: [lib/word-filter.ts](lib/word-filter.ts) (obscenity, local, free) runs first, then OpenAI's moderation endpoint only for what passes — so the common case never makes a request. **Fails open** — a moderation outage lets messages through rather than breaking chat. [lib/moderation-rate-limit.ts](lib/moderation-rate-limit.ts) is in-memory (resets on restart, not multi-instance safe) and gives 2 warnings before escalating cooldowns.
+[lib/chat/moderation.ts](lib/chat/moderation.ts) is two layers: [lib/word-filter.ts](lib/word-filter.ts) (obscenity, local, free) runs first, then OpenAI's moderation endpoint only for what passes — so the common case never makes a request. **Fails open** — a moderation outage lets messages through rather than breaking chat. [lib/moderation-rate-limit.ts](lib/moderation-rate-limit.ts) gives 2 warnings before escalating cooldowns, and keeps each person's strikes in `moderation_state` — one row per profile, so a count survives a deploy and is shared across instances. It was a module-level Map until `20260802000000`, which failed exactly where it mattered: serverless invocations do not share memory, so reaching three strikes needed three requests to land on the same warm instance. `npm run verify:moderation` prints the escalation end to end.
 
 It runs **inside `sendMessage`, before the row exists**, which is the part that matters. It used to be an advisory API route the browser called before posting to Stream itself, so a client that simply didn't call it was unmoderated. There is no longer a route to skip.
 
