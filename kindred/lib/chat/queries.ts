@@ -9,6 +9,7 @@ import {
 } from "@/lib/chat/mapping";
 import { getChatLevel } from "@/lib/chat-level";
 import { dailyBonusThreshold, utcDay } from "@/lib/confidence-xp";
+import { blockedIdsFor } from "@/lib/blocks";
 import { prisma } from "@/lib/prisma";
 import type {
     ChatConversation,
@@ -42,8 +43,21 @@ const CONVERSATION_LIMIT = 100;
 /// a query per conversation — unread compares each message against a cutoff that differs per
 /// row, and "the newest message in each conversation" is a DISTINCT ON.
 export async function listConversations(userId: string): Promise<ChatConversation[]> {
+    // Filtered in SQL rather than after the fact, so a blocked conversation never counts
+    // against CONVERSATION_LIMIT. Dropping them in JS afterwards would let a hundred hidden
+    // conversations push real ones off the end of the list.
+    const blockedIds = await blockedIdsFor(userId);
+
     const memberships = await prisma.conversation_members.findMany({
-        where: { profile_id: userId },
+        where: {
+            profile_id: userId,
+            // Any conversation containing somebody either of us has blocked disappears for
+            // both. For a DM that is the whole conversation; for a group it is the whole room,
+            // because there is no way to be in one and not see what a member says.
+            ...(blockedIds.length > 0
+                ? { conversation: { members: { none: { profile_id: { in: blockedIds } } } } }
+                : {}),
+        },
         // Ordered and bounded in SQL rather than in JS afterwards. This runs in the app-shell
         // layout — on /meet and /me too, not only /chats — because the unread badges it feeds
         // have to work from every tab, so it is the most frequently run query in the app and
