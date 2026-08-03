@@ -64,6 +64,7 @@ model profiles {
   profile_badges    profile_badges[]
   group_member      group_members?
   prompt_awards     prompt_awards[]
+  moderation        moderation_state?
   daily_activity    daily_chat_activity[]
 
   // Two relations to the same model, so they need names to tell them apart.
@@ -301,6 +302,16 @@ model prompt_awards {
   prompt  messages @relation(fields: [prompt_id], references: [id], onDelete: Cascade)
 
   @@id([prompt_id, profile_id])
+  @@schema("public")
+}
+
+model moderation_state {
+  profile_id      String     @id @db.Uuid
+  flag_timestamps DateTime[] @db.Timestamptz(6)
+  cooldown_until  DateTime?  @db.Timestamptz(6)
+
+  profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+
   @@schema("public")
 }
 

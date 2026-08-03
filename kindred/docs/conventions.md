@@ -208,11 +208,6 @@ ignores ids the timeline is not holding, so nothing renders. Closing it properly
 soft-deleting reactions so the removal becomes an UPDATE with a full row to check — a schema
 change to make deliberately rather than in passing.
 
-**Moderation cooldowns reset on deploy.** `lib/moderation-rate-limit.ts` is a module-level Map.
-Every deploy clears everyone's strikes, and across more than one instance a user gets an
-allowance per instance. Moving it to a table is easy; it has not been worth it while this runs
-as one process.
-
 **Realtime has a ceiling in the low hundreds of concurrent subscribers.** Unfiltered
 `postgres_changes` means RLS is evaluated per subscriber per change. The escape hatch is
 broadcast-from-database: `realtime.broadcast_changes()` in an AFTER INSERT trigger, fanned out
