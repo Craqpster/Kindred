@@ -3,6 +3,7 @@ import { requireProfile } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import BlockedList from "@/components/profile/BlockedList";
+import DeleteAccount from "@/components/profile/DeleteAccount";
 import { listBlocked } from "@/lib/blocks";
 
 export default async function MePage() {
@@ -36,6 +37,8 @@ export default async function MePage() {
                 />
 
                 <BlockedList blocked={blocked} />
+
+                <DeleteAccount />
             </div>
         </div>
     );
