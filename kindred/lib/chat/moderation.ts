@@ -34,18 +34,18 @@ export async function moderate(userId: string, text: string): Promise<Moderation
 
     // Already serving a cooldown from an earlier message: refuse everything, even something
     // perfectly clean, without spending a check on it.
-    const existingCooldown = getCooldownUntil(userId);
+    const existingCooldown = await getCooldownUntil(userId);
     if (existingCooldown) {
         return { allowed: false, cooldownUntil: existingCooldown };
     }
 
     if (containsBlockedWord(text)) {
-        return { allowed: false, cooldownUntil: recordFlaggedAttempt(userId) };
+        return { allowed: false, cooldownUntil: await recordFlaggedAttempt(userId) };
     }
 
     if (!(await flaggedByOpenAI(text))) return ALLOWED;
 
-    return { allowed: false, cooldownUntil: recordFlaggedAttempt(userId) };
+    return { allowed: false, cooldownUntil: await recordFlaggedAttempt(userId) };
 }
 
 async function flaggedByOpenAI(text: string): Promise<boolean> {
