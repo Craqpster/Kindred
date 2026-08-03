@@ -1,5 +1,6 @@
 import "server-only";
 
+import { conversationIsBlocked } from "@/lib/blocks";
 import { moderate } from "@/lib/chat/moderation";
 import { getMessageById, isMember } from "@/lib/chat/queries";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
@@ -133,7 +134,7 @@ export type SendMessageInput = {
 
 export type SendMessageResult =
     | { ok: true; message: ChatMessage; award: AwardResult | null }
-    | { ok: false; reason: "not_a_member" | "empty" | "bad_parent" | "bad_prompt" }
+    | { ok: false; reason: "not_a_member" | "empty" | "bad_parent" | "bad_prompt" | "blocked" }
     | { ok: false; reason: "moderated"; cooldownUntil: number | null };
 
 /// Sends a message, and does everything that has to happen around one.
@@ -162,6 +163,17 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     // A null sender is the bot, which is server-side by construction and has no membership.
     if (senderId && !(await isMember({ conversationId, userId: senderId }))) {
         return { ok: false, reason: "not_a_member" };
+    }
+
+    // Blocked either way, so neither person can write into a conversation the other can no
+    // longer see. Checked here rather than only in the UI because hiding the conversation from
+    // the list does not remove it: the id is still in whoever's history, and a server action is
+    // reachable by direct POST.
+    //
+    // Before moderation on purpose. Moderation costs an API call and can start a cooldown, and
+    // a message that was never going to be delivered should not be able to do either.
+    if (senderId && (await conversationIsBlocked(conversationId, senderId))) {
+        return { ok: false, reason: "blocked" };
     }
 
     if (senderId) {

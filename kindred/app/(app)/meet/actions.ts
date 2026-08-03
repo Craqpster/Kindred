@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { createGroupConversation, startDm } from "@/lib/chat/mutations";
+import { isBlockedBetween } from "@/lib/blocks";
 import { requireProfile, verifySession } from "@/lib/dal";
 import { formGroupFor, getGroupFor, type FormGroupFailure } from "@/lib/groups";
 import { MEET_VIEW_COOKIE, meetViewSchema } from "@/lib/meet-view";
@@ -46,6 +47,12 @@ export async function sayHi(formData: FormData) {
     if (parsed.data === userId) return;
 
     const otherId = parsed.data;
+
+    // Meet already filters blocked people out of the cards, so reaching this needs a stale
+    // page or a direct POST. Server actions are reachable by both, and a wave that got through
+    // would create a conversation neither person can open — visible to nobody, undeletable,
+    // and counting against the block that was supposed to end contact.
+    if (await isBlockedBetween(userId, otherId)) return;
 
     // Did they wave at us first? Answered from Postgres rather than Stream because we
     // already write a connections row per wave, so this is one lookup on that table's

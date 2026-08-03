@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 
+import BlockButton from "@/components/profile/BlockButton";
 import Avatar from "@/components/ui/Avatar";
 import type { ViewableProfile } from "@/lib/profiles";
 
@@ -35,6 +36,14 @@ export default function ViewProfile({ profile }: { profile: ViewableProfile }) {
                     <p className="rounded-full bg-accent-50 px-3 py-1 text-label uppercase text-accent-600">
                         Confidence tier {profile.confidenceLevel}
                     </p>
+                )}
+
+                {/* Never on your own profile: blocking yourself is refused by a CHECK
+                    constraint anyway, and offering it would be an odd thing to read. */}
+                {!profile.isSelf && (
+                    <div className="mt-2">
+                        <BlockButton profileId={profile.id} username={profile.username} />
+                    </div>
                 )}
             </header>
 

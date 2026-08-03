@@ -16,6 +16,8 @@ export default async function LogInPage() {
             footer={
                 <>
                     New here? <AuthFooterLink href="/signup">Create an account</AuthFooterLink>
+                    <br />
+                    <AuthFooterLink href="/forgot-password">Forgot your password?</AuthFooterLink>
                 </>
             }
         />
