@@ -2,6 +2,8 @@
 import { requireProfile } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
+import BlockedList from "@/components/profile/BlockedList";
+import { listBlocked } from "@/lib/blocks";
 
 export default async function MePage() {
     const [profile, allHobbies, allInterests, genders] = await Promise.all([
@@ -10,6 +12,9 @@ export default async function MePage() {
         prisma.interests.findMany({ orderBy: { name: "asc" } }),
         prisma.genders.findMany({ select: { id: true, label: true }, orderBy: { id: "asc" } }),
     ]);
+
+    // Not in the Promise.all above: it needs the profile id, which that call is what fetches.
+    const blocked = await listBlocked(profile.id);
 
     const userHobbies = profile.profile_hobbies.map(({ hobby_id }) => hobby_id);
     const userInterests = profile.profile_interests.map(({ interest_id }) => interest_id);
@@ -29,6 +34,8 @@ export default async function MePage() {
                     userInterests={userInterests}
                     genders={genders}
                 />
+
+                <BlockedList blocked={blocked} />
             </div>
         </div>
     );
