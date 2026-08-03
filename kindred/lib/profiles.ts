@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ageFrom } from "@/lib/age";
+import { isBlockedBetween } from "@/lib/blocks";
 import { prisma } from "@/lib/prisma";
 
 // Viewing somebody else's profile.
@@ -53,6 +54,11 @@ export type ViewableProfile = {
 /// a stranger cannot tell an account that exists from one that does not.
 async function canView(viewerId: string, targetId: string): Promise<boolean> {
     if (viewerId === targetId) return true;
+
+    // Checked first, and it overrides everything below. A block has to beat the shared-tag and
+    // shared-conversation rules, or blocking somebody you are already talking to would leave
+    // their profile open to you and yours to them.
+    if (await isBlockedBetween(viewerId, targetId)) return false;
 
     const sharedConversation = await prisma.conversation_members.findFirst({
         where: {
