@@ -43,6 +43,10 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+      # `vitest run`, not `vitest` - the bare form watches and would hang the job.
+      # The script itself is the run form; this is just calling it.
+      - run: npm test
+
       # The three verifiers that are pure. verify:chat and verify:moderation both need a
       # real database and are deliberately left out - see the note at the bottom.
       - run: npm run verify:games
