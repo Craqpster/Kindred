@@ -1,6 +1,7 @@
 import "server-only";
 
 import { sendMessage } from "@/lib/chat/mutations";
+import { prisma } from "@/lib/prisma";
 
 const ICEBREAKER_PROMPTS = [
     "What's a hobby you picked up recently that surprised you?",
@@ -35,4 +36,15 @@ export async function postIcebreakerPrompt(conversationId: string): Promise<void
         kind: "icebreaker_prompt",
         body: text,
     });
+}
+
+/// Whether this user has ever answered an icebreaker - the "Open Book" badge.
+///
+/// Reads prompt_awards rather than counting prompt_response messages: lib/confidence.ts
+/// writes exactly one row there per person per prompt, and that table is already the
+/// record of an answer that counted. Counting messages would also recognize an answer
+/// that was later deleted.
+export async function hasAnsweredAnIcebreaker(profileId: string): Promise<boolean> {
+    const count = await prisma.prompt_awards.count({ where: { profile_id: profileId } });
+    return count > 0;
 }

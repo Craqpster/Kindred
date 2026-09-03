@@ -111,6 +111,21 @@ export async function hasStartedAGame(userId: string): Promise<boolean> {
     return count > 0;
 }
 
+/// Whether this user has ever finished a game - the "Game Finisher" badge.
+///
+/// Deliberately not hasWonAGame with the winner check dropped: finishing is the thing
+/// being recognized, so a loss counts. `completed` and not `abandoned`, because a game
+/// the inactivity timeout closed was not finished by anyone - see endGameSession.
+export async function hasFinishedAGame(userId: string): Promise<boolean> {
+    const count = await prisma.game_sessions.count({
+        where: {
+            status: "completed",
+            OR: [{ player_one_id: userId }, { player_two_id: userId }],
+        },
+    });
+    return count > 0;
+}
+
 /// Whether this user has ever won a completed game - the "Game Winner" badge.
 /// state.winner is each game's own symbol for "player one" ("X" in tic-tac-toe, 1 in
 /// connect four) or "player two" ("O" / 2), not a profile id, so this fetches completed
