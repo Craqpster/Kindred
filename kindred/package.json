@@ -12,6 +12,7 @@
     "verify:reactions": "tsx scripts/verify-reactions.ts",
     "verify:xp": "tsx scripts/verify-xp.ts",
     "verify:moderation": "tsx --conditions=react-server scripts/verify-moderation.ts",
+    "verify:deletion": "tsx --conditions=react-server scripts/verify-account-deletion.ts",
     "reset:connections": "tsx scripts/reset-connections.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
