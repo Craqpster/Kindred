@@ -426,30 +426,31 @@ export async function toggleReaction({
         return { ok: false, reason: "not_a_member" };
     }
 
-    // Delete first and branch on whether anything went: a read-then-write would let two
+    // Retract first and branch on whether anything went: a read-then-write would let two
     // clicks in flight at once both see "not reacted" and both try to insert.
-    const { count } = await prisma.message_reactions.deleteMany({
-        where: { message_id: messageId, profile_id: userId, emoji },
+    //
+    // An UPDATE rather than a DELETE, which is the whole point of deleted_at — Realtime
+    // forwards the full new row, so the RLS policy can filter a removal the way it already
+    // filters an addition. See 20260903000000.
+    const { count } = await prisma.message_reactions.updateMany({
+        where: { message_id: messageId, profile_id: userId, emoji, deleted_at: null },
+        data: { deleted_at: new Date() },
     });
 
     if (count > 0) return { ok: true, reacted: false };
 
-    try {
-        await prisma.message_reactions.create({
-            data: { message_id: messageId, profile_id: userId, emoji },
-        });
-    } catch (error) {
-        // The primary key is (message_id, profile_id, emoji), so the only way to collide is
-        // for the same person to have added the same reaction between the delete above and
-        // this insert — another tab, or a double-fired click. The end state is what they
-        // asked for either way, so this is success, not a failure to report.
-        if (
-            !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-            error.code !== "P2002"
-        ) {
-            throw error;
-        }
-    }
+    // Upsert rather than create: the row may still be there, retracted. The composite
+    // primary key is (message_id, profile_id, emoji), so a re-reaction collides with its own
+    // soft-deleted row, and clearing deleted_at is what "react again" means. This also
+    // absorbs the race the old catch handled — another tab reacting between the update above
+    // and here — because the end state is the same either way.
+    await prisma.message_reactions.upsert({
+        where: {
+            message_id_profile_id_emoji: { message_id: messageId, profile_id: userId, emoji },
+        },
+        create: { message_id: messageId, profile_id: userId, emoji },
+        update: { deleted_at: null },
+    });
 
     return { ok: true, reacted: true };
 }
