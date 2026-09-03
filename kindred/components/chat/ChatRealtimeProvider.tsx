@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { loadConversation } from "@/app/(app)/chats/actions";
 import { useToast } from "@/components/ui/ToastStack";
 import type { ChatConversation } from "@/lib/chat/types";
+import { isReactionPresent } from "@/lib/chat/realtime";
 import type { MessageRow, ReactionRow } from "@/lib/chat/realtime";
 import { createClient } from "@/utils/supabase/client";
 
@@ -294,21 +295,22 @@ export default function ChatRealtimeProvider({
             )
             .on(
                 "postgres_changes",
-                { event: "DELETE", schema: "public", table: "message_reactions" },
+                { event: "UPDATE", schema: "public", table: "message_reactions" },
                 (payload) => {
-                    // Worth knowing, because it is asymmetric with the INSERT above: Realtime
-                    // evaluates RLS against the row it is forwarding, and a DELETE payload has
-                    // only the replica identity to evaluate — not enough to run the policy. So
-                    // removals are broadcast to every subscriber, where additions are filtered.
+                    // A retraction is an UPDATE setting deleted_at, not a DELETE — which is
+                    // what makes it symmetric with the INSERT above. Realtime evaluates RLS
+                    // against the row it forwards, and an UPDATE payload carries the full new
+                    // row, so "members read reactions" runs on it and a removal reaches only
+                    // people who can read the message. A DELETE payload carried just the
+                    // replica identity, so the policy could not run and removals went to every
+                    // subscriber. See 20260903000000.
                     //
-                    // What leaks is a (message_id, profile_id, emoji) triple for a message the
-                    // recipient cannot read, which is why applyReaction ignores ids it does not
-                    // already hold: a stranger's un-reaction reaches the client and changes
-                    // nothing. Closing it properly would mean soft-deleting reactions so the
-                    // removal is an UPDATE with a full row to check, and that is a schema change
-                    // to make deliberately rather than in passing.
-                    const row = payload.old as ReactionRow;
-                    for (const listener of reactionListenersRef.current) listener(row, false);
+                    // Reading deleted_at rather than assuming a direction also means clearing
+                    // it — reacting again after taking it back — arrives correctly as an add.
+                    const row = payload.new as ReactionRow;
+                    for (const listener of reactionListenersRef.current) {
+                        listener(row, isReactionPresent(row));
+                    }
                 },
             )
             .subscribe((status) => {
