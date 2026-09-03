@@ -1,0 +1,114 @@
+# The checks docs/conventions.md §6 already calls "done", plus the one that would have
+# caught #24: applying every migration to an empty database.
+#
+# Neither job needs a secret. The build is fully dynamic (every authenticated route is
+# server-rendered on demand), so `next build` completes with no environment at all, and the
+# migration job talks only to its own throwaway Postgres.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to a PR makes the first run pointless; don't pay for it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, build, and the database-free verifiers
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kindred
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22 rather than the 24 the project is developed against: this is the version the
+          # pipeline was actually validated on. Raise it once a run has proven the higher one.
+          node-version: 22
+          cache: npm
+          cache-dependency-path: kindred/package-lock.json
+
+      # postinstall runs `prisma generate`, which reads the schema and touches no database.
+      # It warns that DIRECT_URL is unset; that is expected here and not an error.
+      - run: npm ci
+
+      - run: npm run lint
+      - run: npm run build
+
+      # The three verifiers that are pure. verify:chat and verify:moderation both need a
+      # real database and are deliberately left out - see the note at the bottom.
+      - run: npm run verify:games
+      - run: npm run verify:reactions
+      - run: npm run verify:xp
+
+  migrations:
+    name: The migration chain applies to an empty database
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kindred
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Both point at the same throwaway database. The transaction/session pooler split that
+      # matters against Supabase is irrelevant here - there is no pooler in front of this.
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgres://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: kindred/package-lock.json
+
+      - run: npm ci
+
+      - name: Create the objects Supabase provides
+        run: psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f ../.github/ci/supabase-prelude.sql
+
+      # 0_init is a recorded baseline of the pre-existing Supabase database, not something
+      # `deploy` should run - so it is applied by hand and marked resolved, exactly as the
+      # project did against Supabase. See the header of that migration.
+      - name: Baseline 0_init
+        run: |
+          psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f prisma/migrations/0_init/migration.sql
+          npx prisma migrate resolve --applied 0_init
+
+      # The step that fails when a migration file is not valid SQL. Verified against the
+      # tree before #24, where it stops here with:
+      #   ERROR: syntax error at or near ""game_sessions_invite_message_id_key""
+      #   Error: P3018  A migration failed to apply (database error code 42601)
+      - name: Apply the rest of the chain
+        run: npx prisma migrate deploy
+
+      - name: Confirm the schema matches the migrations
+        run: npx prisma migrate status
+
+# Not covered, on purpose:
+#   verify:chat       - needs a database AND the RLS roles; it could plausibly run against
+#                       the migrations job's Postgres, which is worth doing as a follow-up.
+#   verify:moderation - writes real rows via recordFlaggedAttempt, which cannot be enrolled
+#                       in a transaction to roll back. It does not belong in CI.
