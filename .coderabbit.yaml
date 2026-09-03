@@ -1,0 +1,123 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Tuned for this repo specifically. Without it CodeRabbit flags a lot of things that are
+# deliberate here and documented in docs/conventions.md - Prisma bypassing RLS, the
+# unfiltered realtime subscription, moderation failing open - and reviews generated Prisma
+# output as if a human wrote it.
+
+language: en-US
+
+reviews:
+  # Comments rather than blocking. This repo has two regular contributors; assertive plus
+  # request_changes turns every PR into an approval queue for a bot.
+  profile: chill
+  request_changes_workflow: false
+
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: false
+  poem: false
+
+  path_filters:
+    # Rebuilt by `postinstall: prisma generate` and gitignored - thousands of
+    # machine-written lines that would bury the four a human needs to read.
+    - "!kindred/lib/generated/**"
+    - "!kindred/package-lock.json"
+    - "!kindred/public/**"
+    - "!docs/screenshots/**"
+
+  path_instructions:
+    - path: "kindred/prisma/migrations/**"
+      instructions: |
+        Migration SQL is hand-written on purpose. Never suggest `prisma migrate dev` - it
+        reruns history in a shadow database and offers to RESET the real one, and this
+        schema triggers that every time because it covers the introspected Supabase `auth`
+        schema alongside `public`. `prisma migrate deploy` is the only correct command.
+
+        Do not suggest "simplifying" a CHECK constraint into the Prisma schema. Several
+        invariants live here precisely because Prisma cannot model them: `ease_in` values,
+        `confidence_level >= 1`, `connections.status`, the DM/group shape rules.
+
+        An already-applied migration file must not be edited, with one exception: restoring
+        it to the bytes that were actually applied. Flag any other change to a migration
+        that is not the newest one.
+
+        A new migration must be accompanied by its schema.prisma change in the same PR. A
+        schema change that exists in only one place is one that exists until someone clones.
+
+    - path: "kindred/lib/**"
+      instructions: |
+        Prisma connects as the `postgres` owner role and BYPASSES row level security. There
+        is no RLS backstop on the server. Every query must sit behind a lib/dal.ts call and
+        be scoped by the authenticated user id explicitly. Flag any query that takes an id
+        from the caller and uses it to widen rather than narrow what is already restricted
+        to the viewer.
+
+        RLS on the chat tables exists for exactly one consumer: the browser's realtime
+        socket, which connects as `authenticated` and holds SELECT and nothing else. Do not
+        suggest relying on it for anything server-side.
+
+        Any function taking two or more ids takes a named-argument object, not positional
+        strings - `isMember({ conversationId, userId })`. Both are uuid strings, so the
+        wrong order compiles and then fails silently. Flag new positional id pairs.
+
+        Never `any`. Flag it every time.
+
+        Comments should explain WHY, not what. Flag a new comment that only restates the
+        line below it.
+
+    - path: "kindred/lib/chat/**"
+      instructions: |
+        Read lib/chat/* against these decisions before flagging them as bugs:
+
+        - The shell realtime subscription is UNFILTERED on purpose. `postgres_changes`
+          filters allow one `column=eq.value`, so "messages in any of my conversations"
+          cannot be expressed as one. RLS does that per subscriber. Do not suggest adding
+          a filter.
+        - Nothing calls `realtime.setAuth()` and nothing should. supabase-js re-pushes the
+          token on INITIAL_SESSION / TOKEN_REFRESHED; a manual call pins a token that
+          survives resubscribes and stops tracking refreshes.
+        - Moderation FAILS OPEN by design. An outage lets messages through rather than
+          taking chat down. Do not suggest failing closed without saying why it is worth
+          the trade.
+        - Writes go through lib/chat/mutations.ts, never the browser. Moderation, XP and the
+          membership check run inside sendMessage so a crafted client cannot skip them.
+        - `messages.sender_id IS NULL` means the Kindred bot, not an orphaned row.
+
+    - path: "kindred/app/**/actions.ts"
+      instructions: |
+        Server Actions are reachable by direct POST, not only through our forms. Every one
+        must re-validate its own input with zod AND re-derive the user id from the session
+        rather than reading it from the form body. Flag any action that trusts a user id
+        from its payload, and any that skips zod on an id it passes to a query.
+
+    - path: "kindred/components/**"
+      instructions: |
+        Use the palette tokens in app/globals.css - bg-mist, text-star-sapphire, bg-canvas,
+        text-accent, and the newer warm/green Meet set. Flag raw hex values.
+
+        Fonts are theme tokens: font-display (Montserrat), font-body (Karla), default sans
+        Poppins. Never the `font-[var(--font-x)]` form - it is ambiguous and font-bold
+        silently overrides it.
+
+        Product constraint that is easy to violate without knowing: NO red, pink or coral
+        (reads romantic - this is explicitly not a dating app) and NO purple (reads as
+        Discord). Green carries the growth note. This applies to tag tints and avatars too.
+        Flag any new colour in those families, including in Tailwind class names.
+
+    - path: "kindred/components/chat/games/**"
+      instructions: |
+        Each game's rules live in one pure module that both the board and the server import.
+        `playGameMove` takes a move and recomputes with these functions, so they are the
+        whole referee. Flag any change that would let the client compute a board the server
+        does not re-derive, or that duplicates a rule into a second place.
+
+        An illegal move must return the SAME object, not a copy. That identity is how the
+        action tells "nothing happened" from "something happened".
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+chat:
+  auto_reply: true
