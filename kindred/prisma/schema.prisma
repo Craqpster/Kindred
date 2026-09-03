@@ -282,6 +282,14 @@ model message_reactions {
   emoji      String
   created_at DateTime @default(now()) @db.Timestamptz(6)
 
+  /// Soft delete. Removing a reaction sets this rather than dropping the row, so Realtime
+  /// forwards an UPDATE carrying a full row the RLS policy can evaluate - a DELETE payload
+  /// has only the replica identity and reached every subscriber. See 20260903000000.
+  ///
+  /// The composite primary key still makes reacting twice a no-op, but re-reacting after a
+  /// removal is now an update that clears this, not an insert.
+  deleted_at DateTime? @db.Timestamptz(6)
+
   message messages @relation(fields: [message_id], references: [id], onDelete: Cascade)
   profile profiles @relation(fields: [profile_id], references: [id], onDelete: Cascade)
 

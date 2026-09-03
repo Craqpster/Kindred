@@ -1,0 +1,19 @@
+-- Stops reaction removals leaking to subscribers who cannot read the message.
+--
+-- Realtime evaluates RLS against the row it forwards, and a DELETE payload carries only the
+-- replica identity - not enough columns for "members read reactions" to run, since that
+-- policy joins back to messages. So reaction INSERTs were filtered per subscriber and
+-- DELETEs went to everyone: a (message_id, profile_id, emoji) triple for a message the
+-- recipient has no access to.
+--
+-- Soft delete turns the removal into an UPDATE, whose payload carries the full new row, so
+-- the existing SELECT policy can evaluate it exactly as it does an insert. No policy change
+-- is needed, and no grant changes: the browser still holds SELECT and nothing else.
+--
+-- No index. Reads filter deleted_at within one message's reactions, which the existing
+-- message_id index already narrows to a handful of rows.
+--
+-- Nullable with no default and no backfill: every existing row is live, which NULL already
+-- means. Rows removed before this migration are simply gone, and that is correct - they were
+-- hard-deleted under the old behaviour.
+ALTER TABLE "message_reactions" ADD COLUMN "deleted_at" TIMESTAMPTZ(6);
