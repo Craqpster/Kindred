@@ -146,3 +146,12 @@ export type MessagePage = {
     /// reached, which is what stops an infinite scroll from asking forever.
     nextCursor: string | null;
 };
+
+/// What a client missed while its realtime socket was away, oldest-first.
+export type MessageBackfill = {
+    messages: ChatMessage[];
+    /// Whether `messages` closes the gap. When false, too much arrived to stitch and these
+    /// are the newest page instead — the caller replaces its timeline rather than merging,
+    /// because merging half a gap leaves a hole in the middle of it.
+    complete: boolean;
+};

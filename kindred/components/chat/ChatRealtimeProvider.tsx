@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
-import { loadConversation } from "@/app/(app)/chats/actions";
+import { loadConversation, reloadConversations } from "@/app/(app)/chats/actions";
 import { useToast } from "@/components/ui/ToastStack";
 import type { ChatConversation } from "@/lib/chat/types";
 import { isReactionPresent } from "@/lib/chat/realtime";
@@ -43,13 +43,22 @@ type ChatRealtimeValue = {
     /// Fires when anyone reacts or un-reacts. `present` is whether the reaction exists
     /// afterwards, so a listener can apply it without tracking which event it was.
     onReaction: (listener: (row: ReactionRow, present: boolean) => void) => () => void;
-    /// True once the socket has actually joined. Until then a message could be missed, which
-    /// the UI can use to decide whether it still needs to poll on focus.
-    connected: boolean;
+    /// Fires when the socket has rejoined after being away, which is the moment anything
+    /// holding realtime-fed state has to go and ask what it missed. Never fires on the first
+    /// join: everything is freshly server-rendered at that point.
+    onResync: (listener: () => void) => () => void;
+    /// Where the socket is. Distinguishes the two states that look identical to a boolean:
+    /// "connecting" is the first join, where nothing is stale yet because the page was
+    /// server-rendered moments ago, and "reconnecting" is a socket that has been away since —
+    /// realtime-fed state (messages, presence, read receipts) drifting with no cue that it
+    /// has. A consumer rendering any of that should say so rather than show it as current.
+    status: RealtimeStatus;
     /// Tells the shell which conversation is on screen, so it can stop announcing messages
     /// the user is already looking at. Null when no conversation is open.
     setOpenConversation: (conversationId: string | null) => void;
 };
+
+export type RealtimeStatus = "connecting" | "connected" | "reconnecting";
 
 const ChatRealtimeContext = createContext<ChatRealtimeValue | null>(null);
 
@@ -71,7 +80,7 @@ export default function ChatRealtimeProvider({
     children: ReactNode;
 }) {
     const [conversations, setConversations] = useState(initialConversations);
-    const [connected, setConnected] = useState(false);
+    const [status, setStatus] = useState<RealtimeStatus>("connecting");
     const { showToast } = useToast();
 
     // Listeners live in a ref so that subscribing does not re-render this provider, and so
@@ -97,6 +106,17 @@ export default function ChatRealtimeProvider({
         new Set<(row: ReactionRow, present: boolean) => void>(),
     );
 
+    /// Told when the socket rejoins, so anything fed by realtime can close its own gap.
+    ///
+    /// A set of callbacks rather than a counter the consumers watch: a resync is an event,
+    /// and a counter in state would re-render every consumer on every rejoin whether or not
+    /// it had anything to catch up on.
+    const resyncListenersRef = useRef(new Set<() => void>());
+
+    /// Whether the socket has ever been joined. The first SUBSCRIBED is not a reconnect —
+    /// the page was server-rendered moments earlier and there is nothing to have missed.
+    const hasJoinedRef = useRef(false);
+
     const onMessage = useMemo(
         () => (listener: (row: MessageRow) => void) => {
             listenersRef.current.add(listener);
@@ -112,6 +132,16 @@ export default function ChatRealtimeProvider({
             reactionListenersRef.current.add(listener);
             return () => {
                 reactionListenersRef.current.delete(listener);
+            };
+        },
+        [],
+    );
+
+    const onResync = useMemo(
+        () => (listener: () => void) => {
+            resyncListenersRef.current.add(listener);
+            return () => {
+                resyncListenersRef.current.delete(listener);
             };
         },
         [],
@@ -313,9 +343,47 @@ export default function ChatRealtimeProvider({
                     }
                 },
             )
-            .subscribe((status) => {
-                setConnected(status === "SUBSCRIBED");
+            .subscribe((subscription) => {
+                const joined = subscription === "SUBSCRIBED";
+                setStatus(
+                    joined
+                        ? "connected"
+                        : hasJoinedRef.current
+                          ? "reconnecting"
+                          : "connecting",
+                );
+
+                if (!joined) return;
+
+                // A rejoin rather than the first join, which is the only case with a gap to
+                // close. supabase-js reconnects the socket by itself, but postgres_changes are
+                // not replayed: every INSERT and UPDATE that fired while it was away is simply
+                // gone. Nothing arrives late to repair the list — the moment it comes back is
+                // the only cue there will be, so this is where the asking happens.
+                //
+                // Deliberately not gated on a "was disconnected" flag from React state. The
+                // callback closes over the state it saw at mount, and a rejoin that happened
+                // to skip a render would read the status as still connected and do nothing.
+                if (hasJoinedRef.current) resync();
+                hasJoinedRef.current = true;
             });
+
+        // Everything fed by realtime, told to go and ask what it missed.
+        //
+        // Listeners are told first and the list is fetched second, so a thread's backfill is
+        // in flight while the list query runs rather than behind it — and so a failure of one
+        // cannot swallow the other. Each side owns its own errors for the same reason.
+        function resync() {
+            for (const listener of resyncListenersRef.current) listener();
+
+            void reloadConversations()
+                .then(setConversations)
+                // A rejoin can land while the network is still unhappy, in which case the
+                // list stays stale until the next one. Swallowed rather than surfaced: the
+                // socket will drop and rejoin again on its own, and a toast per failed
+                // attempt would be a stream of noise about something already being retried.
+                .catch(() => {});
+        }
 
         return () => {
             void supabase.removeChannel(channel);
@@ -344,8 +412,15 @@ export default function ChatRealtimeProvider({
     }, []);
 
     const value = useMemo(
-        () => ({ conversations, onMessage, onReaction, connected, setOpenConversation }),
-        [conversations, onMessage, onReaction, connected, setOpenConversation],
+        () => ({
+            conversations,
+            onMessage,
+            onReaction,
+            onResync,
+            status,
+            setOpenConversation,
+        }),
+        [conversations, onMessage, onReaction, onResync, status, setOpenConversation],
     );
 
     return (

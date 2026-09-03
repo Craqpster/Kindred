@@ -2,7 +2,7 @@
 //
 // No server imports: this is loaded by client components.
 
-import type { ChatMember, ChatMessage, MessageKind } from "@/lib/chat/types";
+import type { ChatMember, ChatMessage, MessageKind, TimelineMessage } from "@/lib/chat/types";
 
 /// The raw `messages` row as Supabase Realtime delivers it — the database's own column
 /// names, and every timestamp already a string because the payload is JSON.
@@ -105,6 +105,35 @@ export function mergeMessage<T extends ChatMessage>(messages: T[], incoming: T):
 
     if (index === -1) return [...withoutDuplicate, incoming];
     return [...withoutDuplicate.slice(0, index), incoming, ...withoutDuplicate.slice(index)];
+}
+
+/// Where a backfill should start asking from: the createdAt of the newest message the
+/// SERVER sent.
+///
+/// Optimistic messages are skipped, and that is the whole point of this existing. One
+/// carries a createdAt from the browser's own clock, so a clock running fast produces a
+/// cursor in the future — and the backfill would then use it to skip the very messages it
+/// never received, silently, leaving exactly the hole it was called to fill. A clock running
+/// slow is harmless by comparison: it re-asks for a message already held, and mergeMessage
+/// drops the duplicate.
+///
+/// Scans rather than reading the last element. The timeline is ordered by createdAt with
+/// optimistic messages folded in among the rest, so the newest entry is frequently one of
+/// the ones that must not be used.
+///
+/// Falls back to the epoch when nothing in the timeline came from the server — an empty
+/// conversation, or one where every message is still in flight. That is not a request for
+/// all history: getMessagesSince caps at a page and reports the gap, so an epoch cursor
+/// resolves to "give me the newest page", which is the right answer for an empty timeline.
+export function backfillCursor(messages: TimelineMessage[]): string {
+    let newest: string | null = null;
+
+    for (const message of messages) {
+        if (message.status === "sending" || message.status === "failed") continue;
+        if (newest === null || message.createdAt > newest) newest = message.createdAt;
+    }
+
+    return newest ?? new Date(0).toISOString();
 }
 
 /// A `message_reactions` row as realtime delivers it. The primary key is
