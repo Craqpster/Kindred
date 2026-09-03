@@ -15,7 +15,6 @@ Full documentation lives in the [root README](../README.md). The details behind 
 - [`docs/setup.md`](docs/setup.md) — setting up on another machine, step by step
 - [`docs/conventions.md`](docs/conventions.md) — working on Kindred, and the incidents behind each rule
 - [`docs/chat-rework-plan.md`](docs/chat-rework-plan.md) — the Stream → Supabase Realtime migration
-- [`CLAUDE.md`](CLAUDE.md) — orientation for AI coding agents
 - [`.env.example`](.env.example) — annotated environment variables
 
 One rule worth repeating before you touch the database: **never run `prisma migrate dev` on this
