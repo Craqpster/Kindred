@@ -114,6 +114,22 @@ export type ReactionRow = {
     message_id: string;
     profile_id: string;
     emoji: string;
+    /// Set when the reaction was retracted. See 20260903000000.
+    deleted_at: string | null;
+}
+
+/// What identifies a reaction, which is all applyReaction needs. A ReactionRow off the wire
+/// satisfies this structurally; an optimistic click builds one directly rather than
+/// fabricating a deleted_at it has no opinion about.
+export type ReactionKey = Pick<ReactionRow, "message_id" | "profile_id" | "emoji">;
+
+/// Whether a forwarded row is currently a reaction or a retracted one.
+///
+/// Trivial, and extracted anyway: it is the whole of the soft-delete contract on the client
+/// side, the provider is a component that cannot be unit tested, and getting it inverted
+/// would silently turn every removal into an add. scripts/verify-reactions.ts pins it.
+export function isReactionPresent(row: ReactionRow): boolean {
+    return row.deleted_at === null;
 };
 
 /// Adds or removes one person's reaction, in whatever state the list is already in.
@@ -127,7 +143,7 @@ export type ReactionRow = {
 /// it would put an empty bubble on screen.
 export function applyReaction<T extends ChatMessage>(
     messages: T[],
-    row: ReactionRow,
+    row: ReactionKey,
     present: boolean,
 ): T[] {
     return messages.map((message) => {

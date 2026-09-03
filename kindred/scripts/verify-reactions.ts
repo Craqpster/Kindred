@@ -11,7 +11,7 @@
 // value in and a value out rather than as something that reaches into component state.
 //
 // Run: npm run verify:reactions
-import { applyReaction } from "../lib/chat/realtime";
+import { applyReaction, isReactionPresent } from "../lib/chat/realtime";
 import type { ChatMessage } from "../lib/chat/types";
 
 type Check = { name: string; ok: boolean; note?: string };
@@ -68,8 +68,10 @@ expect("the last removal drops the pill", state[0].reactions, []);
 state = applyReaction(state, mine, false);
 expect("removing what is absent is idempotent", state[0].reactions, []);
 
-// The DELETE-leak case: Realtime cannot apply RLS to a delete, so removals for messages
-// this client has no business seeing do arrive. They must land on nothing.
+// Removals are RLS-filtered since 20260903000000 made them an UPDATE, so this no longer
+// guards a live leak — but the shell subscription is unfiltered by design, so rows for
+// conversations this timeline is not showing still arrive constantly. They must land on
+// nothing.
 const held = applyReaction([message], mine, true);
 expect(
     "a reaction for an unknown message changes nothing",
@@ -96,6 +98,31 @@ expect("optimistic, echo and settle converge", raced[0].reactions, [
 const original: ChatMessage = { ...message, reactions: [] };
 applyReaction([original], mine, true);
 expect("the input is not mutated", original.reactions, []);
+
+// The soft-delete contract, which is the client half of 20260903000000. The provider maps
+// a forwarded row to present/absent through isReactionPresent, and inverting that would turn
+// every removal into an add — silently, since both directions render something plausible.
+const key = { message_id: "m1", profile_id: "u1", emoji: "👍" };
+expect("a live row is present", isReactionPresent({ ...key, deleted_at: null }), true);
+expect(
+    "a retracted row is absent",
+    isReactionPresent({ ...key, deleted_at: "2026-09-03T00:00:00.000Z" }),
+    false,
+);
+
+// End to end through the pair, in the order two tabs actually see it.
+let retracted = applyReaction([message], mine, true);
+retracted = applyReaction(retracted, mine, isReactionPresent({ ...key, deleted_at: "2026-09-03T00:00:00.000Z" }));
+expect("a retraction drops the pill", retracted[0].reactions, []);
+
+retracted = applyReaction(retracted, mine, isReactionPresent({ ...key, deleted_at: null }));
+expect("reacting again after a retraction restores it", retracted[0].reactions, [
+    { emoji: "👍", reactedBy: ["u1"] },
+]);
+
+retracted = applyReaction(retracted, mine, false);
+retracted = applyReaction(retracted, mine, false);
+expect("a retraction echoed twice is idempotent", retracted[0].reactions, []);
 
 for (const check of checks) {
     console.log(`${check.ok ? "  ok  " : " FAIL "} ${check.name}${check.note ? ` — ${check.note}` : ""}`);

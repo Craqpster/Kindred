@@ -50,7 +50,9 @@ export const MESSAGE_INCLUDE = {
             sender: { select: { username: true } },
         },
     },
-    reactions: { select: { emoji: true, profile_id: true } },
+    // Retracted reactions stay as rows so their removal can be an RLS-checkable UPDATE
+    // (see 20260903000000); they are not reactions any more, so they never load.
+    reactions: { where: { deleted_at: null }, select: { emoji: true, profile_id: true } },
     _count: { select: { thread: true } },
 } as const;
 
