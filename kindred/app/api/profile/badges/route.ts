@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifySession } from "@/lib/dal";
 import { tierForPoints } from "@/lib/confidence-tiers";
-import { hasStartedAGame, hasWonAGame } from "@/lib/games";
+import { hasFinishedAGame, hasStartedAGame, hasWonAGame } from "@/lib/games";
+import { hasAnsweredAnIcebreaker } from "@/lib/prompts";
 
 /// Reconciles the caller's badges with the tier their points have actually earned.
 ///
@@ -145,8 +146,38 @@ export async function GET() {
       if (winnerId && !unlockedSet.has(winnerId) && (await hasWonAGame(userId))) {
         toUnlock.push(winnerId);
       }
+
+      // Game Finisher is not Game Winner with the winner check dropped - it pays out for
+      // reaching the end of a game either way, which is why both exist.
+      const finisherId = findBadge("Game Finisher");
+      if (finisherId && !unlockedSet.has(finisherId) && (await hasFinishedAGame(userId))) {
+        toUnlock.push(finisherId);
+      }
     } catch (e) {
       console.warn("Game checks failed", e);
+    }
+
+    // The two badges 20260723003000 left without an award path, fixed together because they
+    // are the same incident. That migration retargeted Ice Breaker from a tier badge to an
+    // activity one by setting tierRequirement = NULL, which drops it out of the tier sweep
+    // above (NULL never satisfies `lte`), and moved "answered an icebreaker" onto Open Book,
+    // seeded by 20260723004000. Neither replacement check was ever written, so both badges
+    // were unreachable: Ice Breaker since the retarget, Open Book since it was created.
+    try {
+      // Ice Breaker: "Say hi to someone" - the copy BadgesSection.tsx already shows. sayHi
+      // writes exactly one connections row per person greeted, so its existence is the check.
+      const iceBreakerId = findBadge("Ice Breaker");
+      if (iceBreakerId && !unlockedSet.has(iceBreakerId)) {
+        const greeted = await prisma.connections.count({ where: { user_id: userId } });
+        if (greeted > 0) toUnlock.push(iceBreakerId);
+      }
+
+      const openBookId = findBadge("Open Book");
+      if (openBookId && !unlockedSet.has(openBookId) && (await hasAnsweredAnIcebreaker(userId))) {
+        toUnlock.push(openBookId);
+      }
+    } catch (e) {
+      console.warn("Retargeted badge checks failed", e);
     }
 
     // Chat-based checks. These used to pull up to 1000 channels out of Stream with their
