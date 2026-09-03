@@ -16,6 +16,7 @@ import type {
     ChatMessage,
     ConversationKind,
     ConversationXp,
+    MessageBackfill,
     MessagePage,
 } from "@/lib/chat/types";
 
@@ -286,6 +287,56 @@ export async function getMessages({
         messages: page.reverse().map(toMessage),
         nextCursor: hasMore ? page[0].created_at.toISOString() : null,
     };
+}
+
+/// Everything that landed after `since`, oldest-first — the mirror of `before` above.
+///
+/// This is the question a client asks after its realtime socket has been away. supabase-js
+/// rejoins on its own, but `postgres_changes` are not replayed: whatever fired while the
+/// socket was down is simply gone, so the only way to close the gap is to go and ask for it.
+///
+/// `since` is the createdAt of the newest message the client is holding, and it must be one
+/// the server sent. An optimistic message carries a createdAt from the browser's clock, and
+/// a clock running fast would make it skip real messages it never received.
+export async function getMessagesSince({
+    conversationId,
+    userId,
+    since,
+    limit = PAGE_SIZE,
+}: {
+    conversationId: string;
+    userId: string;
+    since: string;
+    limit?: number;
+}): Promise<MessageBackfill> {
+    if (!(await isMember({ conversationId, userId }))) {
+        return { messages: [], complete: true };
+    }
+
+    const rows = await prisma.messages.findMany({
+        where: {
+            conversation_id: conversationId,
+            // Thread replies live behind their parent, the same as the timeline query.
+            parent_id: null,
+            created_at: { gt: new Date(since) },
+        },
+        include: MESSAGE_INCLUDE,
+        // Ascending, unlike getMessages: a backfill is bounded by how much was missed rather
+        // than by wanting the newest, so the extra row past `limit` has to be the one furthest
+        // from the cursor for its presence to mean "there is more".
+        orderBy: { created_at: "asc" },
+        take: limit + 1,
+    });
+
+    if (rows.length <= limit) return { messages: rows.map(toMessage), complete: true };
+
+    // More missed than one page can carry, which happens after a long disconnect rather than
+    // a blip. Stitching the oldest `limit` of them onto the timeline would leave the newest
+    // ones missing — a hole in the middle, below messages the reader can see, which is worse
+    // than the staleness this exists to fix. So hand back the newest page and let the caller
+    // start from there instead.
+    const { messages } = await getMessages({ conversationId, userId, limit });
+    return { messages, complete: false };
 }
 
 /// Every reply hanging off one message, oldest-first. Threads are one level deep and

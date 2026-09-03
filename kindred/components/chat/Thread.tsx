@@ -6,6 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
     deleteChatMessage,
     editChatMessage,
+    loadMessagesSince,
     markConversationRead,
     toggleMessageReaction,
 } from "@/app/(app)/chats/actions";
@@ -14,7 +15,10 @@ import ChatLevelBadge from "@/components/chat/ChatLevelBadge";
 import Composer from "@/components/chat/Composer";
 import MessageBubble from "@/components/chat/MessageBubble";
 import MessageEditor from "@/components/chat/MessageEditor";
-import PresenceLine, { GroupPresenceLine } from "@/components/chat/PresenceLine";
+import PresenceLine, {
+    GroupPresenceLine,
+    ReconnectingLine,
+} from "@/components/chat/PresenceLine";
 import TypingLine from "@/components/chat/TypingLine";
 import { useChatRealtime } from "@/components/chat/ChatRealtimeProvider";
 import {
@@ -25,7 +29,7 @@ import { useConversationXp } from "@/components/chat/useConversationXp";
 import Avatar from "@/components/ui/Avatar";
 import { dayLabel, endsRun, startsNewDay, startsNewRun } from "@/lib/chat/grouping";
 import type { ReactionEmoji } from "@/lib/chat/reactions";
-import { applyReaction, applyRow, mergeMessage } from "@/lib/chat/realtime";
+import { applyReaction, applyRow, backfillCursor, mergeMessage } from "@/lib/chat/realtime";
 import type {
     ChatConversation,
     ChatMessage,
@@ -55,7 +59,7 @@ export default function Thread({
     initialXp: ConversationXp | null;
     greet: boolean;
 }) {
-    const { onMessage, onReaction, setOpenConversation } = useChatRealtime();
+    const { onMessage, onReaction, onResync, status, setOpenConversation } = useChatRealtime();
     const channel = useConversationChannel(conversation.id, userId);
     const { statusOf, typingIds, reportTyping } = channel;
     const { xp, applyAward } = useConversationXp({
@@ -106,6 +110,52 @@ export default function Thread({
             );
         });
     }, [onMessage, conversation.id, membersById]);
+
+    /// The timeline as the resync listener needs to read it.
+    ///
+    /// Same reason the provider keeps one for its conversation list: the listener is
+    /// registered once per conversation, so it closes over whatever `messages` was at that
+    /// moment. Re-registering on every message instead would mean tearing down and rebuilding
+    /// the subscription each time one arrives.
+    const messagesRef = useRef(messages);
+    useEffect(() => {
+        messagesRef.current = messages;
+    }, [messages]);
+
+    // Close the gap a dropped socket leaves behind.
+    //
+    // Realtime does not replay what it missed, so every message that landed while the socket
+    // was away is invisible to this timeline and nothing later will mention it. The rejoin is
+    // the only cue there is.
+    useEffect(() => {
+        return onResync(() => {
+            void loadMessagesSince(conversation.id, backfillCursor(messagesRef.current))
+                .then(({ messages: missed, complete }) => {
+                    if (complete && missed.length === 0) return;
+
+                    setMessages((current) =>
+                        complete
+                            ? missed.reduce(
+                                  (timeline, message) => mergeMessage(timeline, message),
+                                  current,
+                              )
+                            : // Too much missed to stitch, so these are the newest page
+                              // rather than the oldest missed. Merging them would leave the
+                              // hole they skipped sitting underneath, below messages the
+                              // reader can see — worse than the staleness being fixed. The
+                              // timeline starts again from what it was handed.
+                              //
+                              // Anything still in flight is dropped with it. That is correct:
+                              // an optimistic message survives on its own send response, and
+                              // one whose send never landed should not outlive a reload.
+                              missed,
+                    );
+                })
+                // A rejoin can arrive while the network is still unhappy. The socket will drop
+                // and rejoin again by itself, and this listener runs again when it does.
+                .catch(() => {});
+        });
+    }, [onResync, conversation.id]);
 
     // Reactions arrive for every conversation, not just this one. applyReaction ignores a
     // message id the timeline is not holding, so there is nothing to filter on the way in.
@@ -232,8 +282,13 @@ export default function Thread({
                     )}
 
                     {/* A DM has one other person, so their status can be stated plainly. A
-                        group has several in several states, so it is summarised instead. */}
-                    {conversation.kind === "group" ? (
+                        group has several in several states, so it is summarised instead.
+                        Neither is answerable while the socket is away — presence comes over
+                        that same connection — so the line says so rather than leaving the
+                        last known state on screen as though it were current. */}
+                    {status === "reconnecting" ? (
+                        <ReconnectingLine />
+                    ) : conversation.kind === "group" ? (
                         <GroupPresenceLine
                             activeCount={
                                 conversation.others.filter(

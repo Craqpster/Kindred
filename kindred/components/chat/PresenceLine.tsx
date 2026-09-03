@@ -27,6 +27,24 @@ export default function PresenceLine({ status }: { status: PresenceStatus }) {
     );
 }
 
+/// Stands in for a presence line while the socket is away.
+///
+/// Presence is only ever as current as the connection carrying it. Leaving "Active now" on
+/// screen through a dropped socket states something nobody actually knows — and it is the
+/// most misleading thing on the page to get wrong, because "they are here and not replying"
+/// is precisely the reading this app exists to avoid. Says what is true instead.
+export function ReconnectingLine() {
+    return (
+        <p className="flex items-center gap-1.5 text-meta text-ink-600">
+            <span
+                className="size-2.5 shrink-0 animate-pulse rounded-full bg-ink-600/40"
+                aria-hidden
+            />
+            Reconnecting…
+        </p>
+    );
+}
+
 /// A group has several people in several states, so one line has to summarise them. Reports
 /// only what is worth acting on: how many are here now.
 export function GroupPresenceLine({ activeCount }: { activeCount: number }) {
