@@ -15,10 +15,15 @@ before it exists.
 > Built with Next.js 16 (App Router), React 19, Supabase (auth + Realtime + Postgres), Prisma 7
 > and Tailwind CSS v4.
 
+<p align="center">
+  <img src="docs/screenshots/landing.png" alt="The Kindred landing page: 'Meet people. At your own pace.'" width="900">
+</p>
+
 ---
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [What's in the box](#whats-in-the-box)
 - [Tech stack](#tech-stack)
 - [Repository layout](#repository-layout)
@@ -34,6 +39,44 @@ before it exists.
 - [Contributing](#contributing)
 - [Known limitations](#known-limitations)
 - [Further reading](#further-reading)
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/meet.png" alt="The Meet tab, showing one spotlighted match and three runners-up">
+      <p><b>Meet</b> — one person, explained properly, with the tags you have in common and a
+      one-line reason. The rest are a click away rather than laid out ten at a time.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/chats.png" alt="A conversation, with the chat list, XP ring and composer">
+      <p><b>Chats</b> — DMs and groups in one list, split into Active and Pending. The ring under
+      the name is that conversation's shared level; presence and unread badges work from every tab.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/profile.png" alt="A profile page showing confidence tier, badges and progress">
+      <p><b>Your profile</b> — confidence tier and progress to the next one, badges, and a switch
+      for every section so you choose what other people see.</p>
+    </td>
+    <td width="50%" valign="top">
+      <img src="docs/screenshots/onboarding.png" alt="Step four of onboarding, choosing interests">
+      <p><b>Onboarding</b> — seven short steps. The interests you pick here are what the matcher
+      scores on, and what your first openers are made of.</p>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/landing-how-it-works.png" alt="The 'How it works' section of the landing page" width="900">
+</p>
+
+> Captured from the app running locally against seeded development data. Profiles here use the
+> built-in initials avatar; a real account picks a generated one during onboarding.
 
 ---
 
@@ -638,7 +681,6 @@ rediscovering the symptom.
 | [`kindred/docs/setup.md`](kindred/docs/setup.md) | Setting up on another machine, step by step |
 | [`kindred/docs/conventions.md`](kindred/docs/conventions.md) | Working on Kindred — every rule, with the incident behind it |
 | [`kindred/docs/chat-rework-plan.md`](kindred/docs/chat-rework-plan.md) | The Stream → Supabase Realtime migration, phase by phase |
-| [`kindred/CLAUDE.md`](kindred/CLAUDE.md) | Orientation for AI coding agents working in this repo |
 | [`kindred/.env.example`](kindred/.env.example) | Annotated environment variables |
 
 ---
