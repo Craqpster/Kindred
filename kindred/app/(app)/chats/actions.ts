@@ -15,10 +15,22 @@ import {
     type SendMessageResult,
     type ToggleReactionResult,
 } from "@/lib/chat/mutations";
-import { getConversation, getConversationXp, getMessages, isMember } from "@/lib/chat/queries";
+import {
+    getConversation,
+    getConversationXp,
+    getMessages,
+    getMessagesSince,
+    isMember,
+    listConversations,
+} from "@/lib/chat/queries";
 import { REACTION_EMOJI } from "@/lib/chat/reactions";
 import { postIcebreakerPrompt } from "@/lib/prompts";
-import type { ChatConversation, ConversationXp, MessagePage } from "@/lib/chat/types";
+import type {
+    ChatConversation,
+    ConversationXp,
+    MessageBackfill,
+    MessagePage,
+} from "@/lib/chat/types";
 import { verifySession } from "@/lib/dal";
 
 // Thin wrappers over lib/chat. Everything real lives there; these exist to validate input
@@ -243,4 +255,40 @@ export async function loadOlderMessages(
     if (!parsed.success) return { messages: [], nextCursor: null };
 
     return getMessages({ conversationId: parsed.data.conversationId, userId, before });
+}
+
+const sinceInput = z.object({ conversationId: uuid, since: z.iso.datetime() });
+
+/// What arrived while the realtime socket was away. `since` is the createdAt of the newest
+/// message the client has from the server — see getMessagesSince on why it must not be an
+/// optimistic one.
+export async function loadMessagesSince(
+    conversationId: string,
+    since: string,
+): Promise<MessageBackfill> {
+    const { userId } = await verifySession();
+
+    const parsed = sinceInput.safeParse({ conversationId, since });
+    if (!parsed.success) return { messages: [], complete: true };
+
+    return getMessagesSince({
+        conversationId: parsed.data.conversationId,
+        userId,
+        since: parsed.data.since,
+    });
+}
+
+/// The whole conversation list, fetched again.
+///
+/// The shell seeds its list from the server on every navigation, so this exists for the one
+/// case that produces no navigation: the socket dropping and rejoining while the user sits
+/// still. Everything missed in between — a wave, an unread count, a rename — is only
+/// recoverable by asking.
+///
+/// Takes no arguments on purpose. The list is always the caller's own, and an id in the
+/// payload would be an invitation to read somebody else's.
+export async function reloadConversations(): Promise<ChatConversation[]> {
+    const { userId } = await verifySession();
+
+    return listConversations(userId);
 }
