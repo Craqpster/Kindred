@@ -2,6 +2,11 @@
 
 **Meet people. At your own pace.**
 
+[![CI](https://github.com/Craqpster/Kindred/actions/workflows/ci.yml/badge.svg])(https://github.com/Craqpster/Kindred/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Status: the live app is currently down.** Supabase paused this project's database due to inactivity, so the deployed site on Vercel (https://kindred-one-lovat.vercel.app/) cannot connect to a database and will not work beyond the landing page until the database is restored. The code here is complete and runnable locally once you point it at a live Supabase project (see [Getting started](#getting-started)).
+
 Kindred is a low-pressure social app for people who find meeting strangers hard. It matches you
 with others who share your hobbies and interests, hands you openers so you never have to start
 from a blank page, and quietly rewards the small acts of showing up — a real reply, an answered
@@ -9,7 +14,8 @@ icebreaker, both of you turning up on the same day.
 
 It is deliberately **not a dating app**. There is no swiping, no photos, no performance. Matching
 is on shared interests and on how you said you wanted to ease in, and the whole product is built
-around comfort: block anyone, hide any part of your profile, and every message passes moderation
+around comfort: block anyone, hide any part of your profile, and every message pa
+es moderation
 before it exists.
 
 > Built with Next.js 16 (App Router), React 19, Supabase (auth + Realtime + Postgres), Prisma 7
@@ -203,8 +209,7 @@ Kindred/
 ### Prerequisites
 
 - **Node 20.9+** (Next 16's minimum). Kindred is developed against **Node 24**.
-- Access to the project's **Supabase** instance. There is no local database to install — Postgres
-  lives in Supabase, so a second machine points at the same one and sees the same data.
+- Access to a Supabase project. The original project's database is currently paused due to inactivity, so set up your own free Supabase project and use its credentials in `.env`. There is no local database to install — Postgres lives in Supabase.
 - An **OpenAI API key**, optionally. Moderation fails open, so the app runs without one.
 
 ### 1. Clone and enter the app
@@ -690,5 +695,4 @@ rediscovering the symptom.
 Built by the Kindred team — see the repository's
 [contributors](https://github.com/Craqpster/Kindred/graphs/contributors).
 
-No license file has been added yet, so the project is "all rights reserved" by default. Add a
-`LICENSE` before making the repository public.
+Licensed under the MIT License — see [LICENSE](LICENSE).
