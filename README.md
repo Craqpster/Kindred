@@ -14,8 +14,7 @@ icebreaker, both of you turning up on the same day.
 
 It is deliberately **not a dating app**. There is no swiping, no photos, no performance. Matching
 is on shared interests and on how you said you wanted to ease in, and the whole product is built
-around comfort: block anyone, hide any part of your profile, and every message pa
-es moderation
+around comfort: block anyone, hide any part of your profile, and every message passes moderation
 before it exists.
 
 > Built with Next.js 16 (App Router), React 19, Supabase (auth + Realtime + Postgres), Prisma 7
